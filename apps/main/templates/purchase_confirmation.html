@@ -120,16 +120,21 @@
         </div>
         <div class="mb-8">
           <div class="flex items-start mb-2">
-            <input type="checkbox" id="agree" x-model="agreedToTerms" class="checkbox mt-1 h-4 w-4 text-green-600 border-gray-300 rounded">
+            <input type="checkbox" id="agree" x-model="agreedToTerms" @change="hideStatus()" class="checkbox mt-1 h-4 w-4 text-green-600 border-gray-300 rounded">
             <label for="agree" class="ml-2 text-sm text-gray-700">
               Я согласен с <a href="#" class="text-blue-600 hover:underline">условиями использования</a> и <a href="#" class="text-blue-600 hover:underline">политикой конфиденциальности</a>
             </label>
           </div>
+          <!-- Индикатор статуса согласия -->
+          <div x-show="!agreedToTerms" class="text-sm text-red-600 mt-1">
+            <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i>
+            Необходимо согласиться с условиями для продолжения
+          </div>
         </div>
       </div>
       <div class="mt-auto">
-        <button type="submit" :disabled="!agreedToTerms || isProcessing" @click="console.log('Button clicked')"
-                class="w-full green-btn text-white font-bold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg mb-3">
+        <button type="submit" :disabled="isProcessing" @click="handleSubmit()"
+                :class="!agreedToTerms ? 'w-full bg-gray-400 text-gray-600 font-bold py-3 px-6 rounded-lg transition-all cursor-not-allowed text-lg mb-3' : 'w-full green-btn text-white font-bold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg mb-3'">
           <span x-show="!isProcessing">
             <i data-lucide="credit-card" class="w-5 h-5 inline mr-2"></i>
             Подписаться
@@ -185,13 +190,18 @@
         console.log('Plan data loaded:', this.planData);
       },
       
-      processPurchase() {
-        console.log('processPurchase called');
-        console.log('agreedToTerms:', this.agreedToTerms);
-        if (!this.agreedToTerms) {
-          this.showErrorMessage('Пожалуйста, согласитесь с условиями использования');
-          return;
-        }
+              handleSubmit() {
+          console.log('handleSubmit called');
+          console.log('agreedToTerms:', this.agreedToTerms);
+          if (!this.agreedToTerms) {
+            this.showErrorMessage('Пожалуйста, согласитесь с условиями использования');
+            return;
+          }
+          this.processPurchase();
+        },
+        
+        processPurchase() {
+          console.log('processPurchase called');
         
         this.isProcessing = true;
         
@@ -446,7 +456,7 @@
         testPurchase() {
           console.log('Test purchase called');
           if (!this.agreedToTerms) {
-            alert('Пожалуйста, согласитесь с условиями использования');
+            this.showErrorMessage('Пожалуйста, согласитесь с условиями использования');
             return;
           }
           
