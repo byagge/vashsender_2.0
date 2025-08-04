@@ -429,6 +429,21 @@
         </div>
         
         <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+          <!-- Debug Info -->
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6" x-show="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template?.html_content">
+            <h4 class="font-medium text-yellow-800 mb-2">Отладочная информация</h4>
+            <div class="text-sm text-yellow-700 space-y-1">
+              <p>Campaign ID: <span x-text="selectedCampaign?.id"></span></p>
+              <p>Template ID: <span x-text="selectedCampaign?.template?.id || selectedCampaign?.template_detail?.id"></span></p>
+              <p>Template exists: <span x-text="!!selectedCampaign?.template"></span></p>
+              <p>Template detail exists: <span x-text="!!selectedCampaign?.template_detail"></span></p>
+              <p>HTML content (template): <span x-text="!!selectedCampaign?.template?.html_content"></span></p>
+              <p>HTML content (detail): <span x-text="!!selectedCampaign?.template_detail?.html_content"></span></p>
+              <p>Text content (template): <span x-text="!!selectedCampaign?.template?.text_content"></span></p>
+              <p>Text content (detail): <span x-text="!!selectedCampaign?.template_detail?.text_content"></span></p>
+            </div>
+          </div>
+          
           <!-- Email Header Info -->
           <div class="bg-gray-50 rounded-lg p-4 mb-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -454,13 +469,27 @@
           <!-- Email Content -->
           <div class="border border-gray-200 rounded-lg overflow-hidden">
             <div class="bg-white p-6">
-              <template x-if="selectedCampaign?.template?.html_content">
+              <template x-if="selectedCampaign?.template_detail?.html_content">
+                <div x-html="selectedCampaign.template_detail.html_content" class="email-preview"></div>
+              </template>
+              <template x-if="!selectedCampaign?.template_detail?.html_content && selectedCampaign?.template_detail?.text_content">
+                <div class="email-preview">
+                  <pre x-text="selectedCampaign.template_detail.text_content" class="whitespace-pre-wrap font-sans"></pre>
+                </div>
+              </template>
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && selectedCampaign?.template?.html_content">
                 <div x-html="selectedCampaign.template.html_content" class="email-preview"></div>
               </template>
-              <template x-if="!selectedCampaign?.template?.html_content">
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && !selectedCampaign?.template?.html_content && selectedCampaign?.template?.text_content">
+                <div class="email-preview">
+                  <pre x-text="selectedCampaign.template.text_content" class="whitespace-pre-wrap font-sans"></pre>
+                </div>
+              </template>
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.text_content">
                 <div class="text-center py-12 text-gray-500">
                   <i data-lucide="file-text" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
                   <p>Содержимое письма недоступно для просмотра</p>
+                  <p class="text-sm mt-2">Template ID: <span x-text="selectedCampaign?.template?.id || selectedCampaign?.template_detail?.id || 'Не указан'"></span></p>
                 </div>
               </template>
             </div>
@@ -491,6 +520,7 @@
         selectedCampaign: null,
         isRetrying: false,
 
+        isAdmin: false, // Добавляем переменную isAdmin
         sidebarItems: [
           { name: 'Панель управления', active: false },
           { name: 'Кампании', active: true },
@@ -543,6 +573,7 @@
             const data = await response.json();
             console.log('Received campaigns:', data);
             this.campaigns = data.map(campaign => {
+              console.log('Processing campaign:', campaign);
               const processedCampaign = {
                 ...campaign,
                 // Basic fields
@@ -558,6 +589,7 @@
                 
                 // Related fields with proper handling
                 template: campaign.template || null,
+                template_detail: campaign.template_detail || null,
                 sender_email: campaign.sender_email || null,
                 contact_lists: Array.isArray(campaign.contact_lists) ? campaign.contact_lists : [],
                 contact_lists_detail: Array.isArray(campaign.contact_lists_detail) ? campaign.contact_lists_detail : [],
@@ -570,6 +602,7 @@
                 bounce_rate: campaign.bounce_rate || 0
               };
               
+              console.log('Processed campaign:', processedCampaign);
               return processedCampaign;
             });
             
@@ -611,7 +644,8 @@
             const matchesSearch = campaign.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
                                 campaign.subject.toLowerCase().includes(this.searchTerm.toLowerCase());
             const matchesStatus = this.statusFilter === 'All' || campaign.status === this.statusFilter;
-            const matchesSender = this.senderFilter === 'All' || campaign.sender_email.email === this.senderFilter;
+            const matchesSender = this.senderFilter === 'All' || 
+              (campaign.sender_email && campaign.sender_email.email === this.senderFilter);
             return matchesSearch && matchesStatus && matchesSender;
           });
 
@@ -666,7 +700,9 @@
         },
 
         uniqueSenders() {
-          return [...new Set(this.campaigns.map(c => c.sender_email.email))];
+          return [...new Set(this.campaigns
+            .filter(c => c.sender_email && c.sender_email.email)
+            .map(c => c.sender_email.email))];
         },
 
         async deleteCampaign() {
@@ -712,6 +748,11 @@
         },
 
         showPreview(campaign) {
+          console.log('Showing preview for campaign:', campaign);
+          console.log('Campaign template:', campaign.template);
+          console.log('Template detail:', campaign.template_detail);
+          console.log('Template detail HTML:', campaign.template_detail?.html_content);
+          console.log('Template detail text:', campaign.template_detail?.text_content);
           this.selectedCampaign = campaign;
           this.showPreviewModal = true;
           this.$nextTick(() => {
