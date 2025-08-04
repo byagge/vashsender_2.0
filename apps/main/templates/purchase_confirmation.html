@@ -139,6 +139,14 @@
             Обработка...
           </span>
         </button>
+        
+        <!-- Временная кнопка для тестирования без CloudPayments -->
+        <button type="button" @click="testPurchase()" 
+                class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg transition-all text-lg mb-3">
+          <i data-lucide="test-tube" class="w-5 h-5 inline mr-2"></i>
+          Тестовая покупка (без CloudPayments)
+        </button>
+        
         <div class="text-center text-xs text-gray-500 mt-2">
           Оплата производится на стороне <span class="font-semibold text-blue-700">CloudPayments</span>
           {% if cloudpayments_test_mode %}
@@ -275,36 +283,61 @@
         }
       },
       
-      activatePlan(paymentResult) {
-        var self = this;
-        
-        $.ajax({
-          url: '/billing/activate-payment/',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
-          },
-          data: JSON.stringify({
-            plan_id: this.planData.id,
-            payment_data: paymentResult
-          }),
-          success: function(result) {
-            if (result.success) {
-              window.location.href = '/purchase/success/?plan_id=' + self.planData.id + '&transaction_id=' + (paymentResult.invoiceId || paymentResult.TransactionId);
-            } else {
-              alert('Ошибка активации тарифа: ' + result.error);
+              activatePlan(paymentResult) {
+          var self = this;
+          
+          $.ajax({
+            url: '/billing/activate-payment/',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            data: JSON.stringify({
+              plan_id: this.planData.id,
+              payment_data: paymentResult
+            }),
+            success: function(result) {
+              if (result.success) {
+                window.location.href = '/purchase/success/?plan_id=' + self.planData.id + '&transaction_id=' + (paymentResult.invoiceId || paymentResult.TransactionId);
+              } else {
+                alert('Ошибка активации тарифа: ' + result.error);
+                self.isProcessing = false;
+              }
+            },
+            error: function(xhr, status, error) {
+              console.error('Error activating plan:', error);
+              console.error('Response:', xhr.responseText);
+              alert('Ошибка активации тарифа. Обратитесь в поддержку.');
               self.isProcessing = false;
             }
-          },
-          error: function(xhr, status, error) {
-            console.error('Error activating plan:', error);
-            console.error('Response:', xhr.responseText);
-            alert('Ошибка активации тарифа. Обратитесь в поддержку.');
-            self.isProcessing = false;
+          });
+        },
+        
+        testPurchase() {
+          console.log('Test purchase called');
+          if (!this.agreedToTerms) {
+            alert('Пожалуйста, согласитесь с условиями использования');
+            return;
           }
-        });
-      }
+          
+          this.isProcessing = true;
+          
+          // Создаем тестовые данные платежа
+          var testPaymentData = {
+            invoiceId: 'TEST-' + Date.now(),
+            TransactionId: 'TEST-' + Date.now(),
+            status: 'success',
+            message: 'Тестовая покупка'
+          };
+          
+          var self = this;
+          
+          // Имитируем задержку обработки
+          setTimeout(function() {
+            self.activatePlan(testPaymentData);
+          }, 1000);
+        }
     }
   };
 
