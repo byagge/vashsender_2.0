@@ -97,7 +97,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'updated_at', 'scheduled_at', 'sent_at',
             'template', 'template_detail', 'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail', 'recipients',
-            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name', 'reply_to'
+            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'sent_at']
 

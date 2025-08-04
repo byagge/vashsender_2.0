@@ -206,7 +206,7 @@
                         <h4 class="font-medium text-gray-900 mb-2">Детали рассылки</h4>
                         <div class="space-y-2 text-sm">
                           <p><span class="text-gray-500">Тема:</span> <span x-text="campaign.subject || 'Без темы'"></span></p>
-                          <p><span class="text-gray-500">Ответ на:</span> <span x-text="campaign.reply_to || 'Не указан'"></span></p>
+                          <p><span class="text-gray-500">Ответ на:</span> <span x-text="campaign.sender_email_detail?.reply_to || 'Не указан'"></span></p>
                           <p><span class="text-gray-500">ID рассылки:</span> #<span x-text="campaign.id"></span></p>
                           <p><span class="text-gray-500">Запланировано на:</span> <span x-text="formatDate(campaign.scheduled_at)"></span></p>
                         </div>
@@ -461,7 +461,7 @@
               </div>
               <div>
                 <p class="text-gray-500 mb-1">Ответ на:</p>
-                <p class="font-medium" x-text="selectedCampaign?.reply_to || 'Не указан'"></p>
+                <p class="font-medium" x-text="selectedCampaign?.sender_email_detail?.reply_to || 'Не указан'"></p>
               </div>
             </div>
           </div>
@@ -580,7 +580,7 @@
                 name: campaign.name || '',
                 subject: campaign.subject || '',
                 sender_name: campaign.sender_name || '',
-                reply_to: campaign.reply_to || '',
+                reply_to: campaign.sender_email_detail?.reply_to || '',
                 status: campaign.status || 'draft',
                 status_display: campaign.status_display,
                 created_at: campaign.created_at,

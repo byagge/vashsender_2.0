@@ -254,11 +254,16 @@ def confirm_plan(request):
     if plan.price == 0:
         return activate_free_plan(request, plan)
     
+    # Получаем настройки CloudPayments
+    billing_settings = BillingSettings.get_settings()
+    
     # Для платных тарифов показываем страницу подтверждения
     context = {
         'plan': plan,
         'final_price': plan.get_final_price(),
         'duration_days': 30,  # Можно сделать настраиваемым
+        'cloudpayments_public_id': billing_settings.cloudpayments_public_id,
+        'cloudpayments_test_mode': billing_settings.cloudpayments_test_mode,
     }
     
     if request.method == 'POST':
@@ -414,6 +419,23 @@ def activate_payment(request):
         user = request.user
         print(f"DEBUG: Found plan: {plan.title}, User: {user.email}")
         
+        # Обрабатываем payment_data - может быть строкой или объектом
+        if isinstance(payment_data, str):
+            try:
+                # Пытаемся распарсить как JSON
+                payment_data = json.loads(payment_data)
+            except json.JSONDecodeError:
+                # Если не JSON, создаем простой объект
+                payment_data = {'message': payment_data}
+        
+        # Получаем transaction_id безопасно
+        transaction_id = None
+        if isinstance(payment_data, dict):
+            transaction_id = payment_data.get('invoiceId') or payment_data.get('TransactionId') or payment_data.get('transaction_id')
+        
+        if not transaction_id:
+            transaction_id = f'cp_{timezone.now().strftime("%Y%m%d_%H%M%S")}'
+        
         # Создаем запись о купленном тарифе
         print(f"DEBUG: Creating PurchasedPlan...")
         try:
@@ -422,7 +444,7 @@ def activate_payment(request):
                 print(f"  - user: {user.id}")
                 print(f"  - plan: {plan.id}")
                 print(f"  - amount_paid: {plan.get_final_price()}")
-                print(f"  - transaction_id: {payment_data.get('invoiceId', f'cp_{timezone.now().strftime("%Y%m%d_%H%M%S")}')}")
+                print(f"  - transaction_id: {transaction_id}")
                 
                 purchased_plan = PurchasedPlan.objects.create(
                     user=user,
@@ -432,24 +454,25 @@ def activate_payment(request):
                     is_active=True,
                     amount_paid=plan.get_final_price(),
                     payment_method='cloudpayments',
-                    transaction_id=payment_data.get('invoiceId', f'cp_{timezone.now().strftime("%Y%m%d_%H%M%S")}'),
+                    transaction_id=transaction_id,
                     cloudpayments_data=payment_data  # Сохраняем данные от CloudPayments
                 )
                 print(f"DEBUG: PurchasedPlan created successfully!")
+                
+                # Обновляем текущий план пользователя
+                user.current_plan = plan
+                user.plan_expiry = purchased_plan.end_date
+                user.save()
+                
+                print(f"DEBUG: PurchasedPlan created with ID: {purchased_plan.id}")
+                print(f"DEBUG: User plan updated: {user.current_plan.title}")
+                
         except Exception as e:
             print(f"DEBUG: Error creating PurchasedPlan: {e}")
             print(f"DEBUG: Error type: {type(e)}")
             import traceback
             traceback.print_exc()
             raise
-            
-            # Обновляем текущий план пользователя
-            user.current_plan = plan
-            user.plan_expiry = purchased_plan.end_date
-            user.save()
-            
-            print(f"DEBUG: PurchasedPlan created with ID: {purchased_plan.id}")
-            print(f"DEBUG: User plan updated: {user.current_plan.title}")
         
         return JsonResponse({
             'success': True,
