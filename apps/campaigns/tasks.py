@@ -53,11 +53,12 @@ class SMTPConnectionPool:
             
             # Устанавливаем правильный HELO для улучшения доставляемости
             try:
-                connection.helo('mail.vashsender.ru')
-                print(f"SMTP HELO set to: mail.vashsender.ru")
+                # Используем реальный домен вместо localhost
+                helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
+                connection.helo(helo_domain)
+                print(f"SMTP HELO set to: {helo_domain}")
             except Exception as e:
-                # Если не удалось, используем стандартный HELO
-                print(f"Failed to set HELO to mail.vashsender.ru: {e}")
+                print(f"Failed to set HELO to {helo_domain}: {e}")
                 try:
                     connection.helo('localhost')
                     print(f"SMTP HELO set to: localhost")
@@ -68,8 +69,9 @@ class SMTPConnectionPool:
                 connection.starttls()
                 # Повторяем HELO после STARTTLS
                 try:
-                    connection.helo('mail.vashsender.ru')
-                    print(f"SMTP HELO after STARTTLS set to: mail.vashsender.ru")
+                    helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
+                    connection.helo(helo_domain)
+                    print(f"SMTP HELO after STARTTLS set to: {helo_domain}")
                 except Exception as e:
                     print(f"Failed to set HELO after STARTTLS: {e}")
                     try:
@@ -507,11 +509,22 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 if time.time() - start_time > 500:
                     raise TimeoutError("Batch task timeout approaching during email sending")
                 
-                # Rate limiting с случайной задержкой как у человека
-                if i > 0 and i % rate_limit == 0:
+                # Улучшенный rate limiting с более естественными задержками
+                if i > 0:
                     import random
-                    delay = random.uniform(1.5, 3.0)  # Случайная задержка 1.5-3 секунды
-                    time.sleep(delay)
+                    # Более естественные задержки как у человека
+                    if i % rate_limit == 0:
+                        # Пауза каждые rate_limit писем
+                        delay = random.uniform(2.0, 4.0)
+                        time.sleep(delay)
+                    elif i % 10 == 0:
+                        # Небольшая пауза каждые 10 писем
+                        delay = random.uniform(0.5, 1.5)
+                        time.sleep(delay)
+                    else:
+                        # Минимальная задержка между письмами
+                        delay = random.uniform(0.1, 0.3)
+                        time.sleep(delay)
                 
                 # Отправляем письмо напрямую
                 email_result = send_single_email.apply(
@@ -797,11 +810,21 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         msg['To'] = contact.email
         msg['Reply-To'] = campaign.sender_email.reply_to or from_email
         
-        # Минимальные заголовки как у обычного письма
+        # Добавляем важные заголовки для улучшения доставляемости
         import uuid
         msg['Message-ID'] = f"<{uuid.uuid4()}@{from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'}>"
         msg['Date'] = timezone.now().strftime('%a, %d %b %Y %H:%M:%S %z')
         msg['MIME-Version'] = '1.0'
+        
+        # Добавляем заголовки для улучшения доставляемости
+        msg['X-Mailer'] = 'VashSender/1.0'
+        msg['X-Priority'] = '3'  # Нормальный приоритет
+        msg['X-MSMail-Priority'] = 'Normal'
+        msg['Importance'] = 'normal'
+        
+        # Добавляем заголовки для предотвращения спама
+        msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}>'
+        msg['Precedence'] = 'bulk'
         
         # Добавляем текстовую часть
         text_part = MIMEText(plain_text, 'plain', 'utf-8')

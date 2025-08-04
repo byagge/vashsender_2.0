@@ -103,11 +103,11 @@ EMAIL_SSL_CONTEXT = ssl.create_default_context()
 EMAIL_SSL_CONTEXT.check_hostname = False
 EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
-# Email sending configuration для продакшена
-EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=200, cast=int)
-EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=100, cast=int)
+# Email sending configuration для продакшена - улучшенная доставляемость
+EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=50, cast=int)  # Уменьшено для лучшей доставляемости
+EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=10, cast=int)  # Уменьшено для лучшей доставляемости
 EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=3, cast=int)
-EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=60, cast=int)
+EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=120, cast=int)  # Увеличено для лучшей доставляемости
 EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=30, cast=int)
 EMAIL_SEND_TIMEOUT = config('EMAIL_SEND_TIMEOUT', default=60, cast=int)
 
