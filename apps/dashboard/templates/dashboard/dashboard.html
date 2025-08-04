@@ -817,7 +817,22 @@
                         const response = await fetch('/billing/api/user-plan-info/');
                         const data = await response.json();
                         console.log('Plan info:', data);
-                        this.planInfo = data;
+                        
+                        if (data.has_plan) {
+                            this.planInfo = {
+                                plan_name: data.plan_name,
+                                plan_type: data.plan_type,
+                                emails_sent: data.emails_sent,
+                                emails_limit: data.emails_limit,
+                                emails_remaining: data.emails_remaining,
+                                days_remaining: data.days_remaining,
+                                is_expired: data.is_expired,
+                                emails_sent_today: data.emails_sent_today,
+                                has_exceeded_daily_limit: data.has_exceeded_daily_limit
+                            };
+                        } else {
+                            this.planInfo = null;
+                        }
                     } catch (error) {
                         console.error('Error loading plan info:', error);
                         this.planInfo = null;

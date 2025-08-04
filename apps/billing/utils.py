@@ -31,11 +31,24 @@ def get_user_emails_sent(user):
     return active_plan.emails_sent
 
 
+def get_user_emails_sent_today(user):
+    """Получить количество писем, отправленных пользователем сегодня"""
+    from datetime import datetime, time
+    today_start = datetime.combine(datetime.now().date(), time.min)
+    today_end = datetime.combine(datetime.now().date(), time.max)
+    
+    return EmailTracking.objects.filter(
+        campaign__user=user,
+        sent_at__gte=today_start,
+        sent_at__lte=today_end
+    ).count()
+
+
 def update_plan_emails_sent(user):
     """Обновить счётчик отправленных писем в тарифе на основе фактических отправок"""
     active_plan = get_user_active_plan(user)
-    if not active_plan or active_plan.plan.plan_type.name != 'Letters':
-        return
+    if not active_plan:
+        return 0
     
     # Подсчитываем фактически отправленные письма в период действия тарифа
     actual_sent = EmailTracking.objects.filter(
@@ -84,9 +97,13 @@ def get_user_plan_info(user):
             'emails_sent': 0,
             'emails_remaining': 0,
             'days_remaining': 0,
-            'is_expired': True
+            'is_expired': True,
+            'emails_sent_today': 0
         }
     
+    # Обновляем счетчик отправленных писем
+    actual_sent = update_plan_emails_sent(user)
+    emails_sent_today = get_user_emails_sent_today(user)
     emails_remaining = active_plan.get_emails_remaining()
     
     return {
@@ -95,10 +112,11 @@ def get_user_plan_info(user):
         'plan_type': active_plan.plan.plan_type.name,
         'plan_price': float(active_plan.plan.get_final_price()),
         'emails_limit': active_plan.plan.emails_per_month if active_plan.plan.plan_type.name == 'Letters' else None,
-        'emails_sent': active_plan.emails_sent,
+        'emails_sent': actual_sent,
         'emails_remaining': emails_remaining,
         'days_remaining': active_plan.days_remaining(),
         'is_expired': active_plan.is_expired(),
         'start_date': active_plan.start_date,
-        'end_date': active_plan.end_date
+        'end_date': active_plan.end_date,
+        'emails_sent_today': emails_sent_today
     } 

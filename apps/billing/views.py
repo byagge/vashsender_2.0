@@ -204,7 +204,6 @@ class UserPlanInfoViewSet(viewsets.ViewSet):
         
         # Добавляем дополнительную информацию
         plan_info.update({
-            'emails_sent_today': user.emails_sent_today,
             'has_exceeded_daily_limit': user.has_exceeded_daily_limit(),
         })
         
