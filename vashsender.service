@@ -1,0 +1,22 @@
+# /etc/systemd/system/vashsender.service
+[Unit]
+Description=Gunicorn for vashsender project
+After=network.target
+
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=/var/www/vashsender
+EnvironmentFile=/var/www/vashsender/env
+ExecStart=/var/www/vashsender/venv/bin/gunicorn core.wsgi:application \
+    --bind unix:/run/vashsender.sock \
+    --workers 3 \
+    --timeout 120 \
+    --keep-alive 2 \
+    --max-requests 1000 \
+    --max-requests-jitter 100
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target 
