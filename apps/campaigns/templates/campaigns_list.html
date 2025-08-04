@@ -430,7 +430,7 @@
         
         <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
           <!-- Debug Info -->
-          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6" x-show="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template?.html_content">
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6" x-show="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content">
             <h4 class="font-medium text-yellow-800 mb-2">Отладочная информация</h4>
             <div class="text-sm text-yellow-700 space-y-1">
               <p>Campaign ID: <span x-text="selectedCampaign?.id"></span></p>
@@ -438,9 +438,9 @@
               <p>Template exists: <span x-text="!!selectedCampaign?.template"></span></p>
               <p>Template detail exists: <span x-text="!!selectedCampaign?.template_detail"></span></p>
               <p>HTML content (template): <span x-text="!!selectedCampaign?.template?.html_content"></span></p>
-              <p>HTML content (detail): <span x-text="!!selectedCampaign?.template_detail?.html_content"></span></p>
-              <p>Text content (template): <span x-text="!!selectedCampaign?.template?.text_content"></span></p>
-              <p>Text content (detail): <span x-text="!!selectedCampaign?.template_detail?.text_content"></span></p>
+                              <p>HTML content (detail): <span x-text="!!selectedCampaign?.template_detail?.html_content"></span></p>
+                <p>Text content (template): <span x-text="!!selectedCampaign?.template?.plain_text_content"></span></p>
+                <p>Text content (detail): <span x-text="!!selectedCampaign?.template_detail?.plain_text_content"></span></p>
             </div>
           </div>
           
@@ -472,20 +472,20 @@
               <template x-if="selectedCampaign?.template_detail?.html_content">
                 <div x-html="selectedCampaign.template_detail.html_content" class="email-preview"></div>
               </template>
-              <template x-if="!selectedCampaign?.template_detail?.html_content && selectedCampaign?.template_detail?.text_content">
+              <template x-if="!selectedCampaign?.template_detail?.html_content && selectedCampaign?.template_detail?.plain_text_content">
                 <div class="email-preview">
-                  <pre x-text="selectedCampaign.template_detail.text_content" class="whitespace-pre-wrap font-sans"></pre>
+                  <pre x-text="selectedCampaign.template_detail.plain_text_content" class="whitespace-pre-wrap font-sans"></pre>
                 </div>
               </template>
               <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && selectedCampaign?.template?.html_content">
                 <div x-html="selectedCampaign.template.html_content" class="email-preview"></div>
               </template>
-              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && !selectedCampaign?.template?.html_content && selectedCampaign?.template?.text_content">
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && selectedCampaign?.template?.plain_text_content">
                 <div class="email-preview">
-                  <pre x-text="selectedCampaign.template.text_content" class="whitespace-pre-wrap font-sans"></pre>
+                  <pre x-text="selectedCampaign.template.plain_text_content" class="whitespace-pre-wrap font-sans"></pre>
                 </div>
               </template>
-              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.text_content">
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.plain_text_content">
                 <div class="text-center py-12 text-gray-500">
                   <i data-lucide="file-text" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
                   <p>Содержимое письма недоступно для просмотра</p>
@@ -752,7 +752,7 @@
           console.log('Campaign template:', campaign.template);
           console.log('Template detail:', campaign.template_detail);
           console.log('Template detail HTML:', campaign.template_detail?.html_content);
-          console.log('Template detail text:', campaign.template_detail?.text_content);
+          console.log('Template detail text:', campaign.template_detail?.plain_text_content);
           this.selectedCampaign = campaign;
           this.showPreviewModal = true;
           this.$nextTick(() => {

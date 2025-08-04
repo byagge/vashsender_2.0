@@ -15,7 +15,7 @@ class EmailTrackingSerializer(serializers.ModelSerializer):
 class EmailTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailTemplate
-        fields = ['id', 'title', 'html_content', 'text_content']
+        fields = ['id', 'title', 'html_content', 'plain_text_content']
 
 class SenderEmailSerializer(serializers.ModelSerializer):
     class Meta:
