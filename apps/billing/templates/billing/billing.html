@@ -69,7 +69,8 @@
                         </div>
                         <div class="text-right">
                             <div class="text-2xl font-bold text-blue-600" x-show="currentPlan?.price > 0" x-text="'₽' + (currentPlan?.price || 0)"></div>
-                            <div class="text-2xl font-bold text-green-600" x-show="!currentPlan?.price || currentPlan?.price === 0">Бесплатно</div>
+                            <div class="text-2xl font-bold text-green-600" x-show="currentPlan?.price === 0">Бесплатно</div>
+                            <div class="text-2xl font-bold text-gray-600" x-show="!currentPlan?.price && currentPlan?.price !== 0">Не указано</div>
                             <div class="text-sm text-gray-500">в месяц</div>
                         </div>
                     </div>
@@ -218,28 +219,24 @@
           }
           const currentData = await currentResponse.json();
           
-          if (currentData.success) {
-            this.currentPlan = currentData.planInfo;
+          // API возвращает данные напрямую, без поля success
+          if (currentData.has_plan) {
+            this.currentPlan = {
+              title: currentData.plan_name,
+              description: `Тариф типа: ${currentData.plan_type}`,
+              price: currentData.plan_price || null, // Используем цену из API
+              is_active: !currentData.is_expired,
+              end_date: currentData.end_date,
+              days_remaining: currentData.days_remaining,
+              plan_type: currentData.plan_type,
+              emails_sent: currentData.emails_sent,
+              emails_per_month: currentData.emails_limit,
+              emails_remaining: currentData.emails_remaining,
+              emails_sent_today: currentData.emails_sent_today
+            };
           } else {
-            // Если success = false, но данные есть, используем их
-            if (currentData.has_plan) {
-              this.currentPlan = {
-                title: currentData.plan_name,
-                description: `Тариф типа: ${currentData.plan_type}`,
-                price: 0, // Цена не возвращается в этом API
-                is_active: !currentData.is_expired,
-                end_date: currentData.end_date,
-                days_remaining: currentData.days_remaining,
-                plan_type: currentData.plan_type,
-                emails_sent: currentData.emails_sent,
-                emails_per_month: currentData.emails_limit,
-                emails_remaining: currentData.emails_remaining,
-                emails_sent_today: currentData.emails_sent_today
-              };
-            } else {
-              console.warn('Failed to load current plan:', currentData);
-              this.currentPlan = null;
-            }
+            console.warn('No active plan found:', currentData);
+            this.currentPlan = null;
           }
           
           // Загружаем историю тарифов

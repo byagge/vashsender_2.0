@@ -82,6 +82,7 @@ class UserPlanInfoSerializer(serializers.Serializer):
     has_plan = serializers.BooleanField()
     plan_name = serializers.CharField(allow_null=True)
     plan_type = serializers.CharField(allow_null=True)
+    plan_price = serializers.FloatField(allow_null=True)
     emails_limit = serializers.IntegerField(allow_null=True)
     emails_sent = serializers.IntegerField()
     emails_remaining = serializers.IntegerField()
