@@ -187,19 +187,39 @@ class CloudPaymentsService:
             dict: Статус транзакции
         """
         url = f"{self.base_url}/payments/get"
+        
+        # Правильная авторизация для CloudPayments API
+        import base64
+        auth_string = f"{self.public_id}:{self.api_secret}"
+        auth_bytes = auth_string.encode('utf-8')
+        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+        
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Basic {self.api_secret}"
+            "Authorization": f"Basic {auth_b64}"
         }
         data = {
             "TransactionId": transaction_id
         }
         
+        print(f"DEBUG: Checking transaction {transaction_id} at {url}")
+        print(f"DEBUG: Headers: {headers}")
+        print(f"DEBUG: Data: {data}")
+        
         try:
             response = requests.post(url, headers=headers, json=data)
+            print(f"DEBUG: Response status: {response.status_code}")
+            print(f"DEBUG: Response text: {response.text}")
+            
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            print(f"DEBUG: Response JSON: {result}")
+            return result
         except requests.RequestException as e:
+            print(f"DEBUG: Request error: {e}")
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            print(f"DEBUG: General error: {e}")
             return {"success": False, "error": str(e)}
     
     def refund_transaction(self, transaction_id, amount=None):
@@ -214,9 +234,16 @@ class CloudPaymentsService:
             dict: Результат возврата
         """
         url = f"{self.base_url}/payments/refund"
+        
+        # Правильная авторизация для CloudPayments API
+        import base64
+        auth_string = f"{self.public_id}:{self.api_secret}"
+        auth_bytes = auth_string.encode('utf-8')
+        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+        
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Basic {self.api_secret}"
+            "Authorization": f"Basic {auth_b64}"
         }
         data = {
             "TransactionId": transaction_id
@@ -245,9 +272,16 @@ class CloudPaymentsService:
             dict: Результат создания рекуррентного платежа
         """
         url = f"{self.base_url}/payments/tokens/charge"
+        
+        # Правильная авторизация для CloudPayments API
+        import base64
+        auth_string = f"{self.public_id}:{self.api_secret}"
+        auth_bytes = auth_string.encode('utf-8')
+        auth_b64 = base64.b64encode(auth_bytes).decode('utf-8')
+        
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Basic {self.api_secret}"
+            "Authorization": f"Basic {auth_b64}"
         }
         
         data = {
