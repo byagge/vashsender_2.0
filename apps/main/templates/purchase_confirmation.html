@@ -280,19 +280,22 @@
           }).catch((error) => {
             // Ошибка оплаты
             console.error('Payment failed:', error);
-            alert('Оплата не прошла: ' + (error.message || 'Неизвестная ошибка'));
-            self.isProcessing = false;
+            this.showErrorMessage('Оплата не прошла: ' + (error.message || 'Неизвестная ошибка'));
+            this.isProcessing = false;
           });
           
         } catch (error) {
           console.error('Error processing purchase:', error);
-          alert('Произошла ошибка при обработке покупки: ' + error.message);
+          this.showErrorMessage('Произошла ошибка при обработке покупки: ' + error.message);
           this.isProcessing = false;
         }
       },
       
-              activatePlan(paymentResult) {
+      activatePlan(paymentResult) {
           var self = this;
+          
+          // Показываем сообщение о проверке платежа
+          this.showProcessingMessage('Проверяем статус платежа...');
           
           $.ajax({
             url: '/billing/activate-payment/',
@@ -307,16 +310,32 @@
             }),
             success: function(result) {
               if (result.success) {
-                window.location.href = '/purchase/success/?plan_id=' + self.planData.id + '&transaction_id=' + (paymentResult.invoiceId || paymentResult.TransactionId);
+                // Показываем успешное сообщение
+                self.showSuccessMessage(result.message || 'Тариф успешно активирован!');
+                setTimeout(() => {
+                  window.location.href = '/purchase/success/?plan_id=' + self.planData.id + '&transaction_id=' + (paymentResult.invoiceId || paymentResult.TransactionId);
+                }, 2000);
               } else {
-                alert('Ошибка активации тарифа: ' + result.error);
+                // Показываем ошибку
+                self.showErrorMessage(result.error || 'Ошибка активации тарифа');
                 self.isProcessing = false;
               }
             },
             error: function(xhr, status, error) {
               console.error('Error activating plan:', error);
               console.error('Response:', xhr.responseText);
-              alert('Ошибка активации тарифа. Обратитесь в поддержку.');
+              
+              var errorMessage = 'Ошибка активации тарифа. Обратитесь в поддержку.';
+              try {
+                var response = JSON.parse(xhr.responseText);
+                if (response.error) {
+                  errorMessage = response.error;
+                }
+              } catch (e) {
+                // Игнорируем ошибку парсинга
+              }
+              
+              self.showErrorMessage(errorMessage);
               self.isProcessing = false;
             }
           });
@@ -335,6 +354,51 @@
               </div>
             `;
             statusElement.classList.remove('hidden');
+          }
+        },
+        
+        showSuccessMessage(message) {
+          var statusElement = document.getElementById('payment-status');
+          if (statusElement) {
+            statusElement.innerHTML = `
+              <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <div class="flex items-center">
+                  <i data-lucide="check-circle" class="w-6 h-6 text-green-600 mr-3"></i>
+                  <span class="text-green-800">${message}</span>
+                </div>
+              </div>
+            `;
+            statusElement.classList.remove('hidden');
+            // Инициализируем иконки
+            if (typeof lucide !== 'undefined') {
+              lucide.createIcons();
+            }
+          }
+        },
+
+        showErrorMessage(message) {
+          var statusElement = document.getElementById('payment-status');
+          if (statusElement) {
+            statusElement.innerHTML = `
+              <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div class="flex items-center">
+                  <i data-lucide="x-circle" class="w-6 h-6 text-red-600 mr-3"></i>
+                  <span class="text-red-800">${message}</span>
+                </div>
+              </div>
+            `;
+            statusElement.classList.remove('hidden');
+            // Инициализируем иконки
+            if (typeof lucide !== 'undefined') {
+              lucide.createIcons();
+            }
+          }
+        },
+        
+        hideStatus() {
+          var statusElement = document.getElementById('payment-status');
+          if (statusElement) {
+            statusElement.classList.add('hidden');
           }
         },
         
