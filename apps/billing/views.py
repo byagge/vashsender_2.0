@@ -18,7 +18,7 @@ from .serializers import (
     BillingSettingsSerializer, UserPlanInfoSerializer
     # CloudPaymentsTransactionSerializer  # Временно отключено до применения миграций
 )
-# from .cloudpayments import cloudpayments_service  # Временно отключено до применения миграций
+from .cloudpayments import cloudpayments_service  # Временно отключено до применения миграций
 
 
 class PlanTypeViewSet(viewsets.ReadOnlyModelViewSet):
@@ -212,31 +212,36 @@ class UserPlanInfoViewSet(viewsets.ViewSet):
 
 
 # Webhook для CloudPayments
-# @csrf_exempt
-# @require_http_methods(["POST"])
-# def cloudpayments_webhook(request):
-#     """Webhook для обработки уведомлений от CloudPayments"""
-#     try:
-#         # Получаем данные
-#         data = request.POST.dict()
-#         signature = request.headers.get('X-Signature', '')
-#         
-#         # Обрабатываем webhook
-#         result = cloudpayments_service.process_webhook(data, signature)
-#         
-#         if result.get('success'):
-#             return JsonResponse({'status': 'ok'})
-#         else:
-#             return JsonResponse(
-#                 {'status': 'error', 'message': result.get('error')}, 
-#                 status=400
-#             )
-#             
-#     except Exception as e:
-#         return JsonResponse(
-#             {'status': 'error', 'message': str(e)}, 
-#             status=500
-#         )
+@csrf_exempt
+@require_http_methods(["POST"])
+def cloudpayments_webhook(request):
+    """Webhook для обработки уведомлений от CloudPayments"""
+    try:
+        # Получаем данные
+        data = request.POST.dict()
+        signature = request.headers.get('X-Signature', '')
+        
+        print(f"DEBUG: CloudPayments webhook received")
+        print(f"DEBUG: Data: {data}")
+        print(f"DEBUG: Signature: {signature}")
+        
+        # Обрабатываем webhook
+        result = cloudpayments_service.process_webhook(data, signature)
+        
+        if result.get('success'):
+            return JsonResponse({'status': 'ok'})
+        else:
+            return JsonResponse(
+                {'status': 'error', 'message': result.get('error')}, 
+                status=400
+            )
+            
+    except Exception as e:
+        print(f"DEBUG: Webhook error: {e}")
+        return JsonResponse(
+            {'status': 'error', 'message': str(e)}, 
+            status=500
+        )
 
 
 # Views для покупки тарифов
@@ -434,7 +439,35 @@ def activate_payment(request):
             transaction_id = payment_data.get('invoiceId') or payment_data.get('TransactionId') or payment_data.get('transaction_id')
         
         if not transaction_id:
-            transaction_id = f'cp_{timezone.now().strftime("%Y%m%d_%H%M%S")}'
+            return JsonResponse({
+                'success': False,
+                'error': 'Transaction ID is required'
+            }, status=400)
+        
+        # Проверяем, не была ли уже активирована эта транзакция
+        existing_purchase = PurchasedPlan.objects.filter(
+            transaction_id=transaction_id,
+            user=user
+        ).first()
+        
+        if existing_purchase:
+            return JsonResponse({
+                'success': True,
+                'message': f'Тариф "{plan.title}" уже был активирован ранее!',
+                'purchased_plan_id': existing_purchase.id
+            })
+        
+        # Проверяем статус транзакции в CloudPayments
+        print(f"DEBUG: Checking transaction status for: {transaction_id}")
+        transaction_status = cloudpayments_service.get_transaction_status(transaction_id)
+        print(f"DEBUG: Transaction status: {transaction_status}")
+        
+        # Проверяем, что транзакция действительно успешна
+        if not transaction_status.get('success') or transaction_status.get('Model', {}).get('Status') != 'Completed':
+            return JsonResponse({
+                'success': False,
+                'error': 'Транзакция не подтверждена. Пожалуйста, дождитесь подтверждения платежа или обратитесь в поддержку.'
+            }, status=400)
         
         # Создаем запись о купленном тарифе
         print(f"DEBUG: Creating PurchasedPlan...")

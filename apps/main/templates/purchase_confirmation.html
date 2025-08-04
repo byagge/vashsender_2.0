@@ -153,6 +153,9 @@
           <br><span class="text-orange-600 font-semibold">ТЕСТОВЫЙ РЕЖИМ</span>
           {% endif %}
         </div>
+        
+        <!-- Статус платежа -->
+        <div id="payment-status" class="hidden mt-4"></div>
       </div>
       {% csrf_token %}
     </form>
@@ -268,6 +271,11 @@
             // Успешная оплата
             console.log('Payment successful:', result);
             // Структура result: {type: 'payment', data: {...}, status: 'success'}
+            
+            // Показываем сообщение о том, что платеж обрабатывается
+            this.showProcessingMessage('Платеж обрабатывается...');
+            
+            // Проверяем статус и активируем план
             self.activatePlan(result.data || result);
           }).catch((error) => {
             // Ошибка оплаты
@@ -312,6 +320,22 @@
               self.isProcessing = false;
             }
           });
+        },
+        
+        showProcessingMessage(message) {
+          // Показываем сообщение о обработке
+          var statusElement = document.getElementById('payment-status');
+          if (statusElement) {
+            statusElement.innerHTML = `
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div class="flex items-center">
+                  <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+                  <span class="text-blue-800">${message}</span>
+                </div>
+              </div>
+            `;
+            statusElement.classList.remove('hidden');
+          }
         },
         
         testPurchase() {
