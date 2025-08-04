@@ -509,21 +509,17 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 if time.time() - start_time > 500:
                     raise TimeoutError("Batch task timeout approaching during email sending")
                 
-                # Улучшенный rate limiting с более естественными задержками
+                # Rate limiting для 10 писем в секунду
                 if i > 0:
                     import random
-                    # Более естественные задержки как у человека
+                    # Задержка для достижения 10 писем в секунду
                     if i % rate_limit == 0:
-                        # Пауза каждые rate_limit писем
-                        delay = random.uniform(2.0, 4.0)
-                        time.sleep(delay)
-                    elif i % 10 == 0:
-                        # Небольшая пауза каждые 10 писем
-                        delay = random.uniform(0.5, 1.5)
+                        # Пауза каждые 10 писем (rate_limit)
+                        delay = random.uniform(0.8, 1.2)  # ~1 секунда
                         time.sleep(delay)
                     else:
-                        # Минимальная задержка между письмами
-                        delay = random.uniform(0.1, 0.3)
+                        # Минимальная задержка между письмами для 10/сек
+                        delay = random.uniform(0.08, 0.12)  # ~0.1 секунды
                         time.sleep(delay)
                 
                 # Отправляем письмо напрямую
