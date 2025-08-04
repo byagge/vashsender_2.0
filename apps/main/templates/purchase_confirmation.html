@@ -270,17 +270,36 @@
           }).then((result) => {
             // Успешная оплата
             console.log('Payment successful:', result);
-            // Структура result: {type: 'payment', data: {...}, status: 'success'}
             
-            // Показываем сообщение о том, что платеж обрабатывается
-            this.showProcessingMessage('Платеж обрабатывается...');
-            
-            // Проверяем статус и активируем план
-            self.activatePlan(result.data || result);
+            // Проверяем, что это действительно успешный платеж
+            if (result.type === 'payment' && result.status === 'success' && result.data) {
+              // Дополнительная проверка статуса в данных
+              var paymentData = result.data;
+              if (paymentData.Status === 'Completed' || paymentData.status === 'completed') {
+                // Показываем сообщение о том, что платеж обрабатывается
+                this.showProcessingMessage('Платеж обрабатывается...');
+                
+                // Проверяем статус и активируем план
+                self.activatePlan(result.data || result);
+              } else {
+                this.showErrorMessage('Платеж не был завершен успешно. Статус: ' + (paymentData.Status || paymentData.status || 'неизвестен'));
+                this.isProcessing = false;
+              }
+            } else {
+              // Если это не успешный платеж, показываем ошибку
+              this.showErrorMessage('Платеж не был завершен успешно');
+              this.isProcessing = false;
+            }
           }).catch((error) => {
-            // Ошибка оплаты
-            console.error('Payment failed:', error);
-            this.showErrorMessage('Оплата не прошла: ' + (error.message || 'Неизвестная ошибка'));
+            // Ошибка оплаты или отмена
+            console.error('Payment failed or cancelled:', error);
+            
+            // Проверяем тип ошибки
+            if (error.message && error.message.includes('cancelled')) {
+              this.showErrorMessage('Оплата была отменена');
+            } else {
+              this.showErrorMessage('Оплата не прошла: ' + (error.message || 'Неизвестная ошибка'));
+            }
             this.isProcessing = false;
           });
           
@@ -297,6 +316,21 @@
           // Показываем сообщение о проверке платежа
           this.showProcessingMessage('Проверяем статус платежа...');
           
+          // Получаем transaction_id из разных возможных источников
+          var transactionId = null;
+          if (paymentResult.invoiceId) {
+            transactionId = paymentResult.invoiceId;
+          } else if (paymentResult.TransactionId) {
+            transactionId = paymentResult.TransactionId;
+          } else if (paymentResult.transaction_id) {
+            transactionId = paymentResult.transaction_id;
+          } else if (paymentResult.id) {
+            transactionId = paymentResult.id;
+          }
+          
+          console.log('Transaction ID:', transactionId);
+          console.log('Payment result:', paymentResult);
+          
           $.ajax({
             url: '/billing/activate-payment/',
             method: 'POST',
@@ -306,14 +340,21 @@
             },
             data: JSON.stringify({
               plan_id: this.planData.id,
-              payment_data: paymentResult
+              payment_data: {
+                ...paymentResult,
+                transaction_id: transactionId
+              }
             }),
             success: function(result) {
               if (result.success) {
                 // Показываем успешное сообщение
                 self.showSuccessMessage(result.message || 'Тариф успешно активирован!');
                 setTimeout(() => {
-                  window.location.href = '/purchase/success/?plan_id=' + self.planData.id + '&transaction_id=' + (paymentResult.invoiceId || paymentResult.TransactionId);
+                  var successUrl = '/purchase/success/?plan_id=' + self.planData.id;
+                  if (transactionId) {
+                    successUrl += '&transaction_id=' + transactionId;
+                  }
+                  window.location.href = successUrl;
                 }, 2000);
               } else {
                 // Показываем ошибку

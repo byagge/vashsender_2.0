@@ -105,7 +105,11 @@ def purchase_confirmation(request):
 def purchase_success(request):
     """Страница успешной покупки"""
     plan_id = request.GET.get('plan_id')
-    transaction_id = request.GET.get('transaction_id', 'TEST-123456')
+    transaction_id = request.GET.get('transaction_id')
+    
+    # Проверяем, что transaction_id не undefined
+    if transaction_id == 'undefined' or not transaction_id:
+        transaction_id = 'N/A'
     
     if plan_id:
         plan = get_object_or_404(Plan, id=plan_id, is_active=True)

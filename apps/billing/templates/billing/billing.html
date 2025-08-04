@@ -148,7 +148,7 @@
                         <div class="border rounded-lg p-4">
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <h3 class="font-semibold text-gray-900" x-text="plan?.title || 'Неизвестный тариф'"></h3>
+                                    <h3 class="font-semibold text-gray-900" x-text="plan?.title || plan?.plan?.title || 'Неизвестный тариф'"></h3>
                                     <p class="text-sm text-gray-500">
                                         <span x-text="formatDate(plan?.start_date)"></span> - 
                                         <span x-text="formatDate(plan?.end_date)"></span>

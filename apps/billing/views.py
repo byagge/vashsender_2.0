@@ -436,12 +436,17 @@ def activate_payment(request):
         # Получаем transaction_id безопасно
         transaction_id = None
         if isinstance(payment_data, dict):
-            transaction_id = payment_data.get('invoiceId') or payment_data.get('TransactionId') or payment_data.get('transaction_id')
+            transaction_id = (payment_data.get('invoiceId') or 
+                            payment_data.get('TransactionId') or 
+                            payment_data.get('transaction_id') or
+                            payment_data.get('id'))
         
-        if not transaction_id:
+        print(f"DEBUG: Extracted transaction_id: {transaction_id}")
+        
+        if not transaction_id or transaction_id == 'undefined':
             return JsonResponse({
                 'success': False,
-                'error': 'Transaction ID is required'
+                'error': 'Transaction ID не найден или недействителен. Пожалуйста, повторите попытку оплаты.'
             }, status=400)
         
         # Проверяем, не была ли уже активирована эта транзакция

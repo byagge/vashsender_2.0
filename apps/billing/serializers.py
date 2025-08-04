@@ -29,6 +29,7 @@ class PlanSerializer(serializers.ModelSerializer):
 
 class PurchasedPlanSerializer(serializers.ModelSerializer):
     plan = PlanSerializer(read_only=True)
+    title = serializers.SerializerMethodField()
     emails_remaining = serializers.SerializerMethodField()
     days_remaining = serializers.SerializerMethodField()
     is_expired = serializers.SerializerMethodField()
@@ -36,11 +37,14 @@ class PurchasedPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchasedPlan
         fields = [
-            'id', 'plan', 'start_date', 'end_date', 'is_active',
+            'id', 'plan', 'title', 'start_date', 'end_date', 'is_active',
             'auto_renew', 'payment_method', 'transaction_id',
             'amount_paid', 'emails_sent', 'emails_remaining',
             'days_remaining', 'is_expired', 'created_at'
         ]
+    
+    def get_title(self, obj):
+        return obj.plan.title if obj.plan else 'Неизвестный тариф'
     
     def get_emails_remaining(self, obj):
         return obj.get_emails_remaining()
