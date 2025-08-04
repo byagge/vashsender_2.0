@@ -436,12 +436,14 @@ def activate_payment(request):
         # Получаем transaction_id безопасно
         transaction_id = None
         if isinstance(payment_data, dict):
-            transaction_id = (payment_data.get('invoiceId') or 
+            transaction_id = (payment_data.get('transactionId') or 
+                            payment_data.get('invoiceId') or 
                             payment_data.get('TransactionId') or 
                             payment_data.get('transaction_id') or
                             payment_data.get('id'))
         
         print(f"DEBUG: Extracted transaction_id: {transaction_id}")
+        print(f"DEBUG: Payment data: {payment_data}")
         
         if not transaction_id or transaction_id == 'undefined':
             return JsonResponse({
@@ -468,10 +470,18 @@ def activate_payment(request):
         print(f"DEBUG: Transaction status: {transaction_status}")
         
         # Проверяем, что транзакция действительно успешна
-        if not transaction_status.get('success') or transaction_status.get('Model', {}).get('Status') != 'Completed':
+        if not transaction_status.get('success'):
             return JsonResponse({
                 'success': False,
-                'error': 'Транзакция не подтверждена. Пожалуйста, дождитесь подтверждения платежа или обратитесь в поддержку.'
+                'error': 'Не удалось проверить статус транзакции. Пожалуйста, обратитесь в поддержку.'
+            }, status=400)
+        
+        # Проверяем статус в ответе от CloudPayments
+        model_data = transaction_status.get('Model', {})
+        if model_data.get('Status') != 'Completed':
+            return JsonResponse({
+                'success': False,
+                'error': f'Транзакция не подтверждена. Статус: {model_data.get("Status", "неизвестен")}. Пожалуйста, дождитесь подтверждения платежа или обратитесь в поддержку.'
             }, status=400)
         
         # Создаем запись о купленном тарифе

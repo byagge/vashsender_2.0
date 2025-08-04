@@ -189,7 +189,7 @@
         console.log('processPurchase called');
         console.log('agreedToTerms:', this.agreedToTerms);
         if (!this.agreedToTerms) {
-          alert('Пожалуйста, согласитесь с условиями использования');
+          this.showErrorMessage('Пожалуйста, согласитесь с условиями использования');
           return;
         }
         
@@ -272,22 +272,19 @@
             console.log('Payment successful:', result);
             
             // Проверяем, что это действительно успешный платеж
-            if (result.type === 'payment' && result.status === 'success' && result.data) {
-              // Дополнительная проверка статуса в данных
-              var paymentData = result.data;
-              if (paymentData.Status === 'Completed' || paymentData.status === 'completed') {
-                // Показываем сообщение о том, что платеж обрабатывается
-                this.showProcessingMessage('Платеж обрабатывается...');
-                
-                // Проверяем статус и активируем план
-                self.activatePlan(result.data || result);
-              } else {
-                this.showErrorMessage('Платеж не был завершен успешно. Статус: ' + (paymentData.Status || paymentData.status || 'неизвестен'));
-                this.isProcessing = false;
-              }
+            if (result.type === 'payment' && result.status === 'success') {
+              // Показываем сообщение о том, что платеж обрабатывается
+              this.showProcessingMessage('Платеж обрабатывается...');
+              
+              // Проверяем статус и активируем план
+              self.activatePlan(result.data || result);
+            } else if (result.type === 'cancel') {
+              // Пользователь отменил платеж
+              this.showErrorMessage('Оплата была отменена');
+              this.isProcessing = false;
             } else {
               // Если это не успешный платеж, показываем ошибку
-              this.showErrorMessage('Платеж не был завершен успешно');
+              this.showErrorMessage('Платеж не был завершен успешно. Статус: ' + (result.status || 'неизвестен'));
               this.isProcessing = false;
             }
           }).catch((error) => {
@@ -316,9 +313,13 @@
           // Показываем сообщение о проверке платежа
           this.showProcessingMessage('Проверяем статус платежа...');
           
+          console.log('Payment result for activation:', paymentResult);
+          
           // Получаем transaction_id из разных возможных источников
           var transactionId = null;
-          if (paymentResult.invoiceId) {
+          if (paymentResult.transactionId) {
+            transactionId = paymentResult.transactionId;
+          } else if (paymentResult.invoiceId) {
             transactionId = paymentResult.invoiceId;
           } else if (paymentResult.TransactionId) {
             transactionId = paymentResult.TransactionId;
@@ -329,7 +330,6 @@
           }
           
           console.log('Transaction ID:', transactionId);
-          console.log('Payment result:', paymentResult);
           
           $.ajax({
             url: '/billing/activate-payment/',
