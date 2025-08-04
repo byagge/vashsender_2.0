@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оплата прошла успешно — vashsender</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #f6f9fc; }
+        .green-btn { background: #00b86b; }
+        .green-btn:hover { background: #009e5c; }
+        .blue-btn { background: #3b82f6; }
+        .blue-btn:hover { background: #2563eb; }
+    </style>
+</head>
+<body>
+<div class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
+        <!-- Success Icon -->
+        <div class="text-center mb-6">
+            <div class="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="check" class="w-8 h-8 text-green-600"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Оплата прошла успешно!</h1>
+            <p class="text-gray-600">Ваш тариф активирован и готов к использованию.</p>
+        </div>
+
+        <!-- Plan Info -->
+        <div class="bg-blue-50 rounded-lg p-4 mb-6">
+            <h2 class="font-semibold text-gray-900 mb-2">Активированный тариф</h2>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Название:</span>
+                    <span class="font-medium" id="planName">Загрузка...</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Тип:</span>
+                    <span class="font-medium" id="planType">Загрузка...</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Действует до:</span>
+                    <span class="font-medium" id="planExpiry">Загрузка...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="space-y-3">
+            <a href="/dashboard/" class="w-full blue-btn text-white py-3 px-6 rounded-lg text-center block font-medium">
+                <i data-lucide="layout-dashboard" class="w-5 h-5 inline mr-2"></i>
+                Перейти в дашборд
+            </a>
+            <a href="/billing/" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-6 rounded-lg text-center block font-medium">
+                <i data-lucide="credit-card" class="w-5 h-5 inline mr-2"></i>
+                Управление тарифами
+            </a>
+        </div>
+
+        <!-- Additional Info -->
+        <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="text-center text-sm text-gray-500">
+                <p>Чек отправлен на ваш email</p>
+                <p class="mt-1">По вопросам обращайтесь в <a href="/support/" class="text-blue-600 hover:underline">поддержку</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+    
+    // Автоматическое перенаправление через 10 секунд
+    let countdown = 10;
+    const countdownElement = document.createElement('div');
+    countdownElement.className = 'text-center text-sm text-gray-500 mt-4';
+    countdownElement.innerHTML = `Автоматическое перенаправление в дашборд через <span id="countdown">${countdown}</span> секунд`;
+    document.querySelector('.max-w-md').appendChild(countdownElement);
+    
+    const countdownSpan = document.getElementById('countdown');
+    const interval = setInterval(() => {
+        countdown--;
+        countdownSpan.textContent = countdown;
+        if (countdown <= 0) {
+            clearInterval(interval);
+            window.location.href = '/dashboard/';
+        }
+    }, 1000);
+    
+    // Загружаем информацию о плане
+    async function loadPlanInfo() {
+        try {
+            const response = await fetch('/billing/api/user-plan-info/');
+            const data = await response.json();
+            
+            if (data.has_plan) {
+                document.getElementById('planName').textContent = data.plan_name;
+                document.getElementById('planType').textContent = data.plan_type === 'Letters' ? 'Письма' : 'Подписчики';
+                
+                const expiryDate = new Date(data.end_date);
+                document.getElementById('planExpiry').textContent = expiryDate.toLocaleDateString('ru-RU');
+            }
+        } catch (error) {
+            console.error('Error loading plan info:', error);
+        }
+    }
+    
+    // Загружаем информацию при загрузке страницы
+    document.addEventListener('DOMContentLoaded', loadPlanInfo);
+</script>
+</body>
+</html> 

@@ -1,0 +1,161 @@
+{# templates/account/login.html #}
+{% load wagtailcore_tags %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в аккаунт - vashsender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body { 
+            font-family: 'Montserrat', Arial, sans-serif; 
+        }
+    </style>
+</head>
+<body class="bg-[#f5f6fa] text-[#222] min-h-screen">
+    <!-- Header -->
+    <header class="flex items-center justify-between px-6 md:px-20 pt-8">
+        <a href="/" class="flex items-center text-2xl font-bold text-[#222] no-underline">
+            <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/>
+                <path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/>
+            </svg>
+            vashsender
+        </a>
+        <nav class="flex gap-8 items-center">
+            <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-col md:flex-row items-center justify-center px-6 md:px-20 pt-12 pb-8 min-h-[80vh]">
+        <!-- Left - Hero Section -->
+        <div class="flex-1 flex flex-col items-start gap-8 mb-12 md:mb-0">
+            <h1 class="text-4xl md:text-6xl font-extrabold text-[#222a38] leading-tight">
+                ДОБРО<br>ПОЖАЛОВАТЬ<br>ОБРАТНО
+            </h1>
+            <p class="text-lg text-[#6b7a99] max-w-xl">
+                Войдите в свой аккаунт и продолжайте создавать эффективные email-рассылки. Простая отправка, аналитика и готовые шаблоны.
+            </p>
+            <div class="flex items-center gap-2 text-[#6b7a99] text-base">
+                <i class="fa-solid fa-circle-check text-[#1877ff] text-lg"></i>
+                200 подписчиков и неограниченное количество писем
+            </div>
+        </div>
+
+        <!-- Right - Login Form -->
+        <div class="flex-1 flex justify-center">
+            <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-[#222a38] mb-2">Вход в аккаунт</h2>
+                    <p class="text-[#6b7a99]">Введите свои данные для входа</p>
+                </div>
+
+                {% if errors.non_field %}
+                    <div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
+                        {{ errors.non_field }}
+                    </div>
+                {% endif %}
+
+                <form id="loginForm" action="{% url 'accounts:login' %}" method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-6">
+                        <label for="email" class="block text-[#222a38] font-medium mb-2">Email</label>
+                        <input type="email"
+                               name="email"
+                               id="email"
+                               class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                               placeholder="Введите свой email"
+                               value="{{ data.email|default:'' }}"
+                               required>
+                        {% if errors.email %}
+                            <div class="text-red-600 text-sm mt-1">{{ errors.email }}</div>
+                        {% else %}
+                            <div class="text-red-600 text-sm mt-1 hidden" id="emailError">Введите корректный email</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="password" class="block text-[#222a38] font-medium mb-2">Пароль</label>
+                        <input type="password"
+                               name="password"
+                               id="password"
+                               class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                               placeholder="Введите свой пароль"
+                               required>
+                        {% if errors.password %}
+                            <div class="text-red-600 text-sm mt-1">{{ errors.password }}</div>
+                        {% else %}
+                            <div class="text-red-600 text-sm mt-1 hidden" id="passwordError">Пароль не может быть пустым</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" 
+                                   name="remember" 
+                                   id="remember" 
+                                   class="w-4 h-4 text-[#1877ff] border-gray-300 rounded focus:ring-[#1877ff]"
+                                   {% if data.remember %}checked{% endif %}>
+                            <label for="remember" class="ml-2 text-[#6b7a99] text-sm">Запомнить меня</label>
+                        </div>
+                        <a href="{% url 'accounts:password_reset' %}" class="text-[#1877ff] text-sm hover:underline">
+                            Забыли пароль?
+                        </a>
+                    </div>
+
+                    <button type="submit" 
+                            class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg py-3 text-base transition mb-6">
+                        Войти в аккаунт
+                    </button>
+                </form>
+
+                <div class="text-center text-[#6b7a99] text-sm">
+                    Нет аккаунта? 
+                    <a href="{% url 'accounts:signup' %}" class="text-[#1877ff] font-medium hover:underline">
+                        Зарегистрироваться
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const form = document.getElementById('loginForm');
+            const email = document.getElementById('email');
+            const pwd = document.getElementById('password');
+            const emailErr = document.getElementById('emailError');
+            const pwdErr = document.getElementById('passwordError');
+
+            form.addEventListener('submit', e => {
+                e.preventDefault();
+                let valid = true;
+                
+                if (emailErr) emailErr.classList.add('hidden');
+                if (pwdErr) pwdErr.classList.add('hidden');
+
+                // Email check
+                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!re.test(email.value.trim())) {
+                    if (emailErr) emailErr.classList.remove('hidden');
+                    valid = false;
+                }
+                
+                // Password non-empty
+                if (!pwd.value) {
+                    if (pwdErr) pwdErr.classList.remove('hidden');
+                    valid = false;
+                }
+                
+                if (!valid) return;
+                form.submit();
+            });
+        })();
+    </script>
+</body>
+</html>

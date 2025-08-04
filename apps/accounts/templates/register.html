@@ -1,0 +1,361 @@
+{# templates/account/registration.html #}
+{% load wagtailcore_tags %}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Регистрация - vashsender</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        body { font-family: 'Montserrat', Arial, sans-serif; }
+    </style>
+</head>
+<body class="bg-[#f5f6fa] text-[#222] min-h-screen">
+    <!-- Header -->
+    <header class="flex items-center justify-between px-6 md:px-20 pt-8">
+        <a href="/" class="flex items-center text-2xl font-bold text-[#222] no-underline">
+            <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg">
+                <rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/>
+                <path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/>
+            </svg>
+            vashsender
+        </a>
+        <nav class="flex gap-8 items-center">
+            <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
+            <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex flex-col md:flex-row items-center justify-between px-6 md:px-20 pt-12 pb-8 min-h-[80vh]">
+        <!-- Left Hero Section -->
+        <div class="flex-1 flex flex-col items-start gap-8 mb-12 md:mb-0">
+            <h1 class="text-4xl md:text-6xl font-extrabold text-[#222a38] leading-tight">
+                СОЗДАЙТЕ<br>СВОЙ АККАУНТ
+            </h1>
+            <p class="text-lg text-[#6b7a99] max-w-xl">
+                Присоединяйтесь к тысячам компаний, которые используют vashsender для увеличения продаж и улучшения отношений с клиентами
+            </p>
+            
+            <!-- Features List -->
+            <div class="space-y-4">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-[#1877ff] text-lg"></i>
+                    <span class="text-[#6b7a99] text-base">Простой и интуитивный интерфейс</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-[#1877ff] text-lg"></i>
+                    <span class="text-[#6b7a99] text-base">Мощная аналитика и отчеты</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-[#1877ff] text-lg"></i>
+                    <span class="text-[#6b7a99] text-base">Автоматизация email-маркетинга</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-[#1877ff] text-lg"></i>
+                    <span class="text-[#6b7a99] text-base">Поддержка 24/7</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Form Section -->
+        <div class="flex-1 flex items-center justify-center">
+            <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-[#222a38] mb-2">Создайте аккаунт</h2>
+                    <p class="text-[#6b7a99] text-base">Начните бесплатно уже сегодня</p>
+                </div>
+
+                <form id="registrationForm" action="{% url 'accounts:signup' %}" method="post">
+                    {% csrf_token %}
+
+                    <!-- Name Field -->
+                    <div class="mb-6">
+                        <label for="name" class="block text-[#222a38] font-bold text-sm mb-2">Имя</label>
+                        <div class="relative">
+                            <i class="fas fa-user absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6b7a99]"></i>
+                            <input type="text" name="name" id="name" 
+                                   class="w-full border border-gray-300 rounded-md px-10 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                                   placeholder="Введите свое полное имя" value="{{ data.name|default:'' }}" required>
+                        </div>
+                        <div class="error-message text-red-500 text-sm mt-1 hidden" id="nameError">
+                            Пожалуйста, введите свое имя
+                        </div>
+                        {% if errors.name %}
+                            <div class="text-red-500 text-sm mt-1">{{ errors.name }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Email Field -->
+                    <div class="mb-6">
+                        <label for="email" class="block text-[#222a38] font-bold text-sm mb-2">Адрес электронной почты *</label>
+                        <div class="relative">
+                            <i class="fas fa-envelope absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6b7a99]"></i>
+                            <input type="email" name="email" id="email" 
+                                   class="w-full border border-gray-300 rounded-md px-10 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                                   placeholder="Введите свой адрес электронной почты" required value="{{ data.email|default:'' }}">
+                        </div>
+                        <div class="error-message text-red-500 text-sm mt-1 hidden" id="emailError">
+                            Пожалуйста, введите действительный адрес электронной почты
+                        </div>
+                        {% if errors.email %}
+                            <div class="text-red-500 text-sm mt-1">{{ errors.email }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="mb-6">
+                        <label for="password" class="block text-[#222a38] font-bold text-sm mb-2">Пароль *</label>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6b7a99]"></i>
+                            <input type="password" name="password" id="password" 
+                                   class="w-full border border-gray-300 rounded-md px-10 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                                   placeholder="Создайте надежный пароль" required>
+                        </div>
+                        <div class="strength-indicator mt-2 h-1 bg-gray-200 rounded-full hidden" id="strengthIndicator">
+                            <div class="strength-bar h-full rounded-full transition-all duration-300" id="strengthBar"></div>
+                        </div>
+                        <div class="error-message text-red-500 text-sm mt-1 hidden" id="passwordError">
+                            Длина пароля должна составлять не менее 8 символов
+                        </div>
+                        {% if errors.password %}
+                            <div class="text-red-500 text-sm mt-1">{{ errors.password }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Confirm Password Field -->
+                    <div class="mb-6">
+                        <label for="confirmPassword" class="block text-[#222a38] font-bold text-sm mb-2">Подтвердите пароль *</label>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6b7a99]"></i>
+                            <input type="password" name="confirmPassword" id="confirmPassword" 
+                                   class="w-full border border-gray-300 rounded-md px-10 py-3 focus:outline-none focus:ring-2 focus:ring-[#1877ff] focus:border-transparent"
+                                   placeholder="Подтвердите свой пароль" required>
+                        </div>
+                        <div class="error-message text-red-500 text-sm mt-1 hidden" id="confirmPasswordError">
+                            Пароли не совпадают
+                        </div>
+                        <div class="success-message text-green-500 text-sm mt-1 hidden" id="confirmPasswordSuccess">
+                            Пароли совпадают!
+                        </div>
+                        {% if errors.confirmPassword %}
+                            <div class="text-red-500 text-sm mt-1">{{ errors.confirmPassword }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Terms Checkbox -->
+                    <div class="mb-6">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" name="terms" id="terms" 
+                                   class="mt-1 w-4 h-4 text-[#1877ff] border-gray-300 rounded focus:ring-[#1877ff]"
+                                   {% if data.terms %}checked{% endif %} required>
+                            <label for="terms" class="text-[#6b7a99] text-sm leading-relaxed">
+                                Я согласен с
+                                <a href="#" onclick="openModal('terms')" class="text-[#1877ff] hover:underline font-medium">Условиями обслуживания</a>
+                                и
+                                <a href="#" onclick="openModal('privacy')" class="text-[#1877ff] hover:underline font-medium">Политикой конфиденциальности</a>
+                            </label>
+                        </div>
+                        <div class="error-message text-red-500 text-sm mt-1 hidden" id="termsError">
+                            Пожалуйста, примите условия обслуживания и политику конфиденциальности
+                        </div>
+                        {% if errors.terms %}
+                            <div class="text-red-500 text-sm mt-1">{{ errors.terms }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md py-3 text-base transition mb-6">
+                        Создать аккаунт
+                    </button>
+                </form>
+
+                <!-- Login Link -->
+                <div class="text-center">
+                    <p class="text-[#6b7a99] text-sm">
+                        У вас уже есть учетная запись? 
+                        <a href="{% url 'accounts:login' %}" class="text-[#1877ff] hover:underline font-medium">Войдите здесь</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Элементы формы
+        const form = document.getElementById('registrationForm');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const confirmPasswordInput = document.getElementById('confirmPassword');
+        const termsInput = document.getElementById('terms');
+        const strengthIndicator = document.getElementById('strengthIndicator');
+        const strengthBar = document.getElementById('strengthBar');
+
+        // Валидация имени на blur
+        nameInput.addEventListener('blur', function() {
+            if (this.value.trim() === '') {
+                document.getElementById('nameError').classList.remove('hidden');
+                this.classList.add('border-red-500');
+            } else {
+                document.getElementById('nameError').classList.add('hidden');
+                this.classList.remove('border-red-500');
+            }
+        });
+
+        // Скрытие ошибки имени при вводе
+        nameInput.addEventListener('input', function() {
+            if (this.value.trim() !== '') {
+                document.getElementById('nameError').classList.add('hidden');
+                this.classList.remove('border-red-500');
+            }
+        });
+
+        // Валидация email на blur
+        emailInput.addEventListener('blur', function() {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(this.value) && this.value !== '') {
+                document.getElementById('emailError').classList.remove('hidden');
+                this.classList.add('border-red-500');
+            } else {
+                document.getElementById('emailError').classList.add('hidden');
+                this.classList.remove('border-red-500');
+            }
+        });
+
+        // Валидация пароля и индикатор силы
+        passwordInput.addEventListener('input', function() {
+            const password = this.value;
+            if (password.length > 0) {
+                strengthIndicator.classList.remove('hidden');
+                let strength = 0;
+                if (password.length >= 8) strength++;
+                if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+                if (/\d/.test(password)) strength++;
+                if (/[^a-zA-Z\d]/.test(password)) strength++;
+                
+                strengthBar.className = 'strength-bar h-full rounded-full transition-all duration-300';
+                if (strength <= 1) {
+                    strengthBar.classList.add('bg-red-500');
+                    strengthBar.style.width = '33%';
+                } else if (strength <= 2) {
+                    strengthBar.classList.add('bg-yellow-500');
+                    strengthBar.style.width = '66%';
+                } else {
+                    strengthBar.classList.add('bg-green-500');
+                    strengthBar.style.width = '100%';
+                }
+
+                if (password.length < 8) {
+                    document.getElementById('passwordError').classList.remove('hidden');
+                } else {
+                    document.getElementById('passwordError').classList.add('hidden');
+                }
+            } else {
+                strengthIndicator.classList.add('hidden');
+                document.getElementById('passwordError').classList.add('hidden');
+            }
+        });
+
+        // Валидация подтверждения пароля
+        confirmPasswordInput.addEventListener('input', function() {
+            if (this.value !== passwordInput.value && this.value !== '') {
+                document.getElementById('confirmPasswordError').classList.remove('hidden');
+                document.getElementById('confirmPasswordSuccess').classList.add('hidden');
+                this.classList.add('border-red-500');
+            } else if (this.value === passwordInput.value && this.value !== '') {
+                document.getElementById('confirmPasswordError').classList.add('hidden');
+                document.getElementById('confirmPasswordSuccess').classList.remove('hidden');
+                this.classList.remove('border-red-500');
+                this.classList.add('border-green-500');
+            } else {
+                document.getElementById('confirmPasswordError').classList.add('hidden');
+                document.getElementById('confirmPasswordSuccess').classList.add('hidden');
+                this.classList.remove('border-red-500', 'border-green-500');
+            }
+        });
+
+        // Валидация чекбокса условий
+        termsInput.addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('termsError').classList.add('hidden');
+            }
+        });
+
+        // Обработка отправки формы
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            let isValid = true;
+
+            // Проверка имени
+            if (nameInput.value.trim() === '') {
+                document.getElementById('nameError').classList.remove('hidden');
+                nameInput.classList.add('border-red-500');
+                isValid = false;
+            } else {
+                document.getElementById('nameError').classList.add('hidden');
+                nameInput.classList.remove('border-red-500');
+            }
+
+            // Проверка email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(emailInput.value)) {
+                document.getElementById('emailError').classList.remove('hidden');
+                emailInput.classList.add('border-red-500');
+                isValid = false;
+            } else {
+                document.getElementById('emailError').classList.add('hidden');
+                emailInput.classList.remove('border-red-500');
+            }
+
+            // Проверка пароля
+            if (passwordInput.value.length < 8) {
+                document.getElementById('passwordError').classList.remove('hidden');
+                passwordInput.classList.add('border-red-500');
+                isValid = false;
+            } else {
+                document.getElementById('passwordError').classList.add('hidden');
+                passwordInput.classList.remove('border-red-500');
+            }
+
+            // Проверка подтверждения пароля
+            if (confirmPasswordInput.value !== passwordInput.value) {
+                document.getElementById('confirmPasswordError').classList.remove('hidden');
+                confirmPasswordInput.classList.add('border-red-500');
+                isValid = false;
+            } else {
+                document.getElementById('confirmPasswordError').classList.add('hidden');
+                document.getElementById('confirmPasswordSuccess').classList.remove('hidden');
+                confirmPasswordInput.classList.remove('border-red-500');
+                confirmPasswordInput.classList.add('border-green-500');
+            }
+
+            // Проверка условий
+            if (!termsInput.checked) {
+                document.getElementById('termsError').classList.remove('hidden');
+                isValid = false;
+            } else {
+                document.getElementById('termsError').classList.add('hidden');
+            }
+
+            // Если все валидно, отправляем форму
+            if (isValid) {
+                form.submit();
+            }
+        });
+
+        // Функции модальных окон
+        function openModal(type) {
+            if (type === 'terms') {
+                alert('Terms of Service modal would open here');
+            } else if (type === 'privacy') {
+                alert('Privacy Policy modal would open here');
+            }
+        }
+    </script>
+</body>
+</html>
