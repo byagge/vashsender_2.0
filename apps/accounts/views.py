@@ -109,7 +109,7 @@ class EmailSentView(LoginRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         if getattr(request.user, 'is_email_verified', False):
-            return redirect('home')
+            return redirect('dashboard')
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request):
@@ -131,7 +131,7 @@ class ResendEmailView(LoginRequiredMixin, View):
     def post(self, request):
         user = request.user
         if getattr(user, 'is_email_verified', False):
-            return redirect('home')
+            return redirect('dashboard')
 
         # Генерируем новый токен и отправляем письмо
         uid   = urlsafe_base64_encode(force_bytes(user.pk))
@@ -177,7 +177,7 @@ class ActivateView(View):
             user.save()
             messages.success(request, 'Email подтвержден! Теперь вы можете использовать все функции.')
             login(request, user, backend='apps.accounts.backends.EmailBackend')
-            return redirect('home')
+            return redirect('dashboard')
         else:
             messages.error(request, 'Недействительная ссылка для активации.')
             return redirect('accounts:login')
@@ -188,7 +188,7 @@ class LoginView(View):
 
     def get(self, request):
         if request.user.is_authenticated:
-            return redirect('home')
+            return redirect('dashboard')
         return render(request, self.template_name)
 
     def post(self, request):
@@ -213,7 +213,7 @@ class LoginView(View):
             login(request, user, backend='apps.accounts.backends.EmailBackend')
             if not remember:
                 request.session.set_expiry(0)
-            return redirect('home')
+            return redirect('dashboard')
         else:
             errors['non_field'] = 'Неверный email или пароль'
             return render(request, self.template_name, {
@@ -226,7 +226,7 @@ class LogoutView(View):
     def get(self, request):
         logout(request)
         messages.success(request, 'Вы успешно вышли из аккаунта.')
-        return redirect('home')
+        return redirect('main:landing')
 
 
 # Password Reset Views
