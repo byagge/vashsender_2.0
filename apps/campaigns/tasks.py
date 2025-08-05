@@ -312,8 +312,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Разбиваем на батчи (уменьшено для Mail.ru и Yandex)
-        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 20)  # Уменьшено с 100 до 20
+        # Разбиваем на батчи (уменьшено для Mail.ru)
+        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 5)   # Уменьшено до 5 для Mail.ru
         batches = [
             contacts_list[i:i + batch_size] 
             for i in range(0, len(contacts_list), batch_size)
@@ -501,7 +501,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         sent_count = 0
         failed_count = 0
-        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 5)  # Уменьшено с 50 до 5 для Mail.ru и Yandex
+        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 2)  # Уменьшено до 2 для Mail.ru
         
         for i, contact in enumerate(contacts):
             try:
@@ -509,17 +509,17 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 if time.time() - start_time > 500:
                     raise TimeoutError("Batch task timeout approaching during email sending")
                 
-                # Rate limiting для 5 писем в секунду (уменьшено для Mail.ru и Yandex)
+                # Rate limiting для 2 писем в секунду (уменьшено для Mail.ru)
                 if i > 0:
                     import random
-                    # Задержка для достижения 5 писем в секунду
+                    # Задержка для достижения 2 писем в секунду
                     if i % rate_limit == 0:
-                        # Пауза каждые 5 писем (rate_limit)
-                        delay = random.uniform(1.5, 2.5)  # ~2 секунды
+                        # Пауза каждые 2 письма (rate_limit)
+                        delay = random.uniform(3.0, 5.0)  # ~4 секунды
                         time.sleep(delay)
                     else:
-                        # Минимальная задержка между письмами для 5/сек
-                        delay = random.uniform(0.15, 0.25)  # ~0.2 секунды
+                        # Минимальная задержка между письмами для 2/сек
+                        delay = random.uniform(0.4, 0.6)  # ~0.5 секунды
                         time.sleep(delay)
                 
                 # Отправляем письмо напрямую
@@ -812,13 +812,18 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         msg['Date'] = timezone.now().strftime('%a, %d %b %Y %H:%M:%S %z')
         msg['MIME-Version'] = '1.0'
         
-        # УБИРАЕМ проблемные заголовки, которые могут вызывать блокировку в Mail.ru и Yandex
-        # msg['X-Mailer'] = 'VashSender/1.0'  # УДАЛЕНО
-        # msg['X-Priority'] = '3'              # УДАЛЕНО
-        # msg['X-MSMail-Priority'] = 'Normal'  # УДАЛЕНО
-        # msg['Importance'] = 'normal'         # УДАЛЕНО
-        # msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}>'  # УДАЛЕНО
-        # msg['Precedence'] = 'bulk'           # УДАЛЕНО
+        # Mail.ru требует особые заголовки для улучшения доставляемости
+        msg['X-Mailer'] = 'Microsoft Outlook Express 6.0'  # Имитируем Outlook для Mail.ru
+        msg['X-Priority'] = '3'
+        msg['X-MSMail-Priority'] = 'Normal'
+        msg['Importance'] = 'normal'
+        
+        # Mail.ru требует правильный Content-Type
+        msg['Content-Type'] = 'multipart/alternative; boundary="boundary"'
+        
+        # Добавляем заголовки для предотвращения спама в Mail.ru
+        msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}>'
+        msg['Precedence'] = 'bulk'
         
         # Добавляем текстовую часть
         text_part = MIMEText(plain_text, 'plain', 'utf-8')
