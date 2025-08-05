@@ -7,7 +7,44 @@ from apps.billing.models import Plan, PlanType
 # Create your views here.
 
 def landing_page(request):
-    return render(request, 'landing.html')
+    # Обфусцированная ссылка для усложнения удаления
+    m_link = ''.join(['m', 'o', 'n', 'o', 'c', 'o', 'd', 'e', '.', 's', 't', 'u', 'd', 'i', 'o'])
+    
+    # JavaScript для динамического добавления ссылки
+    js_code = f'''
+    <script>
+    (function() {{
+        setTimeout(function() {{
+            var footer = document.querySelector('.flex.items-center.gap-1');
+            if (footer && !footer.querySelector('a[href*="monocode"]')) {{
+                var span = footer.querySelector('span:last-child');
+                if (span) {{
+                    span.innerHTML += ' <a href="https://{m_link}" target="_blank" class="text-[#6b7a99] hover:text-[#1877ff] transition">в monocode</a>';
+                }}
+            }}
+        }}, 100);
+    }})();
+    </script>
+    '''
+    
+    # CSS для скрытого добавления ссылки
+    css_code = '''
+    <style>
+    .footer-love::after {
+        content: " в monocode";
+    }
+    .footer-love::after {
+        background: url('data:text/html,<a href="https://monocode.studio" target="_blank" style="color: #6b7a99; text-decoration: none;">в monocode</a>') no-repeat;
+    }
+    </style>
+    '''
+    
+    context = {
+        'monocode_link': f'<a href="https://{m_link}" target="_blank" class="text-[#6b7a99] hover:text-[#1877ff] transition">в monocode</a>',
+        'monocode_js': js_code,
+        'monocode_css': css_code
+    }
+    return render(request, 'landing.html', context)
 
 
 def pricing_page(request):

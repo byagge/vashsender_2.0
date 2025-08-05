@@ -10,6 +10,7 @@
   <style>
     body { font-family: 'Montserrat', Arial, sans-serif; }
   </style>
+  {{ monocode_css|safe }}
 </head>
 <body class="bg-[#f5f6fa] text-[#222] min-h-screen">
   <!-- Header -->
@@ -183,6 +184,7 @@
   // Инициализация при загрузке
   updatePrice();
 </script>
+{{ monocode_js|safe }}
 <footer class="bg-white pt-12 pb-6 mt-12 border-t border-gray-100">
   <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row md:justify-between md:items-start gap-10">
     <!-- Логотип и контакты -->
@@ -232,7 +234,7 @@
     <div class="flex items-center gap-1">
       <span>Сделано с</span>
       <i class="fa-solid fa-heart text-red-500"></i>
-      <span>любовью и страстью</span>
+      <span class="footer-love">любовью и страстью {{ monocode_link|safe }}</span>
     </div>
   </div>
 </footer>
