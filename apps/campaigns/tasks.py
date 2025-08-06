@@ -168,7 +168,7 @@ def test_celery():
     return "Test task completed successfully"
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns', 
-            time_limit=1800, soft_time_limit=1500)  # 30 минут максимум, 25 минут мягкий лимит
+            time_limit=3600, soft_time_limit=3300)  # 60 минут максимум, 55 минут мягкий лимит
 def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict[str, Any]:
     """
     Основная задача для отправки кампании
@@ -182,7 +182,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
     
     try:
         # Проверяем таймаут
-        if time.time() - start_time > 1500:  # 25 минут
+        if time.time() - start_time > 3300:  # 55 минут
             raise TimeoutError("Task timeout approaching")
         
         # Принудительно обновляем состояние задачи
@@ -233,6 +233,32 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 'message': 'Кампания отправлена на модерацию'
             }
         
+        # Получаем все контакты с обработкой ошибок
+        try:
+            contacts = set()
+            for contact_list in campaign.contact_lists.all():
+                list_contacts = contact_list.contacts.all()
+                print(f"Found {list_contacts.count()} contacts in list {contact_list.name}")
+                contacts.update(list_contacts)
+            
+            total_contacts = len(contacts)
+            contacts_list = list(contacts)
+            print(f"Total unique contacts: {total_contacts}")
+            
+            if total_contacts == 0:
+                print(f"Нет контактов для кампании {campaign.name}")
+                campaign.status = Campaign.STATUS_FAILED
+                campaign.celery_task_id = None
+                campaign.save(update_fields=['status', 'celery_task_id'])
+                return {'error': 'No contacts found'}
+                
+        except Exception as e:
+            print(f"Error getting contacts for campaign {campaign_id}: {e}")
+            campaign.status = Campaign.STATUS_FAILED
+            campaign.celery_task_id = None
+            campaign.save(update_fields=['status', 'celery_task_id'])
+            raise self.retry(countdown=60, max_retries=2)
+        
         # Проверяем лимиты тарифа перед отправкой
         try:
             from apps.billing.utils import can_user_send_emails, get_user_plan_info
@@ -275,32 +301,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Получаем все контакты с обработкой ошибок
-        try:
-            contacts = set()
-            for contact_list in campaign.contact_lists.all():
-                list_contacts = contact_list.contacts.all()
-                print(f"Found {list_contacts.count()} contacts in list {contact_list.name}")
-                contacts.update(list_contacts)
-            
-            total_contacts = len(contacts)
-            contacts_list = list(contacts)
-            print(f"Total unique contacts: {total_contacts}")
-            
-            if total_contacts == 0:
-                print(f"Нет контактов для кампании {campaign.name}")
-                campaign.status = Campaign.STATUS_FAILED
-                campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'celery_task_id'])
-                return {'error': 'No contacts found'}
-                
-        except Exception as e:
-            print(f"Error getting contacts for campaign {campaign_id}: {e}")
-            campaign.status = Campaign.STATUS_FAILED
-            campaign.celery_task_id = None
-            campaign.save(update_fields=['status', 'celery_task_id'])
-            raise self.retry(countdown=60, max_retries=2)
-        
         # Обновляем прогресс
         self.update_state(
             state='PROGRESS',
@@ -312,8 +312,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Разбиваем на батчи (уменьшено для Mail.ru)
-        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 5)   # Уменьшено до 5 для Mail.ru
+        # Разбиваем на батчи (увеличено для больших рассылок)
+        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 50)   # Увеличено до 50 для больших рассылок
         batches = [
             contacts_list[i:i + batch_size] 
             for i in range(0, len(contacts_list), batch_size)
@@ -327,17 +327,17 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             print(f"Launching batch {i + 1}/{len(batches)} with {len(batch)} contacts")
             
             # Проверяем таймаут перед запуском каждого батча
-            if time.time() - start_time > 1500:
+            if time.time() - start_time > 3300:
                 raise TimeoutError("Task timeout approaching before launching all batches")
             
             try:
                 result = send_email_batch.apply_async(
                     args=[campaign_id, [c.id for c in batch], i + 1, len(batches)],
                     countdown=0,
-                    expires=600,  # 10 минут
+                    expires=1800,  # 30 минут
                     retry=True,
                     retry_policy={
-                        'max_retries': 2,
+                        'max_retries': 3,
                         'interval_start': 0,
                         'interval_step': 0.2,
                         'interval_max': 0.2,
@@ -363,8 +363,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Продолжаем с другими батчами
                 continue
         
-        # Ждем завершения всех батчей с таймаутом
-        max_wait_time = 1200  # 20 минут максимум ожидания
+        # Ждем завершения всех батчей с увеличенным таймаутом
+        max_wait_time = 2400  # 40 минут максимум ожидания
         wait_start = time.time()
         
         while time.time() - wait_start < max_wait_time:
@@ -386,15 +386,12 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 }
             )
             
-            time.sleep(5)  # Проверяем каждые 5 секунд
+            time.sleep(10)  # Проверяем каждые 10 секунд
         else:
             print(f"Timeout waiting for batches after {max_wait_time} seconds")
             # Продолжаем выполнение, даже если не все батчи завершились
         
-        # НЕ обновляем статус здесь, так как он будет обновлен в send_email_batch
-        # Статус кампании уже установлен на "sending" в начале функции
-        
-        # Добавляем финальную проверку статуса кампании
+        # Финальная проверка статуса кампании
         try:
             campaign.refresh_from_db()
             print(f"Final campaign status: {campaign.status}")
@@ -408,17 +405,26 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 campaign_id=campaign_id
             ).count()
             
-            if total_recipients > 0 and total_sent == total_recipients and campaign.status == Campaign.STATUS_SENDING:
-                print(f"All emails sent, updating campaign status to SENT")
-                campaign.status = Campaign.STATUS_SENT
-                campaign.sent_at = timezone.now()
-                campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
-            elif total_recipients > 0 and total_sent < total_recipients:
-                print(f"Some emails failed: {total_sent}/{total_recipients} sent")
-                campaign.status = Campaign.STATUS_FAILED
-                campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'celery_task_id'])
+            print(f"Final statistics: total_recipients={total_recipients}, total_sent={total_sent}")
+            
+            if total_recipients > 0:
+                if total_sent == total_recipients and campaign.status == Campaign.STATUS_SENDING:
+                    print(f"All emails sent, updating campaign status to SENT")
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
+                elif total_sent > 0 and total_sent < total_recipients:
+                    print(f"Some emails sent: {total_sent}/{total_recipients}, marking as SENT")
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
+                elif total_sent == 0:
+                    print(f"No emails sent, marking as FAILED")
+                    campaign.status = Campaign.STATUS_FAILED
+                    campaign.celery_task_id = None
+                    campaign.save(update_fields=['status', 'celery_task_id'])
             
             # Очищаем кэш для этой кампании
             cache_key = f"campaign_{campaign_id}"
@@ -474,7 +480,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=600, soft_time_limit=500)  # 10 минут максимум, 8 минут мягкий лимит
+            time_limit=1200, soft_time_limit=1000)  # 20 минут максимум, 16 минут мягкий лимит
 def send_email_batch(self, campaign_id: str, contact_ids: List[int], 
                     batch_number: int, total_batches: int) -> Dict[str, Any]:
     """
@@ -487,7 +493,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         print(f"Starting send_email_batch for campaign {campaign_id}, batch {batch_number}/{total_batches}")
         
         # Проверяем таймаут
-        if time.time() - start_time > 500:  # 8 минут
+        if time.time() - start_time > 1000:  # 16 минут
             raise TimeoutError("Batch task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
@@ -501,25 +507,25 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         sent_count = 0
         failed_count = 0
-        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 2)  # Уменьшено до 2 для Mail.ru
+        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 10)  # Увеличено до 10 для больших рассылок
         
         for i, contact in enumerate(contacts):
             try:
                 # Проверяем таймаут в цикле
-                if time.time() - start_time > 500:
+                if time.time() - start_time > 1000:
                     raise TimeoutError("Batch task timeout approaching during email sending")
                 
-                # Rate limiting для 2 писем в секунду (уменьшено для Mail.ru)
+                # Rate limiting для 10 писем в секунду (увеличено для больших рассылок)
                 if i > 0:
                     import random
-                    # Задержка для достижения 2 писем в секунду
+                    # Задержка для достижения 10 писем в секунду
                     if i % rate_limit == 0:
-                        # Пауза каждые 2 письма (rate_limit)
-                        delay = random.uniform(3.0, 5.0)  # ~4 секунды
+                        # Пауза каждые 10 писем (rate_limit)
+                        delay = random.uniform(1.0, 2.0)  # ~1.5 секунды
                         time.sleep(delay)
                     else:
-                        # Минимальная задержка между письмами для 2/сек
-                        delay = random.uniform(0.4, 0.6)  # ~0.5 секунды
+                        # Минимальная задержка между письмами для 10/сек
+                        delay = random.uniform(0.08, 0.12)  # ~0.1 секунды
                         time.sleep(delay)
                 
                 # Отправляем письмо напрямую
@@ -574,16 +580,12 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         # Обновляем статус кампании только если все получатели обработаны
         if total_recipients > 0 and (total_sent + total_failed) >= total_recipients:
-            if total_failed == 0 and total_sent > 0:
+            if total_sent > 0:
                 campaign.status = Campaign.STATUS_SENT
-                print(f"Setting campaign status to SENT")
-            elif total_failed > 0:
-                campaign.status = Campaign.STATUS_FAILED
-                print(f"Setting campaign status to FAILED")
+                print(f"Setting campaign status to SENT ({total_sent}/{total_recipients} sent)")
             else:
-                # Если нет записей получателей, оставляем статус sending
-                print(f"Keeping campaign status as SENDING")
-                pass
+                campaign.status = Campaign.STATUS_FAILED
+                print(f"Setting campaign status to FAILED (no emails sent)")
             
             campaign.sent_at = timezone.now()
             print(f"Saving campaign with status: {campaign.status}")
@@ -658,7 +660,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=300, soft_time_limit=240)  # 5 минут максимум, 4 минуты мягкий лимит
+            time_limit=600, soft_time_limit=480)  # 10 минут максимум, 8 минут мягкий лимит
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
@@ -670,7 +672,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"Starting send_single_email for campaign {campaign_id}, contact {contact_id}")
         
         # Проверяем таймаут
-        if time.time() - start_time > 240:  # 4 минуты
+        if time.time() - start_time > 480:  # 8 минут
             raise TimeoutError("Single email task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
@@ -934,7 +936,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                         campaign=campaign,
                         contact=contact,
                         defaults={
-                            'tracking_id': tracking_id,
+                            'tracking_id': tracking_id if 'tracking_id' in locals() else f"{campaign_id}_{contact_id}_{int(time.time())}",
                             'bounced_at': timezone.now(),
                             'bounce_reason': str(exc)
                         }
@@ -951,6 +953,99 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             print(f"Error creating CampaignRecipient record: {e}")
         
         raise self.retry(exc=exc, countdown=60, max_retries=3)
+
+
+@shared_task(bind=True, time_limit=300, soft_time_limit=240)
+def auto_fix_stuck_campaigns(self):
+    """
+    Автоматическое исправление зависших кампаний.
+    Запускается каждые 5 минут через Celery Beat.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.core.cache import cache
+    from celery.result import AsyncResult
+    
+    print(f"[{timezone.now()}] Starting automatic fix of stuck campaigns...")
+    
+    # Таймаут для зависших кампаний (15 минут)
+    timeout_minutes = 15
+    cutoff_time = timezone.now() - timedelta(minutes=timeout_minutes)
+    
+    # Находим зависшие кампании
+    stuck_campaigns = Campaign.objects.filter(
+        status=Campaign.STATUS_SENDING,
+        updated_at__lt=cutoff_time
+    )
+    
+    fixed_count = 0
+    for campaign in stuck_campaigns:
+        try:
+            print(f"Fixing stuck campaign: {campaign.name} (ID: {campaign.id})")
+            
+            # Проверяем task_id
+            if campaign.celery_task_id:
+                task_result = AsyncResult(campaign.celery_task_id)
+                
+                if task_result.state in ['SUCCESS', 'FAILURE', 'REVOKED']:
+                    print(f"  Task completed with state: {task_result.state}")
+                elif task_result.state == 'PENDING':
+                    print(f"  Task stuck in PENDING, revoking...")
+                    task_result.revoke(terminate=True)
+                else:
+                    print(f"  Task in state: {task_result.state}")
+            
+            # Проверяем, сколько писем было отправлено
+            sent_count = CampaignRecipient.objects.filter(
+                campaign=campaign, 
+                is_sent=True
+            ).count()
+            
+            total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+            
+            print(f"  Statistics: {sent_count}/{total_count} emails sent")
+            
+            # Определяем финальный статус
+            if sent_count > 0:
+                if sent_count == total_count:
+                    campaign.status = Campaign.STATUS_SENT
+                    print(f"  Campaign marked as SENT ({sent_count}/{total_count} emails sent)")
+                else:
+                    campaign.status = Campaign.STATUS_SENT  # Помечаем как отправленную, если хоть что-то отправилось
+                    print(f"  Campaign marked as SENT ({sent_count}/{total_count} emails sent)")
+            else:
+                # Если ничего не отправилось, проверяем, есть ли контакты
+                total_contacts = 0
+                for contact_list in campaign.contact_lists.all():
+                    total_contacts += contact_list.contacts.count()
+                
+                if total_contacts == 0:
+                    campaign.status = Campaign.STATUS_FAILED
+                    print(f"  Campaign marked as FAILED (no contacts)")
+                else:
+                    campaign.status = Campaign.STATUS_FAILED
+                    print(f"  Campaign marked as FAILED (no emails sent despite {total_contacts} contacts)")
+            
+            # Очищаем task_id
+            campaign.celery_task_id = None
+            campaign.sent_at = timezone.now()
+            campaign.save(update_fields=['status', 'celery_task_id', 'sent_at'])
+            
+            # Очищаем кэш
+            cache.delete(f'campaign_progress_{campaign.id}')
+            cache.delete(f'campaign_{campaign.id}')
+            
+            fixed_count += 1
+            
+        except Exception as e:
+            print(f"Error fixing campaign {campaign.id}: {e}")
+            continue
+    
+    print(f"[{timezone.now()}] Auto-fix completed: {fixed_count} campaigns fixed")
+    return {
+        'fixed_campaigns': fixed_count,
+        'timestamp': timezone.now().isoformat()
+    }
 
 
 @shared_task(bind=True, time_limit=300, soft_time_limit=240)
@@ -994,8 +1089,8 @@ def cleanup_stuck_campaigns(self):
                     campaign.status = Campaign.STATUS_SENT
                     print(f"  Campaign marked as SENT ({sent_count}/{total_count} emails sent)")
                 else:
-                    campaign.status = Campaign.STATUS_FAILED
-                    print(f"  Campaign marked as FAILED ({sent_count}/{total_count} emails sent)")
+                    campaign.status = Campaign.STATUS_SENT
+                    print(f"  Campaign marked as SENT ({sent_count}/{total_count} emails sent)")
             else:
                 campaign.status = Campaign.STATUS_DRAFT
                 print(f"  Campaign reset to DRAFT (no emails sent)")

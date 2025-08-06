@@ -250,8 +250,27 @@ EMAIL_BATCH_SIZE = 100  # Количество писем в одном батч
 EMAIL_RATE_LIMIT = 50   # Писем в секунду
 EMAIL_MAX_RETRIES = 3   # Максимальное количество попыток
 EMAIL_RETRY_DELAY = 60  # Задержка между попытками в секундах
-EMAIL_CONNECTION_TIMEOUT = 30  # Timeout для SMTP соединения
-EMAIL_SEND_TIMEOUT = 60  # Timeout для отправки письма
+EMAIL_CONNECTION_TIMEOUT = 30
+
+# Celery Beat Schedule для периодических задач
+CELERY_BEAT_SCHEDULE = {
+    'auto-fix-stuck-campaigns': {
+        'task': 'apps.campaigns.tasks.auto_fix_stuck_campaigns',
+        'schedule': 300.0,  # Каждые 5 минут
+    },
+    'cleanup-stuck-campaigns': {
+        'task': 'apps.campaigns.tasks.cleanup_stuck_campaigns',
+        'schedule': 600.0,  # Каждые 10 минут
+    },
+    'monitor-campaign-progress': {
+        'task': 'apps.campaigns.tasks.monitor_campaign_progress',
+        'schedule': 300.0,  # Каждые 5 минут
+    },
+    'cleanup-smtp-connections': {
+        'task': 'apps.campaigns.tasks.cleanup_smtp_connections',
+        'schedule': 600.0,  # Каждые 10 минут
+    },
+}
 
 # Custom error pages
 HANDLER404 = 'core.error_handlers.handler404'
