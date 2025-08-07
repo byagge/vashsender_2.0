@@ -837,7 +837,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         
         # Добавляем только необходимые заголовки для Mail.ru и Yandex
         import uuid
-        import time
+        # import time  # Удалено для предотвращения UnboundLocalError
         
         # Создаем уникальный Message-ID с временной меткой для лучшей доставляемости
         timestamp = int(time.time())
