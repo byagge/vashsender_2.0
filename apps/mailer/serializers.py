@@ -76,3 +76,22 @@ class ContactListSerializer(serializers.ModelSerializer):
             'total_contacts', 'valid_count', 'invalid_count', 'blacklisted_count',
             'contacts',
         ]
+
+class ContactListListSerializer(serializers.ModelSerializer):
+    total_contacts    = serializers.IntegerField(read_only=True)
+    valid_count       = serializers.IntegerField(read_only=True)
+    invalid_count     = serializers.IntegerField(read_only=True)
+    blacklisted_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ContactList
+        fields = [
+            'id', 'name', 'created_at', 'updated_at',
+            'total_contacts', 'valid_count', 'invalid_count', 'blacklisted_count',
+        ]
+
+class ContactListDetailSerializer(ContactListListSerializer):
+    contacts = ContactSerializer(many=True, read_only=True)
+
+    class Meta(ContactListListSerializer.Meta):
+        fields = ContactListListSerializer.Meta.fields + ['contacts']

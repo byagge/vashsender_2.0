@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser
 
 from .models import ContactList, Contact, ImportTask
-from .serializers import ContactListSerializer, ContactSerializer
+from .serializers import ContactListSerializer, ContactSerializer, ContactListListSerializer, ContactListDetailSerializer
 from .utils import parse_emails, classify_email
 from apps.billing.models import Plan
 
@@ -32,6 +32,11 @@ class ContactListViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return ContactList.objects.filter(owner=self.request.user)
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ContactListListSerializer
+        return ContactListDetailSerializer
 
     def create(self, request, *args, **kwargs):
         """
