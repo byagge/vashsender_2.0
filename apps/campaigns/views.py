@@ -14,7 +14,7 @@ from django.http import Http404
 import uuid
 
 from .models import Campaign, CampaignStats, EmailTracking, CampaignRecipient
-from .serializers import CampaignSerializer, EmailTrackingSerializer
+from .serializers import CampaignSerializer, CampaignListSerializer
 from apps.billing.models import Plan
 from apps.campaigns.tasks import send_campaign
 from django.conf import settings
@@ -32,15 +32,28 @@ class CampaignViewSet(viewsets.ModelViewSet):
             return Campaign.objects.none()
         return Campaign.objects.filter(user=self.request.user).order_by('-created_at')
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return CampaignListSerializer
+        return CampaignSerializer
+
     def list(self, request, *args, **kwargs):
-        # Принудительно обновляем данные из базы, игнорируя кэш
         queryset = self.get_queryset()
-        # Очищаем кэш для списка кампаний пользователя
-        cache_key = f"campaigns_list_{request.user.id}"
-        from django.core.cache import cache
-        cache.delete(cache_key)
-        
-        return super().list(request, *args, **kwargs)
+        # Пагинация через page/page_size
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        total = queryset.count()
+        num_pages = (total + page_size - 1) // page_size
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_qs = queryset[start:end]
+        serializer = self.get_serializer(page_qs, many=True)
+        return Response({
+            'results': serializer.data,
+            'count': total,
+            'page': page,
+            'num_pages': num_pages,
+        })
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

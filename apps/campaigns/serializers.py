@@ -165,3 +165,30 @@ class CampaignSerializer(serializers.ModelSerializer):
             # Если не удалось обновить, продолжаем с текущими данными
             pass
         return super().to_representation(instance)
+
+class CampaignListSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.email')
+    sender_email_detail = SenderEmailSerializer(source='sender_email', read_only=True)
+    contact_lists_detail = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Campaign
+        fields = [
+            'id', 'user', 'name', 'subject', 'status', 'status_display',
+            'created_at', 'sent_at', 'scheduled_at',
+            'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail',
+            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'sent_at']
+
+    def get_contact_lists_detail(self, obj):
+        obj.refresh_from_db()
+        return [
+            {
+                'id': str(cl.id),
+                'name': cl.name,
+                'contacts_count': cl.contacts.count()
+            }
+            for cl in obj.contact_lists.all()
+        ]

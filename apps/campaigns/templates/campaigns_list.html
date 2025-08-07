@@ -514,6 +514,8 @@
         currentPage: 1,
         itemsPerPage: 6,
         campaigns: [],
+        count: 0,
+        num_pages: 1,
         showDeleteConfirm: null,
         showStatsModal: false,
         showPreviewModal: false,
@@ -552,10 +554,10 @@
           }
         },
 
-        async loadCampaigns() {
+        async loadCampaigns(page = this.currentPage) {
           try {
             console.log('Fetching campaigns from API...');
-            const response = await fetch('/campaigns/api/campaigns/', {
+            const response = await fetch(`/campaigns/api/campaigns/?page=${page}&page_size=${this.itemsPerPage}`, {
               credentials: 'same-origin',
               headers: {
                 'Accept': 'application/json',
@@ -564,48 +566,15 @@
                   ?.split('=')[1] || ''
               }
             });
-            
             if (!response.ok) {
               console.error('Failed to load campaigns:', response.status, response.statusText);
               throw new Error('Failed to load campaigns');
             }
-            
             const data = await response.json();
-            console.log('Received campaigns:', data);
-            this.campaigns = data.map(campaign => {
-              console.log('Processing campaign:', campaign);
-              const processedCampaign = {
-                ...campaign,
-                // Basic fields
-                name: campaign.name || '',
-                subject: campaign.subject || '',
-                sender_name: campaign.sender_name || '',
-                reply_to: campaign.sender_email_detail?.reply_to || '',
-                status: campaign.status || 'draft',
-                status_display: campaign.status_display,
-                created_at: campaign.created_at,
-                sent_at: campaign.sent_at,
-                scheduled_at: campaign.scheduled_at,
-                
-                // Related fields with proper handling
-                template: campaign.template || null,
-                template_detail: campaign.template_detail || null,
-                sender_email: campaign.sender_email || null,
-                contact_lists: Array.isArray(campaign.contact_lists) ? campaign.contact_lists : [],
-                contact_lists_detail: Array.isArray(campaign.contact_lists_detail) ? campaign.contact_lists_detail : [],
-                
-                // Real statistics from the server - используем данные напрямую из API
-                emails_sent: campaign.emails_sent || 0,
-                delivered_emails: campaign.delivered_emails || 0,
-                open_rate: campaign.open_rate || 0,
-                click_rate: campaign.click_rate || 0,
-                bounce_rate: campaign.bounce_rate || 0
-              };
-              
-              console.log('Processed campaign:', processedCampaign);
-              return processedCampaign;
-            });
-            
+            this.campaigns = data.results || [];
+            this.count = data.count || 0;
+            this.currentPage = data.page || 1;
+            this.num_pages = data.num_pages || 1;
             this.$nextTick(() => {
               lucide.createIcons();
             });
@@ -658,19 +627,11 @@
         },
 
         totalPages() {
-          return Math.ceil(this.filteredCampaigns().length / this.itemsPerPage);
+          return this.num_pages || 1;
         },
-
         paginatedCampaigns() {
-          const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-          const paginated = this.filteredCampaigns().slice(startIndex, startIndex + this.itemsPerPage);
-          
-          // Пересоздаем иконки после пагинации
-          this.$nextTick(() => {
-            lucide.createIcons();
-          });
-
-          return paginated;
+          // Теперь серверная пагинация, возвращаем просто this.campaigns
+          return this.campaigns;
         },
 
         toggleRowExpansion(id) {
