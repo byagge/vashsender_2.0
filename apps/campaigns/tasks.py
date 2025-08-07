@@ -59,26 +59,34 @@ class SMTPConnectionPool:
                 helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
                 connection.helo(helo_domain)
                 print(f"SMTP HELO set to: {helo_domain}")
+                
+                # Дополнительные настройки для лучшей доставляемости
+                connection.ehlo(helo_domain)  # Также отправляем EHLO
+                print(f"SMTP EHLO set to: {helo_domain}")
+                
             except Exception as e:
                 print(f"Failed to set HELO to {helo_domain}: {e}")
                 try:
                     connection.helo('localhost')
-                    print(f"SMTP HELO set to: localhost")
+                    connection.ehlo('localhost')
+                    print(f"SMTP HELO/EHLO set to: localhost")
                 except:
                     pass
             
             if settings.EMAIL_USE_TLS:
                 connection.starttls()
-                # Повторяем HELO после STARTTLS
+                # Повторяем HELO и EHLO после STARTTLS для лучшей доставляемости
                 try:
                     helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
                     connection.helo(helo_domain)
-                    print(f"SMTP HELO after STARTTLS set to: {helo_domain}")
+                    connection.ehlo(helo_domain)
+                    print(f"SMTP HELO/EHLO after STARTTLS set to: {helo_domain}")
                 except Exception as e:
                     print(f"Failed to set HELO after STARTTLS: {e}")
                     try:
                         connection.helo('localhost')
-                        print(f"SMTP HELO after STARTTLS set to: localhost")
+                        connection.ehlo('localhost')
+                        print(f"SMTP HELO/EHLO after STARTTLS set to: localhost")
                     except:
                         pass
             
@@ -798,18 +806,51 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         else:
             # Если только ASCII, используем как есть
             encoded_sender_name = sender_name
+        
+        # Очищаем имя отправителя от проблемных символов для лучшей доставляемости
+        import re
+        encoded_sender_name = re.sub(r'[^\w\s\-\.]', '', encoded_sender_name)  # Убираем спецсимволы
+        encoded_sender_name = re.sub(r'\s+', ' ', encoded_sender_name).strip()  # Убираем лишние пробелы
+        
+        # Ограничиваем длину имени отправителя
+        if len(encoded_sender_name) > 50:
+            encoded_sender_name = encoded_sender_name[:50]
+        
+        # Если имя пустое, используем домен
+        if not encoded_sender_name:
+            domain = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+            encoded_sender_name = domain.split('.')[0].title()
+        
         msg['From'] = f"{encoded_sender_name} <{from_email}>"
         msg['To'] = contact.email
-        msg['Reply-To'] = campaign.sender_email.reply_to or from_email
+        
+        # Настраиваем Reply-To для лучшей доставляемости
+        reply_to = campaign.sender_email.reply_to or from_email
+        # Убираем двойные @ в Reply-To
+        if reply_to.count('@') > 1:
+            parts = reply_to.split('@')
+            username = parts[0]
+            domain = parts[1]
+            reply_to = f"{username}@{domain}"
+        
+        msg['Reply-To'] = reply_to
         
         # Добавляем только необходимые заголовки для Mail.ru и Yandex
         import uuid
-        msg['Message-ID'] = f"<{uuid.uuid4()}@{from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'}>"
+        import time
+        
+        # Создаем уникальный Message-ID с временной меткой для лучшей доставляемости
+        timestamp = int(time.time())
+        unique_id = str(uuid.uuid4()).replace('-', '')[:16]
+        domain = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+        msg['Message-ID'] = f"<{timestamp}.{unique_id}@{domain}>"
+        
+        # Правильное форматирование даты для лучшей совместимости
         msg['Date'] = timezone.now().strftime('%a, %d %b %Y %H:%M:%S %z')
         msg['MIME-Version'] = '1.0'
         
-        # Mail.ru требует особые заголовки для улучшения доставляемости
-        msg['X-Mailer'] = 'Microsoft Outlook Express 6.0'  # Имитируем Outlook для Mail.ru
+        # Заголовки для улучшения доставляемости
+        msg['X-Mailer'] = 'VashSender Mailer 1.0'  # Реальный X-Mailer сервиса
         msg['X-Priority'] = '3'
         msg['X-MSMail-Priority'] = 'Normal'
         msg['Importance'] = 'normal'
@@ -817,16 +858,54 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         # Mail.ru требует правильный Content-Type
         msg['Content-Type'] = 'multipart/alternative; boundary="boundary"'
         
-        # Добавляем заголовки для предотвращения спама в Mail.ru
+        # Добавляем заголовки для предотвращения спама и улучшения доставляемости
         msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}>'
         msg['Precedence'] = 'bulk'
+        
+        # Дополнительные заголовки для улучшения доставляемости
+        msg['X-Auto-Response-Suppress'] = 'OOF, AutoReply'
+        msg['Auto-Submitted'] = 'auto-generated'
+        msg['X-Report-Abuse'] = f'Please report abuse here: abuse@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}'
+        
+        # Заголовки для лучшей совместимости с почтовыми сервисами
+        msg['X-Originating-IP'] = '146.185.196.52'  # Указываем реальный IP сервера
+        msg['X-Sender'] = from_email
+        msg['X-Envelope-From'] = from_email
         
         # Добавляем текстовую часть
         text_part = MIMEText(plain_text, 'plain', 'utf-8')
         msg.attach(text_part)
         
         # Добавляем HTML часть (осторожно для доставляемости)
-        # Используем простой HTML без сложных стилей
+        # Используем простой HTML без сложных стилей для лучшей доставляемости
+        # Очищаем HTML от потенциально проблемных элементов
+        import re
+        
+        # Убираем потенциально проблемные теги и атрибуты
+        html_content = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+        html_content = re.sub(r'<iframe[^>]*>.*?</iframe>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+        html_content = re.sub(r'<object[^>]*>.*?</object>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Убираем потенциально проблемные атрибуты
+        html_content = re.sub(r'\s+on\w+\s*=\s*["\'][^"\']*["\']', '', html_content, flags=re.IGNORECASE)
+        html_content = re.sub(r'\s+javascript:', '', html_content, flags=re.IGNORECASE)
+        
+        # Добавляем базовую структуру HTML если её нет
+        if not html_content.strip().startswith('<html'):
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{campaign.subject or 'Письмо'}</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                {html_content}
+            </body>
+            </html>
+            """
+        
         html_part = MIMEText(html_content, 'html', 'utf-8')
         msg.attach(html_part)
         
