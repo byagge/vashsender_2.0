@@ -60,15 +60,28 @@ class ContactListViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get', 'post'], url_path='contacts')
     def contacts(self, request, pk=None):
         """
-        GET  /contactlists/{pk}/contacts/  — список контактов
+        GET  /contactlists/{pk}/contacts/?page=1&page_size=20  — список контактов с пагинацией
         POST /contactlists/{pk}/contacts/  — добавить контакт { email, status }
         """
         contact_list = self.get_object()
 
         if request.method == 'GET':
-            qs = contact_list.contacts.all()
-            ser = ContactSerializer(qs, many=True)
-            return Response(ser.data)
+            qs = contact_list.contacts.all().order_by('-id')
+            # --- PAGINATION ---
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            total = qs.count()
+            num_pages = (total + page_size - 1) // page_size
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_qs = qs[start:end]
+            ser = ContactSerializer(page_qs, many=True)
+            return Response({
+                'results': ser.data,
+                'count': total,
+                'page': page,
+                'num_pages': num_pages,
+            })
 
         # --- ОГРАНИЧЕНИЕ ПО ТАРИФУ ---
         user = request.user

@@ -254,7 +254,7 @@
               <!-- PAGINATION -->
               <div class="flex items-center justify-between mt-6">
                 <p class="text-sm text-gray-600">
-                  Показаны <span x-text="startIndex()+1"></span> с <span x-text="endIndex()"></span> по <span x-text="contacts.length"></span> контактов
+                  Показаны <span x-text="startIndex()+1"></span> с <span x-text="endIndex()"></span> по <span x-text="count || contacts.length"></span> контактов
                 </p>
                 <div class="flex space-x-2">
                   <button @click="prevPage()" :disabled="page===1"
@@ -592,6 +592,8 @@
           blacklist: false
         },
         isExporting: false,
+        count: 0,
+        num_pages: 1,
   
         async init() {
             this.initLucide();
@@ -659,20 +661,24 @@
           }
         },
   
-        async viewList(list) {
-        this.selectedList = { ...list };
-        this.view = 'contacts';
-        this.page = 1;
+        async viewList(list, page = 1) {
+          this.selectedList = { ...list };
+          this.view = 'contacts';
+          this.page = page;
 
-        await this.fetchLists();  
-        const fresh = this.lists.find(l => l.id === list.id);
-        if (fresh) this.selectedList = { ...fresh };
+          await this.fetchLists();  
+          const fresh = this.lists.find(l => l.id === list.id);
+          if (fresh) this.selectedList = { ...fresh };
 
-        const url = `${API_BASE}${list.id}/contacts/`;
-        const res = await fetch(url, { credentials: 'same-origin' });
-        this.contacts = await res.json();
-        this.refreshIcons();
-      },
+          const url = `${API_BASE}${list.id}/contacts/?page=${this.page}&page_size=${this.contactsPerPage}`;
+          const res = await fetch(url, { credentials: 'same-origin' });
+          const data = await res.json();
+          this.contacts = data.results || [];
+          this.count = data.count || 0;
+          this.page = data.page || 1;
+          this.num_pages = data.num_pages || 1;
+          this.refreshIcons();
+        },
 
   
         backToLists() {
@@ -713,14 +719,14 @@
         },
   
         paginatedContacts() {
-          const start = (this.page - 1) * this.contactsPerPage;
-          return this.contacts.slice(start, start + this.contactsPerPage);
+          // Теперь серверная пагинация, возвращаем просто this.contacts
+          return this.contacts;
         },
-        totalPages() { return Math.ceil(this.contacts.length / this.contactsPerPage); },
-        prevPage() { if (this.page > 1) this.page--; },
-        nextPage() { if (this.page < this.totalPages()) this.page++; },
+        totalPages() { return this.num_pages || 1; },
+        prevPage() { if (this.page > 1) this.viewList(this.selectedList, this.page - 1); },
+        nextPage() { if (this.page < this.totalPages()) this.viewList(this.selectedList, this.page + 1); },
         startIndex() { return (this.page - 1) * this.contactsPerPage; },
-        endIndex() { return Math.min(this.page * this.contactsPerPage, this.contacts.length); },
+        endIndex() { return Math.min(this.page * this.contactsPerPage, this.count || this.contacts.length); },
   
         selectContact(id) {
           const i = this.selectedContacts.indexOf(id);
