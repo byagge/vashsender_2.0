@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
+import socket
 
 from celery import shared_task, current_task
 from django.conf import settings
@@ -44,11 +45,12 @@ class SMTPConnectionPool:
             if self.connections:
                 return self.connections.pop()
             
-            # Создать новое соединение
+            # Создать новое соединение, привязываем исходящий IP к 146.185.196.52
             connection = smtplib.SMTP(
                 settings.EMAIL_HOST,
                 settings.EMAIL_PORT,
-                timeout=settings.EMAIL_CONNECTION_TIMEOUT
+                timeout=settings.EMAIL_CONNECTION_TIMEOUT,
+                source_address=("146.185.196.52", 0)  # <-- Привязка исходящего IP (по запросу пользователя)
             )
             
             # Устанавливаем правильный HELO для улучшения доставляемости
@@ -312,8 +314,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Разбиваем на батчи (увеличено для больших рассылок)
-        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 50)   # Увеличено до 50 для больших рассылок
+        # Разбиваем на батчи (оптимизировано для массовых рассылок)
+        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 20)   # Оптимизировано до 20 для лучшей доставляемости
         batches = [
             contacts_list[i:i + batch_size] 
             for i in range(0, len(contacts_list), batch_size)
@@ -331,6 +333,12 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 raise TimeoutError("Task timeout approaching before launching all batches")
             
             try:
+                # Добавляем задержку между батчами для лучшей доставляемости
+                if i > 0:
+                    import random
+                    batch_delay = random.uniform(3.0, 5.0)  # 3-5 секунд между батчами
+                    time.sleep(batch_delay)
+                
                 result = send_email_batch.apply_async(
                     args=[campaign_id, [c.id for c in batch], i + 1, len(batches)],
                     countdown=0,
@@ -514,29 +522,16 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 # Проверяем таймаут в цикле
                 if time.time() - start_time > 1000:
                     raise TimeoutError("Batch task timeout approaching during email sending")
-                
-                # Rate limiting для 10 писем в секунду (увеличено для больших рассылок)
+                # Жесткая задержка 5 секунд между письмами (по запросу пользователя)
                 if i > 0:
-                    import random
-                    # Задержка для достижения 10 писем в секунду
-                    if i % rate_limit == 0:
-                        # Пауза каждые 10 писем (rate_limit)
-                        delay = random.uniform(1.0, 2.0)  # ~1.5 секунды
-                        time.sleep(delay)
-                    else:
-                        # Минимальная задержка между письмами для 10/сек
-                        delay = random.uniform(0.08, 0.12)  # ~0.1 секунды
-                        time.sleep(delay)
-                
+                    time.sleep(5)
                 # Отправляем письмо напрямую
                 email_result = send_single_email.apply(
                     args=[campaign_id, contact.id]
                 )
-                
                 # Не ждем результат, просто запускаем задачу
                 # Результат будет обработан в самой задаче send_single_email
                 sent_count += 1  # Предполагаем успех, так как не ждем результат
-                
                 # Обновляем прогресс
                 self.update_state(
                     state='PROGRESS',
@@ -549,7 +544,6 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                         'failed': failed_count
                     }
                 )
-                
             except Exception as e:
                 failed_count += 1
                 print(f"Ошибка отправки письма {contact.email}: {str(e)}")

@@ -17,11 +17,11 @@ EMAIL_HOST_USER=
 EMAIL_HOST_PASSWORD=
 DEFAULT_FROM_EMAIL=noreply@vashsender.ru
 
-# Email sending configuration
-EMAIL_BATCH_SIZE=200
-EMAIL_RATE_LIMIT=100
+# Email sending configuration - ОПТИМИЗИРОВАНО ДЛЯ МАССОВЫХ РАССЫЛОК
+EMAIL_BATCH_SIZE=20          # Уменьшено с 200 до 20 для лучшей доставляемости
+EMAIL_RATE_LIMIT=5           # Уменьшено с 100 до 5 писем в секунду
 EMAIL_MAX_RETRIES=3
-EMAIL_RETRY_DELAY=60
+EMAIL_RETRY_DELAY=120        # Увеличено до 2 минут между попытками
 EMAIL_CONNECTION_TIMEOUT=30
 EMAIL_SEND_TIMEOUT=60
 

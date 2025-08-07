@@ -1,0 +1,70 @@
+# КОНФИГУРАЦИЯ ВНЕШНЕГО SMTP ДЛЯ УЛУЧШЕНИЯ ДОСТАВЛЯЕМОСТИ
+# Скопируйте эти настройки в файл .env для замены локального SMTP
+
+# ВАРИАНТ 1: Yandex SMTP (рекомендуется для России)
+EMAIL_HOST=smtp.yandex.ru
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=your-email@yandex.ru
+EMAIL_HOST_PASSWORD=your-password
+DEFAULT_FROM_EMAIL=your-email@yandex.ru
+
+# ВАРИАНТ 2: Gmail SMTP
+# EMAIL_HOST=smtp.gmail.com
+# EMAIL_PORT=587
+# EMAIL_USE_TLS=True
+# EMAIL_USE_SSL=False
+# EMAIL_HOST_USER=your-email@gmail.com
+# EMAIL_HOST_PASSWORD=your-app-password
+# DEFAULT_FROM_EMAIL=your-email@gmail.com
+
+# ВАРИАНТ 3: Mail.ru SMTP
+# EMAIL_HOST=smtp.mail.ru
+# EMAIL_PORT=587
+# EMAIL_USE_TLS=True
+# EMAIL_USE_SSL=False
+# EMAIL_HOST_USER=your-email@mail.ru
+# EMAIL_HOST_PASSWORD=your-password
+# DEFAULT_FROM_EMAIL=your-email@mail.ru
+
+# ВАРИАНТ 4: SendGrid (для больших объемов)
+# EMAIL_HOST=smtp.sendgrid.net
+# EMAIL_PORT=587
+# EMAIL_USE_TLS=True
+# EMAIL_USE_SSL=False
+# EMAIL_HOST_USER=apikey
+# EMAIL_HOST_PASSWORD=your-sendgrid-api-key
+# DEFAULT_FROM_EMAIL=noreply@vashsender.ru
+
+# ОПТИМИЗИРОВАННЫЕ НАСТРОЙКИ ДЛЯ МАССОВЫХ РАССЫЛОК
+EMAIL_BATCH_SIZE=20          # Уменьшено для лучшей доставляемости
+EMAIL_RATE_LIMIT=5           # 5 писем в секунду
+EMAIL_MAX_RETRIES=3
+EMAIL_RETRY_DELAY=120        # 2 минуты между попытками
+EMAIL_CONNECTION_TIMEOUT=30
+EMAIL_SEND_TIMEOUT=60
+
+# ИНСТРУКЦИИ ПО НАСТРОЙКЕ:
+
+# Для Yandex:
+# 1. Войдите в аккаунт Yandex
+# 2. Перейдите в настройки безопасности
+# 3. Включите "Пароли для приложений"
+# 4. Создайте пароль для приложения
+# 5. Замените your-email@yandex.ru и your-password
+
+# Для Gmail:
+# 1. Включите двухфакторную аутентификацию
+# 2. Создайте пароль приложения
+# 3. Замените your-email@gmail.com и your-app-password
+
+# Для Mail.ru:
+# 1. Включите SMTP в настройках
+# 2. Используйте пароль от аккаунта
+# 3. Замените your-email@mail.ru и your-password
+
+# Для SendGrid:
+# 1. Зарегистрируйтесь на sendgrid.com
+# 2. Получите API ключ
+# 3. Замените your-sendgrid-api-key 
