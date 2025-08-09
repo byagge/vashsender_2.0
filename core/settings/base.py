@@ -247,7 +247,7 @@ CELERY_TIMEZONE = 'Europe/Moscow'
 
 # Email sending configuration
 EMAIL_BATCH_SIZE = 100  # Количество писем в одном батче
-EMAIL_RATE_LIMIT = 50   # Писем в секунду
+EMAIL_RATE_LIMIT = 10   # Писем в секунду
 EMAIL_MAX_RETRIES = 3   # Максимальное количество попыток
 EMAIL_RETRY_DELAY = 60  # Задержка между попытками в секундах
 EMAIL_CONNECTION_TIMEOUT = 30

@@ -524,21 +524,30 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         sent_count = 0
         failed_count = 0
         rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 10)  # Увеличено до 10 для больших рассылок
-        
+        # Настраиваем интервал отправки для достижения заданной скорости (писем в секунду)
+        try:
+            emails_per_second = float(rate_limit)
+            if emails_per_second <= 0:
+                emails_per_second = 10.0
+        except Exception:
+            emails_per_second = 10.0
+        send_interval = 1.0 / emails_per_second
+        last_scheduled_at = time.monotonic() - send_interval
+         
         for i, contact in enumerate(contacts):
             try:
                 # Проверяем таймаут в цикле
                 if time.time() - start_time > 1000:
                     raise TimeoutError("Batch task timeout approaching during email sending")
-                # Жесткая задержка 5 секунд между письмами (по запросу пользователя)
-                if i > 0:
-                    time.sleep(5)
-                # Отправляем письмо напрямую
-                email_result = send_single_email.apply(
-                    args=[campaign_id, contact.id]
-                )
-                # Не ждем результат, просто запускаем задачу
-                # Результат будет обработан в самой задаче send_single_email
+                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 10 писем/сек)
+                now = time.monotonic()
+                elapsed = now - last_scheduled_at
+                if elapsed < send_interval:
+                    time.sleep(send_interval - elapsed)
+                # Отправляем письмо асинхронно
+                send_single_email.apply_async(args=[campaign_id, contact.id])
+                last_scheduled_at = time.monotonic()
+                # Не ждем результат, просто планируем задачу; обработка результата в send_single_email
                 sent_count += 1  # Предполагаем успех, так как не ждем результат
                 # Обновляем прогресс
                 self.update_state(
@@ -662,7 +671,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=600, soft_time_limit=480)  # 10 минут максимум, 8 минут мягкий лимит
+            time_limit=600, soft_time_limit=480, rate_limit='10/s')  # 10 минут максимум, 8 минут мягкий лимит
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом

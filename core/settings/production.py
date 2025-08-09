@@ -105,7 +105,7 @@ EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 # Email sending configuration для продакшена - улучшенная доставляемость в Mail.ru и Yandex
 EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=5, cast=int)    # Уменьшено до 5 для Mail.ru
-EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=2, cast=int)    # Уменьшено до 2 писем в секунду для Mail.ru
+EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=10, cast=int)   # 10 писем в секунду
 EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=3, cast=int)
 EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=300, cast=int) # Увеличено до 5 минут для Mail.ru
 EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=30, cast=int)
