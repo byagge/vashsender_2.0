@@ -75,12 +75,14 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Moscow'
 
-# Оптимизация Celery для высокой нагрузки
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+# Оптимизация Celery для максимальной скорости (10 писем в секунду)
+CELERY_WORKER_PREFETCH_MULTIPLIER = 10  # Увеличено для обработки большего количества задач
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 5000  # Увеличено для большей производительности
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_TASK_ALWAYS_EAGER = False
+CELERY_WORKER_CONCURRENCY = 20  # Увеличено количество воркеров
+CELERY_TASK_IGNORE_RESULT = True  # Игнорируем результаты для ускорения
 
 # Email settings для продакшена
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -103,13 +105,13 @@ EMAIL_SSL_CONTEXT = ssl.create_default_context()
 EMAIL_SSL_CONTEXT.check_hostname = False
 EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
-# Email sending configuration для продакшена - улучшенная доставляемость в Mail.ru и Yandex
-EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=5, cast=int)    # Уменьшено до 5 для Mail.ru
+# Email sending configuration для продакшена - оптимизировано для 10 писем в секунду
+EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=10, cast=int)    # Увеличено до 10 для максимальной скорости
 EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=10, cast=int)   # 10 писем в секунду
-EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=3, cast=int)
-EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=300, cast=int) # Увеличено до 5 минут для Mail.ru
-EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=30, cast=int)
-EMAIL_SEND_TIMEOUT = config('EMAIL_SEND_TIMEOUT', default=60, cast=int)
+EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=2, cast=int)  # Уменьшено для быстрой обработки
+EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=60, cast=int) # Уменьшено до 1 минуты для быстрого повтора
+EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=15, cast=int)  # Уменьшено для быстрого подключения
+EMAIL_SEND_TIMEOUT = config('EMAIL_SEND_TIMEOUT', default=30, cast=int)  # Уменьшено для быстрой отправки
 
 # Статические файлы
 STATIC_ROOT = '/var/www/vashsender/static/'
@@ -155,11 +157,13 @@ METRICS_INTERVAL = 60  # секунды
 EMAIL_USE_VERIFICATION = True
 EMAIL_VERIFICATION_TIMEOUT = 3600  # 1 час
 
-# Настройки для автоматического масштабирования
+# Настройки для автоматического масштабирования - оптимизировано для 10 писем в секунду
 AUTO_SCALE_WORKERS = True
-MAX_WORKERS = 32
-MIN_WORKERS = 4
-WORKER_SCALE_THRESHOLD = 1000  # писем в очереди
+MAX_WORKERS = 50  # Увеличено для большей пропускной способности
+MIN_WORKERS = 10  # Увеличено минимальное количество воркеров
+WORKER_SCALE_THRESHOLD = 100  # Уменьшено для быстрого масштабирования
+WORKER_SCALE_UP_THRESHOLD = 50  # Порог для увеличения количества воркеров
+WORKER_SCALE_DOWN_THRESHOLD = 10  # Порог для уменьшения количества воркеров
 
 # Настройки для мониторинга здоровья системы
 HEALTH_CHECK_ENABLED = True
