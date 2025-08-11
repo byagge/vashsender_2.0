@@ -429,21 +429,6 @@
         </div>
         
         <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          <!-- Debug Info -->
-          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6" x-show="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content">
-            <h4 class="font-medium text-yellow-800 mb-2">Отладочная информация</h4>
-            <div class="text-sm text-yellow-700 space-y-1">
-              <p>Campaign ID: <span x-text="selectedCampaign?.id"></span></p>
-              <p>Template ID: <span x-text="selectedCampaign?.template?.id || selectedCampaign?.template_detail?.id"></span></p>
-              <p>Template exists: <span x-text="!!selectedCampaign?.template"></span></p>
-              <p>Template detail exists: <span x-text="!!selectedCampaign?.template_detail"></span></p>
-              <p>HTML content (template): <span x-text="!!selectedCampaign?.template?.html_content"></span></p>
-                              <p>HTML content (detail): <span x-text="!!selectedCampaign?.template_detail?.html_content"></span></p>
-                <p>Text content (template): <span x-text="!!selectedCampaign?.template?.plain_text_content"></span></p>
-                <p>Text content (detail): <span x-text="!!selectedCampaign?.template_detail?.plain_text_content"></span></p>
-            </div>
-          </div>
-          
           <!-- Email Header Info -->
           <div class="bg-gray-50 rounded-lg p-4 mb-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -469,27 +454,49 @@
           <!-- Email Content -->
           <div class="border border-gray-200 rounded-lg overflow-hidden">
             <div class="bg-white p-6">
+              <!-- Приоритет 1: HTML содержимое из template_detail -->
               <template x-if="selectedCampaign?.template_detail?.html_content">
                 <div x-html="selectedCampaign.template_detail.html_content" class="email-preview"></div>
               </template>
+              
+              <!-- Приоритет 2: Текстовое содержимое из template_detail -->
               <template x-if="!selectedCampaign?.template_detail?.html_content && selectedCampaign?.template_detail?.plain_text_content">
                 <div class="email-preview">
                   <pre x-text="selectedCampaign.template_detail.plain_text_content" class="whitespace-pre-wrap font-sans"></pre>
                 </div>
               </template>
-              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.text_content && selectedCampaign?.template?.html_content">
+              
+              <!-- Приоритет 3: HTML содержимое из template -->
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && selectedCampaign?.template?.html_content">
                 <div x-html="selectedCampaign.template.html_content" class="email-preview"></div>
               </template>
+              
+              <!-- Приоритет 4: Текстовое содержимое из template -->
               <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && selectedCampaign?.template?.plain_text_content">
                 <div class="email-preview">
                   <pre x-text="selectedCampaign.template.plain_text_content" class="whitespace-pre-wrap font-sans"></pre>
                 </div>
               </template>
-              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.plain_text_content">
+              
+              <!-- Приоритет 5: Поле content из кампании -->
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.plain_text_content && selectedCampaign?.content">
+                <div class="email-preview">
+                  <div x-html="selectedCampaign.content"></div>
+                </div>
+              </template>
+              
+              <!-- Fallback: ничего не найдено -->
+              <template x-if="!selectedCampaign?.template_detail?.html_content && !selectedCampaign?.template_detail?.plain_text_content && !selectedCampaign?.template?.html_content && !selectedCampaign?.template?.plain_text_content && !selectedCampaign?.content">
                 <div class="text-center py-12 text-gray-500">
                   <i data-lucide="file-text" class="w-12 h-12 mx-auto mb-4 text-gray-300"></i>
-                  <p>Содержимое письма недоступно для просмотра</p>
-                  <p class="text-sm mt-2">Template ID: <span x-text="selectedCampaign?.template?.id || selectedCampaign?.template_detail?.id || 'Не указан'"></span></p>
+                  <p class="text-lg font-medium mb-2">Содержимое письма недоступно для просмотра</p>
+                  <p class="text-sm">Возможные причины:</p>
+                  <ul class="text-sm mt-2 space-y-1">
+                    <li>• Шаблон письма был удален</li>
+                    <li>• Шаблон не был привязан к рассылке</li>
+                    <li>• Ошибка при загрузке данных шаблона</li>
+                  </ul>
+                  <p class="text-sm mt-4">Template ID: <span class="font-mono bg-gray-100 px-2 py-1 rounded" x-text="selectedCampaign?.template?.id || selectedCampaign?.template_detail?.id || 'Не указан'"></span></p>
                 </div>
               </template>
             </div>
@@ -541,7 +548,6 @@
           this.autoRefreshInterval = setInterval(() => {
             const hasSendingCampaigns = this.campaigns.some(campaign => campaign.status === 'sending');
             if (hasSendingCampaigns) {
-              console.log('Auto-refreshing campaigns data...');
               this.loadCampaigns();
             }
           }, 5000);
@@ -556,7 +562,6 @@
 
         async loadCampaigns(page = this.currentPage) {
           try {
-            console.log('Fetching campaigns from API...');
             const response = await fetch(`/campaigns/api/campaigns/?page=${page}&page_size=${this.itemsPerPage}`, {
               credentials: 'same-origin',
               headers: {
@@ -709,11 +714,6 @@
         },
 
         showPreview(campaign) {
-          console.log('Showing preview for campaign:', campaign);
-          console.log('Campaign template:', campaign.template);
-          console.log('Template detail:', campaign.template_detail);
-          console.log('Template detail HTML:', campaign.template_detail?.html_content);
-          console.log('Template detail text:', campaign.template_detail?.plain_text_content);
           this.selectedCampaign = campaign;
           this.showPreviewModal = true;
           this.$nextTick(() => {

@@ -1,78 +1,50 @@
-# core/apps/campaigns/serializers.py
+# apps/campaigns/serializers.py
 
 from rest_framework import serializers
-
+from apps.mailer.models import Contact, ContactList
 from apps.emails.models import SenderEmail
-from apps.mailer.models import ContactList, Contact
 from apps.mail_templates.models import EmailTemplate
-from .models import Campaign, CampaignStats, EmailTracking
+from apps.campaigns.models import Campaign, CampaignStats, EmailTracking, CampaignRecipient
+from apps.campaigns.models import Campaign as CampaignModel
 
-class EmailTrackingSerializer(serializers.ModelSerializer):
+class ContactSerializer(serializers.ModelSerializer):
     class Meta:
-        model = EmailTracking
-        fields = ['id', 'tracking_id', 'sent_at', 'opened_at', 'clicked_at', 'bounced_at', 'bounce_reason']
-
-class EmailTemplateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmailTemplate
-        fields = ['id', 'title', 'html_content', 'plain_text_content']
-
-class SenderEmailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SenderEmail
-        fields = ['id', 'email', 'sender_name', 'reply_to']
+        model = Contact
+        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'created_at']
 
 class ContactListSerializer(serializers.ModelSerializer):
     contacts_count = serializers.SerializerMethodField()
     
     class Meta:
         model = ContactList
-        fields = ['id', 'name', 'contacts_count']
+        fields = ['id', 'name', 'description', 'contacts_count', 'created_at']
     
     def get_contacts_count(self, obj):
         return obj.contacts.count()
 
-class ContactSerializer(serializers.ModelSerializer):
+class SenderEmailSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Contact
-        fields = ['id', 'email', 'status', 'added_date']
+        model = SenderEmail
+        fields = ['id', 'email', 'sender_name', 'reply_to', 'is_verified', 'created_at']
+
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailTemplate
+        fields = ['id', 'title', 'html_content', 'plain_text_content']
 
 class CampaignStatsSerializer(serializers.ModelSerializer):
-    emails_sent = serializers.SerializerMethodField()
-    opens_count = serializers.SerializerMethodField()
-    clicks_count = serializers.SerializerMethodField()
-    bounces_count = serializers.SerializerMethodField()
-
+    contact_list = ContactListSerializer(read_only=True)
+    
     class Meta:
         model = CampaignStats
-        fields = ['emails_sent', 'opens_count', 'clicks_count', 'bounces_count']
+        fields = ['id', 'contact_list', 'emails_sent', 'opens_count', 'clicks_count', 'bounces_count', 'created_at', 'updated_at']
 
-    def get_emails_sent(self, obj):
-        return EmailTracking.objects.filter(
-            campaign=obj.campaign,
-            contact__in=obj.contact_list.contacts.all()
-        ).count()
-
-    def get_opens_count(self, obj):
-        return EmailTracking.objects.filter(
-            campaign=obj.campaign,
-            contact__in=obj.contact_list.contacts.all(),
-            opened_at__isnull=False
-        ).count()
-
-    def get_clicks_count(self, obj):
-        return EmailTracking.objects.filter(
-            campaign=obj.campaign,
-            contact__in=obj.contact_list.contacts.all(),
-            clicked_at__isnull=False
-        ).count()
-
-    def get_bounces_count(self, obj):
-        return EmailTracking.objects.filter(
-            campaign=obj.campaign,
-            contact__in=obj.contact_list.contacts.all(),
-            bounced_at__isnull=False
-        ).count()
+class CampaignRecipientSerializer(serializers.ModelSerializer):
+    contact = ContactSerializer(read_only=True)
+    
+    class Meta:
+        model = CampaignRecipient
+        fields = ['id', 'contact', 'is_sent', 'sent_at', 'created_at']
 
 class CampaignSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.email')
@@ -101,31 +73,7 @@ class CampaignSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'sent_at']
 
-    def validate(self, data):
-        # Для черновиков проверяем только наличие хотя бы одного поля
-        if (self.instance and self.instance.status == Campaign.STATUS_DRAFT) or not self.instance:
-            # Проверяем, что хотя бы одно поле заполнено
-            has_any_field = any(
-                data.get(field) for field in ['name', 'template', 'sender_email', 'subject', 'content', 'contact_lists', 'sender_name']
-            )
-            if not has_any_field:
-                raise serializers.ValidationError('При сохранении черновика должно быть заполнено хотя бы одно поле')
-            return data
-
-        # Полная валидация перед отправкой
-        required_fields = ['name', 'template', 'sender_email', 'subject', 'content', 'contact_lists']
-        for field in required_fields:
-            if field not in data:
-                # Если поле не в данных, используем значение из instance
-                if not getattr(self.instance, field, None):
-                    raise serializers.ValidationError({field: f'Поле {field} обязательно'})
-            elif not data[field]:
-                raise serializers.ValidationError({field: f'Поле {field} обязательно'})
-
-        return data
-
     def get_contact_lists_detail(self, obj):
-        # Принудительно обновляем данные из базы
         obj.refresh_from_db()
         return [
             {
@@ -136,49 +84,54 @@ class CampaignSerializer(serializers.ModelSerializer):
             for cl in obj.contact_lists.all()
         ]
 
-    def get_stats(self, obj):
-        return CampaignStatsSerializer(obj.stats.all(), many=True).data
-
     def get_emails_sent(self, obj):
-        return obj.emails_sent
+        return EmailTracking.objects.filter(campaign=obj).count()
 
     def get_delivered_emails(self, obj):
-        return obj.delivered_emails
+        return EmailTracking.objects.filter(campaign=obj, delivered_at__isnull=False).count()
 
     def get_open_rate(self, obj):
-        return obj.open_rate
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_opens = EmailTracking.objects.filter(campaign=obj, opened_at__isnull=False).count()
+        return (total_opens / total_sent * 100)
 
     def get_click_rate(self, obj):
-        return obj.click_rate
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_clicks = EmailTracking.objects.filter(campaign=obj, clicked_at__isnull=False).count()
+        return (total_clicks / total_sent * 100)
 
     def get_bounce_rate(self, obj):
-        return obj.bounce_rate
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_bounces = EmailTracking.objects.filter(campaign=obj, bounced_at__isnull=False).count()
+        return (total_bounces / total_sent * 100)
 
     def get_delivery_rate(self, obj):
-        return obj.delivery_rate
-
-    def to_representation(self, instance):
-        # Принудительно обновляем данные из базы перед сериализацией
-        try:
-            instance.refresh_from_db()
-        except Exception as e:
-            # Если не удалось обновить, продолжаем с текущими данными
-            pass
-        return super().to_representation(instance)
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        delivered = self.get_delivered_emails(obj)
+        return (delivered / total_sent * 100)
 
 class CampaignListSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.email')
     sender_email_detail = SenderEmailSerializer(source='sender_email', read_only=True)
     contact_lists_detail = serializers.SerializerMethodField()
+    template_detail = EmailTemplateSerializer(source='template', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = Campaign
         fields = [
-            'id', 'user', 'name', 'subject', 'status', 'status_display',
+            'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'sent_at', 'scheduled_at',
             'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail',
-            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name'
+            'template', 'template_detail', 'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'sent_at']
 
@@ -192,3 +145,37 @@ class CampaignListSerializer(serializers.ModelSerializer):
             }
             for cl in obj.contact_lists.all()
         ]
+
+    def get_emails_sent(self, obj):
+        return EmailTracking.objects.filter(campaign=obj).count()
+
+    def get_delivered_emails(self, obj):
+        return EmailTracking.objects.filter(campaign=obj, delivered_at__isnull=False).count()
+
+    def get_open_rate(self, obj):
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_opens = EmailTracking.objects.filter(campaign=obj, opened_at__isnull=False).count()
+        return (total_opens / total_sent * 100)
+
+    def get_click_rate(self, obj):
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_clicks = EmailTracking.objects.filter(campaign=obj, clicked_at__isnull=False).count()
+        return (total_clicks / total_sent * 100)
+
+    def get_bounce_rate(self, obj):
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        total_bounces = EmailTracking.objects.filter(campaign=obj, bounced_at__isnull=False).count()
+        return (total_bounces / total_sent * 100)
+
+    def get_delivery_rate(self, obj):
+        total_sent = self.get_emails_sent(obj)
+        if total_sent == 0:
+            return 0
+        delivered = self.get_delivered_emails(obj)
+        return (delivered / total_sent * 100)
