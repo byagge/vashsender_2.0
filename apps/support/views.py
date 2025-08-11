@@ -9,10 +9,11 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 
-from .models import SupportTicket, SupportMessage, SupportCategory
+from .models import SupportTicket, SupportMessage, SupportCategory, SupportChat, SupportChatMessage
 from .serializers import (
     SupportTicketListSerializer, SupportTicketCreateSerializer, SupportTicketDetailSerializer,
-    SupportMessageSerializer, SupportMessageCreateSerializer
+    SupportMessageSerializer, SupportMessageCreateSerializer, SupportChatSerializer, SupportChatMessageSerializer,
+    SupportChatMessageCreateSerializer
 )
 
 
@@ -217,3 +218,195 @@ class SupportAdminPanelView(LoginRequiredMixin, TemplateView):
     @method_decorator(staff_member_required)
     def dispatch(self, *args, **kwargs):
         return super().dispatch(*args, **kwargs) 
+
+
+class SupportChatViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportChatSerializer
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            return SupportChat.objects.all().order_by('-chat_updated_at')
+        else:
+            return SupportChat.objects.filter(chat_user=user).order_by('-chat_updated_at')
+    
+    @action(detail=False, methods=['post'])
+    def start_chat(self, request):
+        """Создать новый чат"""
+        user = request.user
+        
+        # Проверяем, есть ли уже активный чат у пользователя
+        existing_chat = SupportChat.objects.filter(
+            chat_user=user,
+            chat_status__in=[SupportTicket.STATUS_OPEN, SupportTicket.STATUS_IN_PROGRESS, SupportTicket.STATUS_WAITING, SupportTicket.STATUS_RESOLVED]
+        ).first()
+        
+        if existing_chat and existing_chat.chat_status != SupportTicket.STATUS_CLOSED:
+            return Response({
+                'chat_id': existing_chat.chat_id,
+                'message': 'У вас уже есть активный чат'
+            })
+        
+        # Создаем новый чат
+        chat = SupportChat.objects.create(chat_user=user)
+        
+        # Если есть сообщение в запросе, создаем первое сообщение
+        message_text = request.data.get('message', '')
+        if message_text:
+            SupportChatMessage.objects.create(
+                chat_message=chat,
+                message_author=user,
+                message_text=message_text,
+                message_staff_reply=user.is_staff
+            )
+            
+            # Обновляем время последнего обновления чата
+            chat.chat_updated_at = timezone.now()
+            chat.save(update_fields=['chat_updated_at'])
+        
+        return Response({
+            'chat_id': chat.chat_id,
+            'message': 'Чат создан'
+        }, status=201)
+    
+    @action(detail=True, methods=['get'])
+    def messages(self, request, pk=None):
+        """Получить сообщения чата"""
+        chat = self.get_object()
+        messages = SupportChatMessage.objects.filter(chat_message=chat).order_by('message_created_at')
+        serializer = SupportChatMessageSerializer(messages, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def send_message(self, request, pk=None):
+        """Отправить сообщение в чат"""
+        chat = self.get_object()
+        
+        if chat.chat_status == SupportTicket.STATUS_CLOSED:
+            return Response(
+                {'error': 'Чат закрыт'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        message_text = request.data.get('message_text', '')
+        if not message_text:
+            return Response(
+                {'error': 'Текст сообщения обязателен'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Определяем, является ли сообщение ответом сотрудника
+        is_staff_reply = request.user.is_staff
+        
+        message = SupportChatMessage.objects.create(
+            chat_message=chat,
+            message_author=request.user,
+            message_text=message_text,
+            message_staff_reply=is_staff_reply
+        )
+        
+        # Обновляем время последнего обновления чата
+        chat.chat_updated_at = timezone.now()
+        chat.save(update_fields=['chat_updated_at'])
+        
+        serializer = SupportChatMessageSerializer(message)
+        return Response(serializer.data, status=201)
+    
+    @action(detail=True, methods=['post'])
+    def close_chat(self, request, pk=None):
+        """Закрыть чат"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Только сотрудники могут закрывать чаты'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        chat = self.get_object()
+        chat.chat_status = SupportTicket.STATUS_CLOSED
+        chat.chat_updated_at = timezone.now()
+        chat.save(update_fields=['chat_status', 'chat_updated_at'])
+        return Response({'status': 'Чат закрыт'})
+    
+    @action(detail=True, methods=['post'])
+    def change_status(self, request, pk=None):
+        """Изменить статус чата"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Только сотрудники могут изменять статус чатов'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        chat = self.get_object()
+        new_status = request.data.get('status')
+        
+        if not new_status:
+            return Response(
+                {'error': 'Статус обязателен'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Проверяем, что статус валидный
+        valid_statuses = [choice[0] for choice in SupportTicket.STATUS_CHOICES]
+        if new_status not in valid_statuses:
+            return Response(
+                {'error': f'Неверный статус. Допустимые значения: {", ".join(valid_statuses)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        chat.chat_status = new_status
+        chat.chat_updated_at = timezone.now()
+        chat.save(update_fields=['chat_status', 'chat_updated_at'])
+        
+        return Response({
+            'status': 'Статус изменён',
+            'new_status': new_status,
+            'chat_id': chat.chat_id
+        })
+
+
+class SupportChatMessageViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SupportChatMessageSerializer
+    
+    def get_queryset(self):
+        chat_id = self.kwargs.get('chat_pk')
+        chat = get_object_or_404(SupportChat, chat_id=chat_id)
+        return SupportChatMessage.objects.filter(chat_message=chat).order_by('message_created_at')
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return SupportChatMessageCreateSerializer
+        return SupportChatMessageSerializer
+    
+    def perform_create(self, serializer):
+        chat_id = self.kwargs.get('chat_pk')
+        chat = get_object_or_404(SupportChat, chat_id=chat_id)
+        
+        # Определяем, является ли сообщение ответом сотрудника
+        is_staff_reply = self.request.user.is_staff
+        
+        serializer.save(
+            chat_message=chat, 
+            message_author=self.request.user,
+            message_staff_reply=is_staff_reply
+        )
+        
+        # Обновляем время последнего обновления чата
+        chat.chat_updated_at = timezone.now()
+        chat.save(update_fields=['chat_updated_at'])
+
+
+class SupportChatView(LoginRequiredMixin, TemplateView):
+    template_name = 'support/chat.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Получаем активный чат пользователя
+        user = self.request.user
+        active_chat = SupportChat.objects.filter(
+            chat_user=user,
+            chat_status__in=[SupportTicket.STATUS_OPEN, SupportTicket.STATUS_IN_PROGRESS, SupportTicket.STATUS_WAITING, SupportTicket.STATUS_RESOLVED]
+        ).first()
+        context['active_chat'] = active_chat
+        return context 

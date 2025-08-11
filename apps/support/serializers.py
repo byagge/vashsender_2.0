@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SupportTicket, SupportMessage, SupportAttachment
+from .models import SupportTicket, SupportMessage, SupportAttachment, SupportChat, SupportChatMessage
 
 class SupportTicketListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -74,3 +74,57 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
                 attachment_mime_type=attachment_file.content_type
             )
         return message 
+
+class SupportChatSerializer(serializers.ModelSerializer):
+    chat_user = serializers.ReadOnlyField(source='chat_user.email')
+    chat_assigned_to = serializers.ReadOnlyField(source='chat_assigned_to.email')
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SupportChat
+        fields = [
+            'chat_id', 'chat_user', 'chat_status', 'chat_created_at', 
+            'chat_updated_at', 'chat_assigned_to', 'last_message', 'unread_count'
+        ]
+    
+    def get_last_message(self, obj):
+        last_msg = obj.chat_messages.last()
+        if last_msg:
+            text = last_msg.message_text[:100]
+            if len(last_msg.message_text) > 100:
+                text += '...'
+            return text
+        return None
+    
+    def get_unread_count(self, obj):
+        user = self.context['request'].user
+        if user.is_staff:
+            # Для сотрудников считаем сообщения от пользователей
+            return obj.chat_messages.filter(message_staff_reply=False).count()
+        else:
+            # Для пользователей считаем сообщения от сотрудников
+            return obj.chat_messages.filter(message_staff_reply=True).count()
+
+
+class SupportChatMessageSerializer(serializers.ModelSerializer):
+    message_author = serializers.ReadOnlyField(source='message_author.email')
+    message_author_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SupportChatMessage
+        fields = [
+            'message_id', 'chat_message', 'message_author', 'message_author_name',
+            'message_text', 'message_staff_reply', 'message_created_at'
+        ]
+    
+    def get_message_author_name(self, obj):
+        if obj.message_author.is_staff:
+            return "Поддержка"
+        return obj.message_author.email
+
+
+class SupportChatMessageCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SupportChatMessage
+        fields = ['message_text'] 

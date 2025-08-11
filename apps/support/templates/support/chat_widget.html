@@ -1,0 +1,256 @@
+<!-- Виджет чата поддержки -->
+<div x-data="chatWidget()" class="fixed bottom-4 right-4 z-50">
+    <!-- Кнопка открытия чата -->
+    <button 
+        @click="toggleChat()"
+        x-show="!chatOpen"
+        class="bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 hover:scale-110"
+        title="Чат поддержки"
+    >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+        </svg>
+    </button>
+
+    <!-- Окно чата -->
+    <div 
+        x-show="chatOpen" 
+        x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="bg-white rounded-lg shadow-2xl border border-gray-200 w-80 h-96 flex flex-col"
+    >
+        <!-- Заголовок чата -->
+        <div class="bg-blue-600 text-white px-4 py-3 rounded-t-lg flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span class="font-medium">Поддержка онлайн</span>
+            </div>
+            <button @click="toggleChat()" class="text-blue-100 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Область сообщений -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-3" id="widget-messages">
+            <!-- Приветственное сообщение -->
+            <div x-show="!currentChat" class="text-center py-8">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">Задайте вопрос и получите быстрый ответ</p>
+                <button 
+                    @click="startNewChat()"
+                    class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                >
+                    Начать чат
+                </button>
+            </div>
+
+            <!-- Сообщения -->
+            <template x-for="message in messages" :key="message.message_id">
+                <div class="flex" :class="message.message_staff_reply ? 'justify-start' : 'justify-end'">
+                    <div 
+                        class="max-w-xs px-3 py-2 rounded-lg text-sm"
+                        :class="message.message_staff_reply 
+                            ? 'bg-gray-100 text-gray-900' 
+                            : 'bg-blue-600 text-white'"
+                    >
+                        <p x-text="message.message_text"></p>
+                        <div class="text-xs opacity-75 mt-1" x-text="formatTime(message.message_created_at)"></div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Индикатор загрузки -->
+            <div x-show="loading" class="flex justify-center">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+        </div>
+
+        <!-- Форма отправки -->
+        <div x-show="currentChat && currentChat.chat_status !== 'closed'" class="border-t border-gray-200 p-3">
+            <form @submit.prevent="sendMessage()" class="flex space-x-2">
+                <input 
+                    type="text" 
+                    x-model="newMessage" 
+                    placeholder="Введите сообщение..."
+                    class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    :disabled="sending"
+                >
+                <button 
+                    type="submit" 
+                    :disabled="!newMessage.trim() || sending"
+                    class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                    <span x-show="!sending">→</span>
+                    <span x-show="sending">...</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function chatWidget() {
+    return {
+        chatOpen: false,
+        currentChat: null,
+        messages: [],
+        newMessage: '',
+        loading: false,
+        sending: false,
+        refreshInterval: null,
+
+        init() {
+            this.checkExistingChat();
+            this.startAutoRefresh();
+        },
+
+        toggleChat() {
+            this.chatOpen = !this.chatOpen;
+            if (this.chatOpen && this.currentChat) {
+                this.loadMessages();
+            }
+        },
+
+        async checkExistingChat() {
+            try {
+                const response = await fetch('/support/api/chats/', {
+                    headers: {
+                        'X-CSRFToken': this.getCSRFToken(),
+                    }
+                });
+                
+                if (response.ok) {
+                    const chats = await response.json();
+                    const activeChat = chats.find(chat => 
+                        chat.chat_status !== 'closed'
+                    );
+                    
+                    if (activeChat) {
+                        this.currentChat = activeChat;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при проверке чата:', error);
+            }
+        },
+
+        async startNewChat() {
+            this.loading = true;
+            try {
+                const response = await fetch('/support/api/chats/start_chat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken(),
+                    },
+                    body: JSON.stringify({
+                        message: 'Начало чата через виджет'
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    this.currentChat = { chat_id: result.chat_id };
+                    this.loadMessages();
+                }
+            } catch (error) {
+                console.error('Ошибка при создании чата:', error);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async loadMessages() {
+            if (!this.currentChat) return;
+            
+            this.loading = true;
+            try {
+                const response = await fetch(`/support/api/chats/${this.currentChat.chat_id}/messages/`, {
+                    headers: {
+                        'X-CSRFToken': this.getCSRFToken(),
+                    }
+                });
+
+                if (response.ok) {
+                    this.messages = await response.json();
+                    this.scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Ошибка при загрузке сообщений:', error);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async sendMessage() {
+            if (!this.newMessage.trim() || !this.currentChat) return;
+            
+            this.sending = true;
+            try {
+                const response = await fetch(`/support/api/chats/${this.currentChat.chat_id}/send_message/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken(),
+                    },
+                    body: JSON.stringify({
+                        message_text: this.newMessage
+                    })
+                });
+
+                if (response.ok) {
+                    const newMsg = await response.json();
+                    this.messages.push(newMsg);
+                    this.newMessage = '';
+                    this.scrollToBottom();
+                }
+            } catch (error) {
+                console.error('Ошибка при отправке сообщения:', error);
+            } finally {
+                this.sending = false;
+            }
+        },
+
+        startAutoRefresh() {
+            this.refreshInterval = setInterval(() => {
+                if (this.chatOpen && this.currentChat && this.currentChat.chat_status !== 'closed') {
+                    this.loadMessages();
+                }
+            }, 10000); // Обновляем каждые 10 секунд
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const container = document.getElementById('widget-messages');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        },
+
+        formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('ru-RU', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        },
+
+        getCSRFToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                   document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+        }
+    }
+}
+</script> 

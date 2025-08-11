@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SupportTicket, SupportMessage, SupportCategory, SupportAttachment
+from .models import SupportTicket, SupportMessage, SupportCategory, SupportAttachment, SupportChat, SupportChatMessage
 
 
 @admin.register(SupportCategory)
@@ -48,3 +48,45 @@ class SupportAttachmentAdmin(admin.ModelAdmin):
     search_fields = ['attachment_filename', 'attachment_ticket__ticket_subject']
     readonly_fields = ['attachment_id', 'attachment_uploaded_at']
     ordering = ['-attachment_uploaded_at'] 
+
+
+@admin.register(SupportChat)
+class SupportChatAdmin(admin.ModelAdmin):
+    list_display = ['chat_id', 'chat_user', 'chat_status', 'chat_created_at', 'chat_updated_at', 'chat_assigned_to']
+    list_filter = ['chat_status', 'chat_created_at', 'chat_assigned_to']
+    search_fields = ['chat_user__email', 'chat_id']
+    readonly_fields = ['chat_id', 'chat_created_at', 'chat_updated_at']
+    ordering = ['-chat_updated_at']
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('chat_id', 'chat_user', 'chat_status', 'chat_assigned_to')
+        }),
+        ('Временные метки', {
+            'fields': ('chat_created_at', 'chat_updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(SupportChatMessage)
+class SupportChatMessageAdmin(admin.ModelAdmin):
+    list_display = ['message_id', 'chat_message', 'message_author', 'message_staff_reply', 'message_created_at', 'short_text']
+    list_filter = ['message_staff_reply', 'message_created_at', 'message_author__is_staff']
+    search_fields = ['message_text', 'message_author__email', 'chat_message__chat_id']
+    readonly_fields = ['message_id', 'message_created_at']
+    ordering = ['-message_created_at']
+    
+    def short_text(self, obj):
+        return obj.message_text[:100] + '...' if len(obj.message_text) > 100 else obj.message_text
+    short_text.short_description = 'Текст сообщения'
+    
+    fieldsets = (
+        ('Сообщение', {
+            'fields': ('message_id', 'chat_message', 'message_author', 'message_text', 'message_staff_reply')
+        }),
+        ('Временные метки', {
+            'fields': ('message_created_at',),
+            'classes': ('collapse',)
+        }),
+    ) 

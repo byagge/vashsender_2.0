@@ -129,3 +129,50 @@ class SupportAttachment(models.Model):
     
     class Meta:
         pass 
+
+
+class SupportChat(models.Model):
+    chat_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    chat_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='support_chats')
+    chat_status = models.CharField(max_length=20, choices=SupportTicket.STATUS_CHOICES, default=SupportTicket.STATUS_OPEN)
+    chat_created_at = models.DateTimeField(auto_now_add=True)
+    chat_updated_at = models.DateTimeField(auto_now=True)
+    chat_assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='assigned_support_chats'
+    )
+    
+    def __str__(self):
+        return f"Чат {self.chat_id.hex[:8]} - {self.chat_user.email}"
+    
+    class Meta:
+        ordering = ['-chat_updated_at']
+
+
+class SupportChatMessage(models.Model):
+    message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    chat_message = models.ForeignKey(SupportChat, on_delete=models.CASCADE, related_name='chat_messages')
+    message_author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_messages')
+    
+    message_text = models.TextField()
+    message_staff_reply = models.BooleanField(default=False)
+    message_created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Сообщение в чате {self.chat_message.chat_id.hex[:8]} от {self.message_author.email}"
+    
+    def save(self, *args, **kwargs):
+        if not self.message_staff_reply:
+            self.message_staff_reply = self.message_author.is_staff
+        
+        super().save(*args, **kwargs)
+        
+        # Обновляем время последнего сообщения в чате
+        self.chat_message.chat_updated_at = timezone.now()
+        self.chat_message.save(update_fields=['chat_updated_at'])
+    
+    class Meta:
+        ordering = ['message_created_at'] 

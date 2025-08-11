@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Чат поддержки - vashsender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .chat-container {
+            height: calc(100vh - 120px);
+        }
+        .messages-container {
+            height: calc(100vh - 280px);
+        }
+        .message-bubble {
+            max-width: 70%;
+        }
+        .message-bubble.staff {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .message-bubble.user {
+            background: #f3f4f6;
+            color: #1f2937;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    {% csrf_token %}
+    <div class="min-h-screen flex" x-data="userChat">
+        <!-- Sidebar -->
+        {% include "dashboard/common/sidebar.html" %}
+
+        <!-- Main Content -->
+        <div class="flex-1 flex md:ml-64">
+            <div class="flex-1 p-8">
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-3xl font-bold text-gray-900">Чат поддержки</h1>
+                    <p class="text-gray-600 mt-2">Получите помощь от нашей команды поддержки</p>
+                </div>
+
+                <!-- Chat Container -->
+                <div class="bg-white rounded-lg shadow-sm border chat-container flex flex-col">
+                    <!-- Chat Header -->
+                    <div class="p-4 border-b border-gray-200 bg-gray-50">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                    <i data-lucide="headphones" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-900">Поддержка vashsender</h3>
+                                    <p class="text-sm text-gray-500">Мы ответим вам в ближайшее время</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span 
+                                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                    :class="getStatusClass(chatStatus)"
+                                    x-text="getStatusText(chatStatus)"
+                                ></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Messages Container -->
+                    <div class="flex-1 overflow-y-auto p-4 messages-container scrollbar-hide" x-ref="messagesContainer">
+                        <template x-for="message in messages" :key="message.message_id">
+                            <div class="mb-4" :class="{ 'text-right': !message.message_staff_reply }">
+                                <div 
+                                    class="message-bubble inline-block px-4 py-2 rounded-2xl"
+                                    :class="message.message_staff_reply ? 'staff' : 'user'"
+                                >
+                                    <p class="text-sm" x-text="message.message_text"></p>
+                                    <div class="text-xs mt-1 opacity-70" x-text="formatTime(message.message_created_at)"></div>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <!-- Welcome message -->
+                        <div x-show="messages.length === 0" class="text-center text-gray-500 py-8">
+                            <i data-lucide="message-circle" class="w-16 h-16 mx-auto text-gray-300 mb-4"></i>
+                            <p class="text-lg font-medium">Добро пожаловать в чат поддержки!</p>
+                            <p class="text-sm mt-2">Опишите вашу проблему, и мы поможем вам её решить</p>
+                        </div>
+                    </div>
+
+                    <!-- Message Input -->
+                    <div class="p-4 border-t border-gray-200 bg-gray-50">
+                        <form @submit.prevent="sendMessage" class="flex space-x-3">
+                            <div class="flex-1 relative">
+                                <textarea 
+                                    x-model="newMessage"
+                                    @keydown.enter.prevent="sendMessage"
+                                    placeholder="Опишите вашу проблему..."
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    rows="1"
+                                    x-ref="messageInput"
+                                    :disabled="!chatId"
+                                ></textarea>
+                            </div>
+                            <button 
+                                type="submit"
+                                :disabled="!newMessage.trim() || !chatId"
+                                class="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                            >
+                                <i data-lucide="send" class="w-5 h-5"></i>
+                                Отправить
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('userChat', () => ({
+                messages: [],
+                newMessage: '',
+                chatId: null,
+                chatStatus: 'open',
+                refreshInterval: null,
+
+                init() {
+                    this.initializeChat();
+                    this.startAutoRefresh();
+                    // Инициализация Lucide Icons
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                },
+
+                async initializeChat() {
+                    // Проверяем, есть ли активный чат
+                    {% if active_chat %}
+                        this.chatId = '{{ active_chat.chat_id }}';
+                        this.chatStatus = '{{ active_chat.chat_status }}';
+                        await this.loadMessages();
+                    {% else %}
+                        // Создаем новый чат
+                        await this.createChat();
+                    {% endif %}
+                },
+
+                async createChat() {
+                    try {
+                        const response = await fetch('/support/api/chats/start_chat/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCsrfToken(),
+                            },
+                            body: JSON.stringify({ message: '' })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.chatId = data.chat_id;
+                            this.chatStatus = 'open';
+                        }
+                    } catch (error) {
+                        console.error('Ошибка создания чата:', error);
+                    }
+                },
+
+                async loadMessages() {
+                    if (!this.chatId) return;
+
+                    try {
+                        const response = await fetch(`/support/api/chats/${this.chatId}/messages/`);
+                        if (response.ok) {
+                            this.messages = await response.json();
+                            this.scrollToBottom();
+                        }
+                    } catch (error) {
+                        console.error('Ошибка загрузки сообщений:', error);
+                    }
+                },
+
+                async sendMessage() {
+                    if (!this.newMessage.trim() || !this.chatId) return;
+
+                    const message = this.newMessage.trim();
+                    this.newMessage = '';
+
+                    try {
+                        const response = await fetch(`/support/api/chats/${this.chatId}/send_message/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCsrfToken(),
+                            },
+                            body: JSON.stringify({ message_text: message })
+                        });
+
+                        if (response.ok) {
+                            await this.loadMessages();
+                            this.scrollToBottom();
+                        }
+                    } catch (error) {
+                        console.error('Ошибка отправки сообщения:', error);
+                    }
+                },
+
+                scrollToBottom() {
+                    this.$nextTick(() => {
+                        if (this.$refs.messagesContainer) {
+                            this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
+                        }
+                    });
+                },
+
+                startAutoRefresh() {
+                    this.refreshInterval = setInterval(() => {
+                        if (this.chatId) {
+                            this.loadMessages();
+                        }
+                    }, 10000); // Обновляем каждые 10 секунд
+                },
+
+                formatTime(timestamp) {
+                    if (!timestamp) return '';
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+
+                    if (diffMins < 1) return 'сейчас';
+                    if (diffMins < 60) return `${diffMins}м`;
+                    if (diffHours < 24) return `${diffHours}ч`;
+                    if (diffDays < 7) return `${diffDays}д`;
+                    
+                    return date.toLocaleDateString('ru-RU', { 
+                        day: '2-digit', 
+                        month: '2-digit' 
+                    });
+                },
+
+                getStatusClass(status) {
+                    const classes = {
+                        'open': 'bg-green-100 text-green-800',
+                        'in_progress': 'bg-blue-100 text-blue-800',
+                        'waiting': 'bg-yellow-100 text-yellow-800',
+                        'resolved': 'bg-gray-100 text-gray-800',
+                        'closed': 'bg-red-100 text-red-800'
+                    };
+                    return classes[status] || 'bg-gray-100 text-gray-800';
+                },
+
+                getStatusText(status) {
+                    const texts = {
+                        'open': 'Открыт',
+                        'in_progress': 'В работе',
+                        'waiting': 'Ожидает',
+                        'resolved': 'Решён',
+                        'closed': 'Закрыт'
+                    };
+                    return texts[status] || 'Неизвестно';
+                },
+
+                getCsrfToken() {
+                    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+                }
+            }));
+        });
+    </script>
+</body>
+</html> 
