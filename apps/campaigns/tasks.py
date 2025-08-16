@@ -322,8 +322,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Разбиваем на батчи (оптимизировано для массовых рассылок)
-        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 20)   # Оптимизировано до 20 для лучшей доставляемости
+        # Разбиваем на батчи (уменьшено для предотвращения баунса)
+        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 10)   # Уменьшено до 10 для лучшей доставляемости
         batches = [
             contacts_list[i:i + batch_size] 
             for i in range(0, len(contacts_list), batch_size)
@@ -344,7 +344,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Добавляем задержку между батчами для лучшей доставляемости
                 if i > 0:
                     import random
-                    batch_delay = random.uniform(3.0, 5.0)  # 3-5 секунд между батчами
+                    batch_delay = random.uniform(5.0, 10.0)  # 5-10 секунд между батчами
                     time.sleep(batch_delay)
                 
                 result = send_email_batch.apply_async(
@@ -523,14 +523,15 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         sent_count = 0
         failed_count = 0
-        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 10)  # Увеличено до 10 для больших рассылок
+        # Снижаем скорость отправки для предотвращения баунса
+        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 2)  # Снижено до 2 писем в секунду
         # Настраиваем интервал отправки для достижения заданной скорости (писем в секунду)
         try:
             emails_per_second = float(rate_limit)
             if emails_per_second <= 0:
-                emails_per_second = 10.0
+                emails_per_second = 2.0  # Снижено до 2 писем в секунду
         except Exception:
-            emails_per_second = 10.0
+            emails_per_second = 2.0  # Снижено до 2 писем в секунду
         send_interval = 1.0 / emails_per_second
         last_scheduled_at = time.monotonic() - send_interval
          
@@ -539,7 +540,14 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 # Проверяем таймаут в цикле
                 if time.time() - start_time > 1000:
                     raise TimeoutError("Batch task timeout approaching during email sending")
-                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 10 писем/сек)
+                
+                # Добавляем дополнительную задержку в начале для предотвращения быстрого выброса
+                if i < 10:  # Первые 10 писем отправляем с увеличенной задержкой
+                    import random
+                    initial_delay = random.uniform(2.0, 4.0)  # 2-4 секунды между первыми письмами
+                    time.sleep(initial_delay)
+                
+                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 2 писем/сек)
                 now = time.monotonic()
                 elapsed = now - last_scheduled_at
                 if elapsed < send_interval:

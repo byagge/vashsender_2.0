@@ -107,7 +107,7 @@ EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 # Email sending configuration для продакшена - оптимизировано для 10 писем в секунду
 EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=10, cast=int)    # Увеличено до 10 для максимальной скорости
-EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=10, cast=int)   # 10 писем в секунду
+EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=2, cast=int)   # 2 писем в секунду (снижено для предотвращения баунса)
 EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=2, cast=int)  # Уменьшено для быстрой обработки
 EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=60, cast=int) # Уменьшено до 1 минуты для быстрого повтора
 EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=15, cast=int)  # Уменьшено для быстрого подключения

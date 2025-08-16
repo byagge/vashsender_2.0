@@ -159,3 +159,15 @@ def purchase_success(request):
     }
     
     return render(request, 'purchase_success.html', context)
+
+def license_page(request):
+    """Страница лицензионного соглашения"""
+    return render(request, 'legal/license.html')
+
+def privacy_page(request):
+    """Страница политики конфиденциальности"""
+    return render(request, 'legal/privacy.html')
+
+def antispam_page(request):
+    """Страница антиспам соглашения"""
+    return render(request, 'legal/antispam.html')
