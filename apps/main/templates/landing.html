@@ -83,7 +83,7 @@
           <div class="text-xl font-bold text-[#222a38] mb-2">ПОДПИСЧИКИ</div>
           <div class="flex items-end mb-2">
             <span class="text-2xl font-bold text-[#222a38] mr-1">₽</span>
-            <span id="price-subs" class="text-4xl font-extrabold text-[#222a38]">770</span>
+            <span id="price-subs" class="text-4xl font-extrabold text-[#222a38]">590</span>
             <span id="period-subs" class="text-lg text-[#6b7a99] ml-2">/ месяц</span>
           </div>
           <label class="w-full mb-4">
@@ -92,6 +92,8 @@
               <option value="1000">1 000</option>
               <option value="5000">5 000</option>
               <option value="10000">10 000</option>
+              <option value="20000">20 000</option>
+              <option value="25000">25 000</option>
             </select>
           </label>
           <div class="text-[#6b7a99] text-base mb-6">
@@ -104,15 +106,17 @@
           <div class="text-xl font-bold text-[#222a38] mb-2">ПИСЬМА</div>
           <div class="flex items-end mb-2">
             <span class="text-2xl font-bold text-[#222a38] mr-1">₽</span>
-            <span id="price-letters" class="text-4xl font-extrabold text-[#222a38]">430</span>
+            <span id="price-letters" class="text-4xl font-extrabold text-[#222a38]">380</span>
             <span id="period-letters" class="text-lg text-[#6b7a99] ml-2">/ пакет</span>
           </div>
           <label class="w-full mb-4">
             <span class="block text-[#6b7a99] text-sm mb-1">Количество писем</span>
-            <select class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1877ff]">
-              <option>1 000</option>
-              <option>5 000</option>
-              <option>10 000</option>
+            <select id="letters-count" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1877ff]">
+              <option value="1000">1 000</option>
+              <option value="5000">5 000</option>
+              <option value="10000">10 000</option>
+              <option value="20000">20 000</option>
+              <option value="25000">25 000</option>
             </select>
           </label>
           <div class="text-[#6b7a99] text-base mb-6">
@@ -157,19 +161,34 @@
   const periodSubs = document.getElementById('period-subs');
   const discountLabel = document.getElementById('discount-label');
   const subsCount = document.getElementById('subs-count');
+  const lettersCount = document.getElementById('letters-count');
+  const priceLetters = document.getElementById('price-letters');
 
   // Базовые цены (месяц/год) для разных количеств подписчиков
   const prices = {
     month: {
-      1000: 770,
-      5000: 2900,
-      10000: 4900
+      1000: 590,
+      5000: 1990,
+      10000: 2940,
+      20000: 4680,
+      25000: 5490
     },
     year: {
-      1000: Math.round(770 * 12 * 0.7 / 12),    // 30% скидка
-      5000: Math.round(2900 * 12 * 0.7 / 12),
-      10000: Math.round(4900 * 12 * 0.7 / 12)
+      1000: Math.round(590 * 12 * 0.7 / 12),    // 30% скидка
+      5000: Math.round(1990 * 12 * 0.7 / 12),
+      10000: Math.round(2940 * 12 * 0.7 / 12),
+      20000: Math.round(4680 * 12 * 0.7 / 12),
+      25000: Math.round(5490 * 12 * 0.7 / 12)
     }
+  };
+
+  // Цены для тарифа "Письма"
+  const lettersPrices = {
+    1000: 380,
+    5000: 1190,
+    10000: 1760,
+    20000: 2900,
+    25000: 3400
   };
 
   function updatePrice() {
@@ -180,11 +199,18 @@
     discountLabel.classList.toggle('hidden', !toggle.checked);
   }
 
+  function updateLettersPrice() {
+    const count = lettersCount.value;
+    priceLetters.textContent = lettersPrices[count];
+  }
+
   toggle.addEventListener('change', updatePrice);
   subsCount.addEventListener('change', updatePrice);
+  lettersCount.addEventListener('change', updateLettersPrice);
 
   // Инициализация при загрузке
   updatePrice();
+  updateLettersPrice();
 </script>
 
 <!-- Footer -->

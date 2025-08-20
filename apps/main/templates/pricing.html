@@ -102,7 +102,7 @@
           <h3 class="text-2xl font-bold text-[#222a38] mb-2">Подписчики</h3>
           <div class="flex items-baseline justify-center mb-4">
             <span class="text-4xl font-extrabold text-[#222a38]">
-              <span id="subscribers-price">₽770</span>
+              <span id="subscribers-price">₽590</span>
             </span>
             <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
           </div>
@@ -150,7 +150,7 @@
           <h3 class="text-2xl font-bold text-[#222a38] mb-2">Письма</h3>
           <div class="flex items-baseline justify-center mb-4">
             <span class="text-4xl font-extrabold text-[#222a38]">
-              <span id="letters-price">₽430</span>
+              <span id="letters-price">₽380</span>
             </span>
             <span class="text-lg text-[#6b7a99] ml-2">/пакет</span>
           </div>
@@ -210,7 +210,7 @@
         >
         <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
           <span>1,000</span>
-          <span>50,000</span>
+          <span>25,000</span>
           <span>100,000</span>
           <span>500,000</span>
           <span>1,000,000</span>
@@ -220,7 +220,7 @@
       <div class="text-center p-6 bg-gray-50 rounded-lg">
         <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Подписчики"</h4>
         <div class="text-3xl font-bold text-[#1877ff] mb-2">
-          <span id="subscribers-price-slider">₽770</span>
+          <span id="subscribers-price-slider">₽590</span>
         </div>
         <p class="text-[#6b7a99]">в месяц</p>
         <button onclick="handleChoosePlan('subscribers', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
@@ -250,7 +250,7 @@
         >
         <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
           <span>1,000</span>
-          <span>50,000</span>
+          <span>25,000</span>
           <span>100,000</span>
           <span>500,000</span>
           <span>1,000,000</span>
@@ -260,7 +260,7 @@
       <div class="text-center p-6 bg-gray-50 rounded-lg">
         <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Письма"</h4>
         <div class="text-3xl font-bold text-[#1877ff] mb-2">
-          <span id="letters-price-slider">₽430</span>
+          <span id="letters-price-slider">₽380</span>
         </div>
         <p class="text-[#6b7a99]">за пакет</p>
         <button onclick="handleChoosePlan('letters', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
@@ -555,9 +555,9 @@
         if (range <= 10000) {
           subscribersSlider.step = 1000;
         } else if (range <= 100000) {
-          subscribersSlider.step = 5000;
+          subscribersSlider.step = 1000;
         } else {
-          subscribersSlider.step = 10000;
+          subscribersSlider.step = 1000;
         }
         subscribersSlider.value = minSubscribers;
         
@@ -578,9 +578,9 @@
         if (range <= 10000) {
           lettersSlider.step = 1000;
         } else if (range <= 100000) {
-          lettersSlider.step = 5000;
+          lettersSlider.step = 1000;
         } else {
-          lettersSlider.step = 10000;
+          lettersSlider.step = 1000;
         }
         lettersSlider.value = minEmails;
         
@@ -636,7 +636,8 @@
       const upperPrice = upper.price;
       const ratio = (value - lowerValue) / (upperValue - lowerValue);
       
-      return Math.round(lowerPrice + (upperPrice - lowerPrice) * ratio);
+      // Округляем до ближайших 10 рублей для более читаемых цен
+      return Math.round((lowerPrice + (upperPrice - lowerPrice) * ratio) / 10) * 10;
     }
 
     // Subscribers slider functionality
