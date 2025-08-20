@@ -344,7 +344,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Добавляем задержку между батчами для лучшей доставляемости
                 if i > 0:
                     import random
-                    batch_delay = random.uniform(5.0, 10.0)  # 5-10 секунд между батчами
+                    batch_delay = random.uniform(25.0, 30.0)  # 25-30 секунд между батчами (соответствует 1 письму в 5 секунд)
                     time.sleep(batch_delay)
                 
                 result = send_email_batch.apply_async(
@@ -524,14 +524,14 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         sent_count = 0
         failed_count = 0
         # Снижаем скорость отправки для предотвращения баунса
-        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 2)  # Снижено до 2 писем в секунду
+        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 0.2)  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
         # Настраиваем интервал отправки для достижения заданной скорости (писем в секунду)
         try:
             emails_per_second = float(rate_limit)
             if emails_per_second <= 0:
-                emails_per_second = 2.0  # Снижено до 2 писем в секунду
+                emails_per_second = 0.2  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
         except Exception:
-            emails_per_second = 2.0  # Снижено до 2 писем в секунду
+            emails_per_second = 0.2  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
         send_interval = 1.0 / emails_per_second
         last_scheduled_at = time.monotonic() - send_interval
          
@@ -544,10 +544,10 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 # Добавляем дополнительную задержку в начале для предотвращения быстрого выброса
                 if i < 10:  # Первые 10 писем отправляем с увеличенной задержкой
                     import random
-                    initial_delay = random.uniform(2.0, 4.0)  # 2-4 секунды между первыми письмами
+                    initial_delay = random.uniform(5.0, 7.0)  # 5-7 секунд между первыми письмами (соответствует 1 письму в 5 секунд)
                     time.sleep(initial_delay)
                 
-                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 2 писем/сек)
+                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 0.2 писем/сек - 1 письмо в 5 секунд)
                 now = time.monotonic()
                 elapsed = now - last_scheduled_at
                 if elapsed < send_interval:
@@ -679,7 +679,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=600, soft_time_limit=480, rate_limit='10/s')  # 10 минут максимум, 8 минут мягкий лимит
+            time_limit=600, soft_time_limit=480, rate_limit='0.2/s')  # 10 минут максимум, 8 минут мягкий лимит, 0.2 письма в секунду
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
