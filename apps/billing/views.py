@@ -248,11 +248,43 @@ def cloudpayments_webhook(request):
 def confirm_plan(request):
     """Страница подтверждения покупки тарифа"""
     plan_id = request.GET.get('plan_id')
-    if not plan_id:
+    plan_type = request.GET.get('plan_type')
+    
+    # Проверяем, переданы ли параметры fallback плана
+    if plan_type and not plan_id:
+        # Обрабатываем fallback план
+        subscribers = request.GET.get('subscribers')
+        emails_per_month = request.GET.get('emails_per_month')
+        price = request.GET.get('price')
+        name = request.GET.get('name')
+        
+        if not all([plan_type, price, name]):
+            messages.error(request, 'Неполные данные тарифа')
+            return redirect('pricing')
+        
+        # Создаем временный объект плана для fallback
+        class FallbackPlan:
+            def __init__(self, plan_type, subscribers, emails_per_month, price, name):
+                self.id = f"fallback_{plan_type}_{price}"
+                self.plan_type = plan_type
+                self.subscribers = int(subscribers) if subscribers else None
+                self.emails_per_month = int(emails_per_month) if emails_per_month else None
+                self.price = int(price)
+                self.name = name
+                self.title = name
+                self.is_fallback = True
+            
+            def get_final_price(self):
+                return self.price
+        
+        plan = FallbackPlan(plan_type, subscribers, emails_per_month, price, name)
+        
+    elif plan_id:
+        # Обрабатываем обычный план из базы данных
+        plan = get_object_or_404(Plan, id=plan_id, is_active=True)
+    else:
         messages.error(request, 'Тариф не выбран')
         return redirect('pricing')
-    
-    plan = get_object_or_404(Plan, id=plan_id, is_active=True)
     
     # Если тариф бесплатный - активируем сразу
     if plan.price == 0:
@@ -324,9 +356,36 @@ def process_plan_purchase(request, plan):
     from django.utils import timezone
     from datetime import timedelta
     
+    # Проверяем, является ли это fallback планом
+    if hasattr(plan, 'is_fallback') and plan.is_fallback:
+        # Для fallback планов создаем временный план в базе данных
+        from apps.billing.models import PlanType
+        
+        # Создаем тип плана если его нет
+        plan_type, created = PlanType.objects.get_or_create(
+            name=plan.plan_type,
+            defaults={'description': f'Тип плана {plan.plan_type}'}
+        )
+        
+        # Создаем временный план в базе данных
+        temp_plan = Plan.objects.create(
+            title=plan.title,
+            plan_type=plan_type,
+            subscribers=plan.subscribers or 0,
+            emails_per_month=plan.emails_per_month or 0,
+            price=plan.price,
+            is_active=True
+        )
+        
+        # Используем временный план для создания PurchasedPlan
+        actual_plan = temp_plan
+    else:
+        # Для обычных планов используем существующий план
+        actual_plan = plan
+    
     purchased_plan = PurchasedPlan.objects.create(
         user=user,
-        plan=plan,
+        plan=actual_plan,
         start_date=timezone.now(),
         end_date=timezone.now() + timedelta(days=30),
         is_active=True,
@@ -336,7 +395,7 @@ def process_plan_purchase(request, plan):
     )
     
     # Обновляем текущий план пользователя
-    user.current_plan = plan
+    user.current_plan = actual_plan
     user.plan_expiry = purchased_plan.end_date
     user.save()
     
