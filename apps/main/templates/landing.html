@@ -573,17 +573,21 @@
     let selectedPlan = null;
     
     if (planType === 'subscribers') {
-      const subscribersCount = parseInt(document.getElementById('subscribers-slider').value);
+      const subscribersSlider = document.getElementById('subscribers-slider');
+      const subscribersCount = subscribersSlider ? parseInt(subscribersSlider.value) : 1000; // fallback значение
       selectedPlan = findPlanBySubscribers(subscribersCount);
     } else if (planType === 'letters') {
-      const lettersCount = parseInt(document.getElementById('letters-slider').value);
+      const lettersSlider = document.getElementById('letters-slider');
+      const lettersCount = lettersSlider ? parseInt(lettersSlider.value) : 1000; // fallback значение
       selectedPlan = findPlanByEmails(lettersCount);
     }
 
     if (selectedPlan) {
       window.location.href = `/billing/confirm/?plan_id=${selectedPlan.id}`;
     } else {
-      alert('Ошибка: не удалось найти подходящий тариф');
+      // Если не нашли план, используем fallback - редиректим на страницу pricing
+      console.warn('Plan not found, redirecting to pricing page');
+      window.location.href = '/pricing/';
     }
   }
 
@@ -619,6 +623,12 @@
   function findPlanBySubscribers(count) {
     const plans = plansData.subscribers;
     
+    // Если планы не загружены, возвращаем null
+    if (!plans || plans.length === 0) {
+      console.warn('No subscribers plans loaded');
+      return null;
+    }
+    
     // Сначала ищем точное совпадение
     let exactMatch = plans.find(plan => plan.subscribers === count);
     if (exactMatch) return exactMatch;
@@ -643,6 +653,12 @@
   // Поиск тарифа по количеству писем
   function findPlanByEmails(count) {
     const plans = plansData.letters;
+    
+    // Если планы не загружены, возвращаем null
+    if (!plans || plans.length === 0) {
+      console.warn('No letters plans loaded');
+      return null;
+    }
     
     // Сначала ищем точное совпадение
     let exactMatch = plans.find(plan => plan.emails_per_month === count);
