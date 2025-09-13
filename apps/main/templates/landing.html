@@ -494,14 +494,20 @@
   // Загрузка тарифов с сервера
   async function loadPlans() {
     try {
+      console.log('=== DEBUG loadPlans ===');
       console.log('Loading plans from /api/plans/');
       const response = await fetch('/api/plans/');
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const contentType = response.headers.get('content-type');
+      console.log('Content-Type:', contentType);
+      
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Response is not JSON:', text);
@@ -510,14 +516,19 @@
       
       const data = await response.json();
       console.log('Raw API response:', data);
+      console.log('Response success:', data.success);
+      console.log('Response plans:', data.plans);
       
       if (data.success) {
         plansData = data.plans;
-        console.log('Plans loaded:', plansData);
+        console.log('Plans loaded successfully:', plansData);
+        console.log('Subscribers plans count:', plansData.subscribers ? plansData.subscribers.length : 0);
+        console.log('Letters plans count:', plansData.letters ? plansData.letters.length : 0);
       } else {
         console.error('Failed to load plans:', data.error);
         // Используем fallback данные
         plansData = createFallbackPlans();
+        console.log('Using fallback plans:', plansData);
       }
       
       // Обновляем слайдеры и цены
@@ -527,12 +538,16 @@
       console.error('Error details:', error.message);
       // Используем fallback данные при ошибке
       plansData = createFallbackPlans();
+      console.log('Using fallback plans due to error:', plansData);
       updateSliders();
     }
   }
 
   // Создание fallback планов из статических цен
   function createFallbackPlans() {
+    console.log('=== DEBUG createFallbackPlans ===');
+    console.log('fallbackPrices:', fallbackPrices);
+    
     const subscribers = Object.entries(fallbackPrices.subscribers).map(([count, price]) => ({
       id: `sub_${count}`,
       subscribers: parseInt(count),
@@ -547,15 +562,27 @@
       name: `${count} писем`
     }));
 
-    return {
+    const result = {
       free: [],
       subscribers: subscribers,
       letters: letters
     };
+    
+    console.log('Created fallback plans:', result);
+    console.log('Subscribers fallback count:', subscribers.length);
+    console.log('Letters fallback count:', letters.length);
+    
+    return result;
   }
 
   // Функция выбора тарифа
   function handleChoosePlan(planType, isFree) {
+    console.log('=== DEBUG handleChoosePlan ===');
+    console.log('planType:', planType);
+    console.log('isFree:', isFree);
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('plansData:', plansData);
+    
     if (isFree) {
       // Бесплатный тариф - активируем сразу
       window.location.href = '/billing/activate-free/';
@@ -573,21 +600,26 @@
     let selectedPlan = null;
     
     if (planType === 'subscribers') {
-      const subscribersSlider = document.getElementById('subscribers-slider');
-      const subscribersCount = subscribersSlider ? parseInt(subscribersSlider.value) : 1000; // fallback значение
+      const subscribersCount = parseInt(document.getElementById('subscribers-slider').value);
+      console.log('subscribersCount:', subscribersCount);
+      console.log('Available subscribers plans:', plansData.subscribers);
       selectedPlan = findPlanBySubscribers(subscribersCount);
+      console.log('Selected subscribers plan:', selectedPlan);
     } else if (planType === 'letters') {
-      const lettersSlider = document.getElementById('letters-slider');
-      const lettersCount = lettersSlider ? parseInt(lettersSlider.value) : 1000; // fallback значение
+      const lettersCount = parseInt(document.getElementById('letters-slider').value);
+      console.log('lettersCount:', lettersCount);
+      console.log('Available letters plans:', plansData.letters);
       selectedPlan = findPlanByEmails(lettersCount);
+      console.log('Selected letters plan:', selectedPlan);
     }
 
     if (selectedPlan) {
+      console.log('Redirecting to:', `/billing/confirm/?plan_id=${selectedPlan.id}`);
       window.location.href = `/billing/confirm/?plan_id=${selectedPlan.id}`;
     } else {
-      // Если не нашли план, используем fallback - редиректим на страницу pricing
-      console.warn('Plan not found, redirecting to pricing page');
-      window.location.href = '/pricing/';
+      console.error('No plan found!');
+      console.log('Final plansData state:', plansData);
+      alert('Ошибка: не удалось найти подходящий тариф');
     }
   }
 
@@ -621,16 +653,21 @@
 
   // Поиск тарифа по количеству подписчиков
   function findPlanBySubscribers(count) {
-    const plans = plansData.subscribers;
+    console.log('=== DEBUG findPlanBySubscribers ===');
+    console.log('Looking for count:', count);
     
-    // Если планы не загружены, возвращаем null
+    const plans = plansData.subscribers;
+    console.log('Available plans:', plans);
+    console.log('Plans length:', plans ? plans.length : 'undefined');
+    
     if (!plans || plans.length === 0) {
-      console.warn('No subscribers plans loaded');
+      console.warn('No subscribers plans available');
       return null;
     }
     
     // Сначала ищем точное совпадение
     let exactMatch = plans.find(plan => plan.subscribers === count);
+    console.log('Exact match:', exactMatch);
     if (exactMatch) return exactMatch;
     
     // Ищем ближайший подходящий тариф
@@ -638,30 +675,40 @@
     let minDifference = Infinity;
     
     for (let plan of plans) {
+      console.log(`Checking plan: ${plan.id}, subscribers: ${plan.subscribers}, price: ${plan.price}`);
       if (plan.subscribers >= count) {
         const difference = plan.subscribers - count;
+        console.log(`Plan ${plan.id} is suitable, difference: ${difference}`);
         if (difference < minDifference) {
           minDifference = difference;
           bestPlan = plan;
         }
       }
     }
+    
+    console.log('Best plan found:', bestPlan);
+    console.log('Fallback plan (first):', plans[0]);
     
     return bestPlan || plans[0]; // Возвращаем первый тариф если ничего не найдено
   }
 
   // Поиск тарифа по количеству писем
   function findPlanByEmails(count) {
-    const plans = plansData.letters;
+    console.log('=== DEBUG findPlanByEmails ===');
+    console.log('Looking for count:', count);
     
-    // Если планы не загружены, возвращаем null
+    const plans = plansData.letters;
+    console.log('Available plans:', plans);
+    console.log('Plans length:', plans ? plans.length : 'undefined');
+    
     if (!plans || plans.length === 0) {
-      console.warn('No letters plans loaded');
+      console.warn('No letters plans available');
       return null;
     }
     
     // Сначала ищем точное совпадение
     let exactMatch = plans.find(plan => plan.emails_per_month === count);
+    console.log('Exact match:', exactMatch);
     if (exactMatch) return exactMatch;
     
     // Ищем ближайший подходящий тариф
@@ -669,14 +716,19 @@
     let minDifference = Infinity;
     
     for (let plan of plans) {
+      console.log(`Checking plan: ${plan.id}, emails_per_month: ${plan.emails_per_month}, price: ${plan.price}`);
       if (plan.emails_per_month >= count) {
         const difference = plan.emails_per_month - count;
+        console.log(`Plan ${plan.id} is suitable, difference: ${difference}`);
         if (difference < minDifference) {
           minDifference = difference;
           bestPlan = plan;
         }
       }
     }
+    
+    console.log('Best plan found:', bestPlan);
+    console.log('Fallback plan (first):', plans[0]);
     
     return bestPlan || plans[0]; // Возвращаем первый тариф если ничего не найдено
   }
