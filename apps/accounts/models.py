@@ -11,19 +11,32 @@ class UserManager(BaseUserManager):
         
         # Получаем бесплатный план из billing app
         from apps.billing.models import Plan, PlanType, BillingSettings
-        free_plan = Plan.objects.filter(title__icontains='бесплат').first()
+        # Ищем существующий бесплатный план (по нулевой цене/активности или по названию)
+        free_plan = (
+            Plan.objects.filter(price=0, is_active=True).order_by('id').first()
+            or Plan.objects.filter(title__icontains='бесплат').order_by('id').first()
+        )
         if not free_plan:
-            # Если бесплатного плана нет, создаем его
+            # Если бесплатного плана нет, создаем его вместе с типом "Free" при необходимости
             settings = BillingSettings.get_settings()
-            # Получаем тип плана Free (ID=1)
-            free_plan_type = PlanType.objects.get(id=1)
-            free_plan = Plan.objects.create(
+            free_plan_type, _ = PlanType.objects.get_or_create(
+                name='Free',
+                defaults={
+                    'description': 'Бесплатный тариф для новых пользователей',
+                    'is_active': True,
+                },
+            )
+            free_plan, _ = Plan.objects.get_or_create(
                 title="Бесплатный",
-                plan_type=free_plan_type,
-                subscribers=settings.free_plan_subscribers,
-                emails_per_month=settings.free_plan_emails,
-                max_emails_per_day=settings.free_plan_daily_limit,
-                price=0
+                defaults={
+                    'plan_type': free_plan_type,
+                    'subscribers': settings.free_plan_subscribers,
+                    'emails_per_month': settings.free_plan_emails,
+                    'max_emails_per_day': settings.free_plan_daily_limit,
+                    'price': 0,
+                    'is_active': True,
+                    'sort_order': 1,
+                },
             )
         
         user = self.model(email=email, current_plan=free_plan, **extra_fields)

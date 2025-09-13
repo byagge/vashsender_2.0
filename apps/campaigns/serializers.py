@@ -61,6 +61,9 @@ class CampaignSerializer(serializers.ModelSerializer):
     open_rate = serializers.ReadOnlyField()
     click_rate = serializers.ReadOnlyField()
     bounce_rate = serializers.ReadOnlyField()
+    opens_count = serializers.SerializerMethodField()
+    clicks_count = serializers.SerializerMethodField()
+    unsubscribed_count = serializers.SerializerMethodField()
     delivery_rate = serializers.ReadOnlyField()
 
     class Meta:
@@ -69,7 +72,8 @@ class CampaignSerializer(serializers.ModelSerializer):
             'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'updated_at', 'scheduled_at', 'sent_at',
             'template', 'template_detail', 'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail', 'recipients',
-            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name'
+            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name',
+            'opens_count', 'clicks_count', 'unsubscribed_count'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'sent_at']
 
@@ -118,12 +122,27 @@ class CampaignSerializer(serializers.ModelSerializer):
         delivered = self.get_delivered_emails(obj)
         return (delivered / total_sent * 100)
 
+    def get_opens_count(self, obj):
+        return EmailTracking.objects.filter(campaign=obj, opened_at__isnull=False).count()
+
+    def get_clicks_count(self, obj):
+        return EmailTracking.objects.filter(campaign=obj, clicked_at__isnull=False).count()
+
+    def get_unsubscribed_count(self, obj):
+        # Количество контактов, ушедших в blacklist среди получивших эту кампанию
+        from apps.mailer.models import Contact as MailerContact
+        contact_ids = EmailTracking.objects.filter(campaign=obj).values_list('contact_id', flat=True)
+        return MailerContact.objects.filter(id__in=contact_ids, status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))).count()
+
 class CampaignListSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.email')
     sender_email_detail = SenderEmailSerializer(source='sender_email', read_only=True)
     contact_lists_detail = serializers.SerializerMethodField()
     template_detail = EmailTemplateSerializer(source='template', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    opens_count = serializers.SerializerMethodField()
+    clicks_count = serializers.SerializerMethodField()
+    unsubscribed_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Campaign
@@ -131,7 +150,8 @@ class CampaignListSerializer(serializers.ModelSerializer):
             'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'sent_at', 'scheduled_at',
             'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail',
-            'template', 'template_detail', 'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name'
+            'template', 'template_detail', 'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name',
+            'opens_count', 'clicks_count', 'unsubscribed_count'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'sent_at']
 
@@ -179,3 +199,14 @@ class CampaignListSerializer(serializers.ModelSerializer):
             return 0
         delivered = self.get_delivered_emails(obj)
         return (delivered / total_sent * 100)
+
+    def get_opens_count(self, obj):
+        return EmailTracking.objects.filter(campaign=obj, opened_at__isnull=False).count()
+
+    def get_clicks_count(self, obj):
+        return EmailTracking.objects.filter(campaign=obj, clicked_at__isnull=False).count()
+
+    def get_unsubscribed_count(self, obj):
+        from apps.mailer.models import Contact as MailerContact
+        contact_ids = EmailTracking.objects.filter(campaign=obj).values_list('contact_id', flat=True)
+        return MailerContact.objects.filter(id__in=contact_ids, status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))).count()

@@ -19,5 +19,6 @@ urlpatterns = [
     path('<uuid:pk>/', views.CampaignFormView.as_view(), name='campaign_edit'),
     path('<uuid:campaign_id>/track-open/', views.track_email_open, name='track_email_open'),
     path('<uuid:campaign_id>/track-click/', views.track_email_click, name='track_email_click'),
+    path('<uuid:campaign_id>/unsubscribe/', views.unsubscribe, name='campaign_unsubscribe'),
     path('', include(router.urls)),
 ]

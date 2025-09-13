@@ -22,6 +22,59 @@
     .feature-check {
       background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
     }
+    /* Modern slider */
+    .slider {
+      --val-percent: 0%;
+      appearance: none;
+      height: 10px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, #1877ff 0%, #1877ff var(--val-percent), #e5e7eb var(--val-percent), #e5e7eb 100%);
+      outline: none;
+    }
+    .slider:focus { outline: none; }
+    .slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 3px solid #1877ff;
+      box-shadow: 0 4px 10px rgba(24, 119, 255, 0.25);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .slider::-webkit-slider-thumb:hover { transform: scale(1.05); }
+    .slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 3px solid #1877ff;
+      box-shadow: 0 4px 10px rgba(24, 119, 255, 0.25);
+      cursor: pointer;
+    }
+    .value-bubble {
+      position: absolute;
+      top: -34px;
+      transform: translateX(-50%);
+      padding: 4px 8px;
+      font-size: 12px;
+      background: #111827;
+      color: #fff;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .value-bubble::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -6px;
+      transform: translateX(-50%);
+      border-width: 6px 6px 0 6px;
+      border-style: solid;
+      border-color: #111827 transparent transparent transparent;
+    }
   </style>
 </head>
 <body class="bg-[#f5f6fa] text-[#222] min-h-screen">
@@ -31,11 +84,32 @@
       <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/><path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/></svg>
       vashsender
     </a>
-    <nav class="flex gap-8 items-center">
-      <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
-      <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+    <!-- Desktop nav -->
+    <nav class="hidden md:flex gap-8 items-center">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
+        <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
     </nav>
+    <!-- Mobile hamburger -->
+    <button id="mobile-nav-toggle" class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 text-[#222] hover:bg-gray-50" aria-label="Открыть меню">
+      <svg id="icon-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2z" clip-rule="evenodd"/></svg>
+      <svg id="icon-close" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </button>
   </header>
+  <!-- Mobile menu -->
+  <div id="mobile-menu" class="md:hidden px-6 pt-2 pb-4 hidden">
+    <div class="flex flex-col gap-2 bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="w-full text-center text-[#222] font-medium text-base hover:text-[#1877ff] transition py-2">Вход</a>
+        <a href="/accounts/signup/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
+    </div>
+  </div>
   <!-- Hero Section -->
   <section class="flex flex-col md:flex-row items-center justify-between px-6 md:px-20 pt-12 pb-8 md:pb-0 min-h-[80vh]">
     <!-- Left -->
@@ -72,7 +146,7 @@
       <!-- Pricing Cards -->
       <div class="grid md:grid-cols-3 gap-8 mb-20">
         <!-- Free Plan -->
-        <div class="bg-white rounded-2xl shadow-lg p-8 card-hover relative">
+        <div id="card-free" data-plan-type="free" class="bg-white rounded-2xl shadow-lg p-8 card-hover relative plan-card cursor-pointer">
           <div class="text-center mb-8">
             <h3 class="text-2xl font-bold text-[#222a38] mb-2">Бесплатный</h3>
             <div class="flex items-baseline justify-center mb-4">
@@ -110,7 +184,7 @@
         </div>
 
         <!-- Subscribers Plan -->
-        <div class="bg-white rounded-2xl shadow-xl p-8 card-hover relative border-2 border-[#1877ff] transform scale-105">
+        <div id="card-subscribers" data-plan-type="subscribers" class="bg-white rounded-2xl shadow-xl p-8 card-hover relative plan-card cursor-pointer">
           <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
             <span class="bg-[#1877ff] text-white px-4 py-1 rounded-full text-sm font-medium">Популярный</span>
           </div>
@@ -124,7 +198,7 @@
               <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
             </div>
             <p class="text-[#6b7a99] mb-6">Для растущего бизнеса с активными рассылками</p>
-            <button onclick="handleChoosePlan('subscribers', false)" class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg py-3 px-6 transition-colors block text-center">
+            <button onclick="selectPlan('subscribers')" class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg py-3 px-6 transition-colors block text-center">
               Выбрать тариф
             </button>
           </div>
@@ -162,7 +236,7 @@
         </div>
 
         <!-- Letters Plan -->
-        <div class="bg-white rounded-2xl shadow-lg p-8 card-hover relative">
+        <div id="card-letters" data-plan-type="letters" class="bg-white rounded-2xl shadow-lg p-8 card-hover relative plan-card cursor-pointer">
           <div class="text-center mb-8">
             <h3 class="text-2xl font-bold text-[#222a38] mb-2">Письма</h3>
             <div class="flex items-baseline justify-center mb-4">
@@ -172,7 +246,7 @@
               <span class="text-lg text-[#6b7a99] ml-2">/пакет</span>
             </div>
             <p class="text-[#6b7a99] mb-6">Для нерегулярных рассылок без ограничений по подписчикам</p>
-            <button onclick="handleChoosePlan('letters', false)" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
+            <button onclick="selectPlan('letters')" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
               Выбрать тариф
             </button>
           </div>
@@ -207,27 +281,27 @@
       </div>
 
       <!-- Subscribers Slider -->
-      <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20">
+      <div id="subscribers-section" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20 hidden">
         <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество подписчиков</h3>
         
         <div class="mb-8">
           <label for="subscribers-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
             Количество подписчиков: <span id="slider-value">1,000</span>
           </label>
-          <input 
-            type="range" 
-            id="subscribers-slider" 
-            min="1000" 
-            max="1000000" 
-            step="1000" 
-            value="1000"
-            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-          >
+          <div class="relative">
+            <input 
+              type="range" 
+              id="subscribers-slider" 
+              min="1000" 
+              max="1000000" 
+              step="1000" 
+              value="1000"
+              class="w-full slider cursor-pointer"
+            >
+            <span id="subscribers-bubble" class="value-bubble">1,000</span>
+          </div>
           <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
             <span>1,000</span>
-            <span>25,000</span>
-            <span>100,000</span>
-            <span>500,000</span>
             <span>1,000,000</span>
           </div>
         </div>
@@ -245,27 +319,27 @@
       </div>
 
       <!-- Letters Slider -->
-      <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20">
+      <div id="letters-section" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20 hidden">
         <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество писем</h3>
         
         <div class="mb-8">
           <label for="letters-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
             Количество писем: <span id="letters-slider-value">1,000</span>
           </label>
-          <input 
-            type="range" 
-            id="letters-slider" 
-            min="1000" 
-            max="1000000" 
-            step="1000" 
-            value="1000"
-            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-          >
+          <div class="relative">
+            <input 
+              type="range" 
+              id="letters-slider" 
+              min="1000" 
+              max="1000000" 
+              step="1000" 
+              value="1000"
+              class="w-full slider cursor-pointer"
+            >
+            <span id="letters-bubble" class="value-bubble">1,000</span>
+          </div>
           <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
             <span>1,000</span>
-            <span>25,000</span>
-            <span>100,000</span>
-            <span>500,000</span>
             <span>1,000,000</span>
           </div>
         </div>
@@ -371,6 +445,7 @@
 <script>
   // Глобальные переменные
   let isAuthenticated = false;
+  let selectedPlanType = null;
   let plansData = {
     free: [],
     subscribers: [],
@@ -510,6 +585,34 @@
     } else {
       // Если не нашли план, редиректим на страницу pricing
       window.location.href = '/pricing/';
+    }
+  }
+
+  // UI-выбор тарифа: подсветка карточки и показ нужного слайдера
+  function selectPlan(planType) {
+    selectedPlanType = planType;
+    const cards = document.querySelectorAll('.plan-card');
+    cards.forEach(card => {
+      card.classList.remove('ring-2', 'ring-[#1877ff]', 'scale-105', 'border-2', 'border-[#1877ff]');
+    });
+    const activeCard = document.querySelector(`[data-plan-type="${planType}"]`);
+    if (activeCard) {
+      activeCard.classList.add('ring-2', 'ring-[#1877ff]');
+    }
+    // Toggle sections
+    const subsSection = document.getElementById('subscribers-section');
+    const lettSection = document.getElementById('letters-section');
+    if (planType === 'subscribers') {
+      subsSection.classList.remove('hidden');
+      lettSection.classList.add('hidden');
+      // Ensure visuals are up-to-date
+      updateSubscribers();
+      document.getElementById('subscribers-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (planType === 'letters') {
+      lettSection.classList.remove('hidden');
+      subsSection.classList.add('hidden');
+      updateLetters();
+      document.getElementById('letters-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
@@ -714,11 +817,13 @@
   const subscribersPrice = document.getElementById('subscribers-price');
   const subscribersPriceSlider = document.getElementById('subscribers-price-slider');
   const subscribersLimit = document.getElementById('subscribers-limit');
+  const subscribersBubble = document.getElementById('subscribers-bubble');
 
   function updateSubscribers() {
     const value = parseInt(subscribersSlider.value);
     subscribersSliderValue.textContent = value.toLocaleString();
     subscribersLimit.textContent = value.toLocaleString();
+    subscribersBubble.textContent = value.toLocaleString();
     
     let price = 590; // Базовая цена по умолчанию
     
@@ -731,6 +836,9 @@
     
     subscribersPrice.textContent = `₽${price}`;
     subscribersPriceSlider.textContent = `₽${price}`;
+
+    // Update slider fill and bubble position
+    updateSliderVisual(subscribersSlider, subscribersBubble);
   }
 
   // Letters slider functionality
@@ -739,11 +847,13 @@
   const lettersPrice = document.getElementById('letters-price');
   const lettersPriceSlider = document.getElementById('letters-price-slider');
   const lettersLimit = document.getElementById('letters-limit');
+  const lettersBubble = document.getElementById('letters-bubble');
 
   function updateLetters() {
     const value = parseInt(lettersSlider.value);
     lettersSliderValue.textContent = value.toLocaleString();
     lettersLimit.textContent = value.toLocaleString();
+    lettersBubble.textContent = value.toLocaleString();
     
     let price = 380; // Базовая цена по умолчанию
     
@@ -756,6 +866,24 @@
     
     lettersPrice.textContent = `₽${price}`;
     lettersPriceSlider.textContent = `₽${price}`;
+
+    // Update slider fill and bubble position
+    updateSliderVisual(lettersSlider, lettersBubble);
+  }
+
+  // Обновление визуала слайдера: градиент и позиция пузыря
+  function updateSliderVisual(sliderEl, bubbleEl) {
+    const min = parseInt(sliderEl.min);
+    const max = parseInt(sliderEl.max);
+    const val = parseInt(sliderEl.value);
+    const percent = ((val - min) * 100) / (max - min);
+    sliderEl.style.setProperty('--val-percent', `${percent}%`);
+    // position bubble
+    const sliderRect = sliderEl.getBoundingClientRect();
+    const offsetLeft = sliderEl.offsetLeft;
+    const width = sliderEl.clientWidth;
+    const x = (percent / 100) * width;
+    bubbleEl.style.left = `${x + offsetLeft}px`;
   }
 
   // FAQ functionality
@@ -773,6 +901,40 @@
     updateSubscribers();
     updateLetters();
     
+    // Карточки выбора тарифа (клик по карточке)
+    document.querySelectorAll('.plan-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const type = card.getAttribute('data-plan-type');
+        if (type === 'free') {
+          handleChoosePlan('free', true);
+        } else {
+          selectPlan(type);
+        }
+      });
+    });
+
+    // Тоггл мобильного меню
+    const mobileToggle = document.getElementById('mobile-nav-toggle');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileToggle && mobileMenu) {
+      const iconOpen = document.getElementById('icon-open');
+      const iconClose = document.getElementById('icon-close');
+      mobileToggle.addEventListener('click', () => {
+        const isHidden = mobileMenu.classList.contains('hidden');
+        if (isHidden) {
+          mobileMenu.classList.remove('hidden');
+          iconOpen.classList.add('hidden');
+          iconClose.classList.remove('hidden');
+          mobileToggle.setAttribute('aria-label', 'Закрыть меню');
+        } else {
+          mobileMenu.classList.add('hidden');
+          iconOpen.classList.remove('hidden');
+          iconClose.classList.add('hidden');
+          mobileToggle.setAttribute('aria-label', 'Открыть меню');
+        }
+      });
+    }
+
     // Затем загружаем данные с сервера
     await checkAuthStatus();
     await loadPlans();
@@ -808,7 +970,7 @@
     <div class="flex flex-col md:flex-row md:justify-between md:items-center text-sm text-[#6b7a99]">
       <!-- Left side - Email -->
       <div class="mb-2 md:mb-0">
-        <span>support@vashsender</span>
+        <a href="mailto:support@vashsender.ru" class="text-[#6b7a99] hover:text-[#1877ff] transition">support@vashsender.ru</a>
       </div>
       <!-- Right side - Made with love -->
       <div class="flex items-center gap-1">

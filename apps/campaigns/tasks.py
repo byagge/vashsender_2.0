@@ -246,8 +246,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         # Получаем все контакты с обработкой ошибок
         try:
             contacts = set()
+            from apps.mailer.models import Contact as MailerContact
             for contact_list in campaign.contact_lists.all():
-                list_contacts = contact_list.contacts.all()
+                list_contacts = contact_list.contacts.filter(status=MailerContact.VALID)
                 print(f"Found {list_contacts.count()} contacts in list {contact_list.name}")
                 contacts.update(list_contacts)
             
@@ -719,6 +720,9 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         
         # Заменяем все href в ссылках
         html_content = re.sub(r'href="([^"]*)"', replace_links, html_content)
+
+        # Формируем ссылку для отписки
+        unsubscribe_url = f"https://vashsender.ru/campaigns/{campaign_id}/unsubscribe/?tracking_id={tracking_id}"
         
         # Подготавливаем отправителя - используем имя из кампании
         sender_name = campaign.sender_name
@@ -768,9 +772,12 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         if len(plain_text) < 100:
             plain_text += f"\n\nС уважением,\n{sender_name}"
         
-        # Ограничиваем длину текста
-        if len(plain_text) > 800:
-            plain_text = plain_text[:800] + "..."
+        # Добавляем блок отписки в текстовую версию
+        plain_text += f"\n\nЕсли вы больше не хотите получать письма, вы можете отписаться по ссылке: {unsubscribe_url}"
+
+        # Ограничиваем длину текста (без удаления блока отписки)
+        if len(plain_text) > 2000:
+            plain_text = plain_text[:2000] + "..."
         
         # Подготавливаем email отправителя
         from_email = campaign.sender_email.email
@@ -803,42 +810,10 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         else:
             msg['Subject'] = campaign.subject
         
-        # Правильная кодировка имени отправителя для кириллицы
-        # Используем транслитерацию для кириллицы
-        if sender_name and any(ord(c) > 127 for c in sender_name):
-            # Простая транслитерация кириллицы в латиницу
-            translit_map = {
-                'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-                'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-                'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-                'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-                'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-                'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
-                'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-                'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-                'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
-                'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-            }
-            encoded_sender_name = ''.join(translit_map.get(c, c) for c in sender_name)
-        else:
-            # Если только ASCII, используем как есть
-            encoded_sender_name = sender_name
-        
-        # Очищаем имя отправителя от проблемных символов для лучшей доставляемости
-        import re
-        encoded_sender_name = re.sub(r'[^\w\s\-\.]', '', encoded_sender_name)  # Убираем спецсимволы
-        encoded_sender_name = re.sub(r'\s+', ' ', encoded_sender_name).strip()  # Убираем лишние пробелы
-        
-        # Ограничиваем длину имени отправителя
-        if len(encoded_sender_name) > 50:
-            encoded_sender_name = encoded_sender_name[:50]
-        
-        # Если имя пустое, используем домен
-        if not encoded_sender_name:
-            domain = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
-            encoded_sender_name = domain.split('.')[0].title()
-        
-        msg['From'] = f"{encoded_sender_name} <{from_email}>"
+        # Устанавливаем корректный заголовок From без транслитерации имени отправителя
+        from email.utils import formataddr
+        encoded_display_name = str(Header(sender_name or '', 'utf-8'))
+        msg['From'] = formataddr((encoded_display_name, from_email))
         msg['To'] = contact.email
         
         # Настраиваем Reply-To для лучшей доставляемости
@@ -923,6 +898,19 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             </html>
             """
         
+        # Добавляем блок отписки в HTML низ письма
+        unsubscribe_block = f"""
+        <div style=\"margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280;\">
+            Это письмо отправлено сервисом VashSender. 
+            Если вы больше не хотите получать подобные письма, 
+            <a href=\"{unsubscribe_url}\" style=\"color:#2563eb;\">отпишитесь по ссылке</a>.
+        </div>
+        """
+        if '</body>' in html_content:
+            html_content = html_content.replace('</body>', f'{unsubscribe_block}</body>')
+        else:
+            html_content += unsubscribe_block
+
         html_part = MIMEText(html_content, 'html', 'utf-8')
         msg.attach(html_part)
         

@@ -88,6 +88,14 @@
                   </template>
                 </select>
 
+                <!-- Export controls -->
+                <div class="flex items-center gap-2">
+                  <button @click="showExportModal = true" class="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Экспорт
+                  </button>
+                </div>
+
                 <a href="/campaigns/new/" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2">
                   <i data-lucide="plus" class="w-4 h-4"></i>
                   Новая рассылка
@@ -103,6 +111,7 @@
                 <div class="p-6">
                   <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-4">
+                      <input type="checkbox" :value="campaign.id" x-model="selectedCampaignIds" class="rounded border-gray-300">
                       <h3 class="text-lg font-semibold text-gray-900" x-text="campaign.name"></h3>
                       <span :class="'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ' + getStatusColor(campaign.status)">
                         <span x-show="campaign.status === 'sent'"><i data-lucide="check-circle" class="w-4 h-4"></i></span>
@@ -178,23 +187,25 @@
                     </div>
                     <div class="bg-green-50 rounded-lg p-3">
                       <p class="text-xs text-gray-500 mb-1">Открытия</p>
-                      <p class="text-xl font-bold text-green-600 flex items-center gap-1">
+                      <p class="text-xl font-bold text-green-600 flex items-center gap-2">
                         <i data-lucide="eye" class="w-4 h-4"></i>
                         <span x-text="campaign.open_rate.toFixed(1) + '%'"></span>
+                        <span class="text-gray-500 text-sm" x-text="'(' + (campaign.opens_count || 0).toLocaleString() + ')'"></span>
                       </p>
                     </div>
                     <div class="bg-blue-50 rounded-lg p-3">
                       <p class="text-xs text-gray-500 mb-1">Клики</p>
-                      <p class="text-xl font-bold text-blue-600 flex items-center gap-1">
+                      <p class="text-xl font-bold text-blue-600 flex items-center gap-2">
                         <i data-lucide="mouse-pointer" class="w-4 h-4"></i>
                         <span x-text="campaign.click_rate.toFixed(1) + '%'"></span>
+                        <span class="text-gray-500 text-sm" x-text="'(' + (campaign.clicks_count || 0).toLocaleString() + ')'"></span>
                       </p>
                     </div>
                     <div class="bg-red-50 rounded-lg p-3">
-                      <p class="text-xs text-gray-500 mb-1">Отказы</p>
-                      <p class="text-xl font-bold text-red-600 flex items-center gap-1">
-                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                        <span x-text="campaign.bounce_rate.toFixed(1) + '%'"></span>
+                      <p class="text-xs text-gray-500 mb-1">Отписались</p>
+                      <p class="text-xl font-bold text-red-600 flex items-center gap-2">
+                        <i data-lucide="user-x" class="w-4 h-4"></i>
+                        <span x-text="(campaign.unsubscribed_count || 0).toLocaleString()"></span>
                       </p>
                     </div>
                   </div>
@@ -366,23 +377,25 @@
           </div>
           <div class="bg-green-50 rounded-lg p-4">
             <p class="text-sm text-gray-500 mb-1">Открытия</p>
-            <p class="text-xl font-bold text-green-600 flex items-center gap-1">
+            <p class="text-xl font-bold text-green-600 flex items-center gap-2">
               <i data-lucide="eye" class="w-4 h-4"></i>
               <span x-text="selectedCampaign?.open_rate.toFixed(1) + '%'"></span>
+              <span class="text-gray-500 text-sm" x-text="'(' + (selectedCampaign?.opens_count || 0).toLocaleString() + ')'"></span>
             </p>
           </div>
           <div class="bg-blue-50 rounded-lg p-4">
             <p class="text-sm text-gray-500 mb-1">Клики</p>
-            <p class="text-xl font-bold text-blue-600 flex items-center gap-1">
+            <p class="text-xl font-bold text-blue-600 flex items-center gap-2">
               <i data-lucide="mouse-pointer" class="w-4 h-4"></i>
               <span x-text="selectedCampaign?.click_rate.toFixed(1) + '%'"></span>
+              <span class="text-gray-500 text-sm" x-text="'(' + (selectedCampaign?.clicks_count || 0).toLocaleString() + ')'"></span>
             </p>
           </div>
           <div class="bg-red-50 rounded-lg p-4">
-            <p class="text-sm text-gray-500 mb-1">Отказы</p>
-            <p class="text-xl font-bold text-red-600 flex items-center gap-1">
-              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-              <span x-text="selectedCampaign?.bounce_rate.toFixed(1) + '%'"></span>
+            <p class="text-sm text-gray-500 mb-1">Отписались</p>
+            <p class="text-xl font-bold text-red-600 flex items-center gap-2">
+              <i data-lucide="user-x" class="w-4 h-4"></i>
+              <span x-text="(selectedCampaign?.unsubscribed_count || 0).toLocaleString()"></span>
             </p>
           </div>
         </div>
@@ -509,6 +522,70 @@
         </div>
       </div>
     </div>
+
+    <!-- Export Modal -->
+    <div x-show="showExportModal" x-cloak class="fixed inset-0 z-50">
+      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+      <div class="relative mx-auto mt-20 w-full max-w-2xl px-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+          <div class="px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                <i data-lucide="download" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Экспорт отчетов</h3>
+                <p class="text-sm text-gray-500">Выберите формат и набор рассылок для выгрузки</p>
+              </div>
+            </div>
+            <button @click="showExportModal = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="px-6 pb-6 space-y-6">
+            <div>
+              <p class="text-sm font-medium text-gray-700 mb-3">Формат файла</p>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button @click="exportFormat = 'xlsx'" :class="exportFormat==='xlsx' ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'" class="p-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex items-center justify-center gap-2 transition-all">
+                  <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                  XLSX
+                </button>
+                <button @click="exportFormat = 'csv'" :class="exportFormat==='csv' ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'" class="p-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex items-center justify-center gap-2 transition-all">
+                  <i data-lucide="file-text" class="w-4 h-4"></i>
+                  CSV
+                </button>
+                <button @click="exportFormat = 'txt'" :class="exportFormat==='txt' ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'" class="p-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex items-center justify-center gap-2 transition-all">
+                  <i data-lucide="file" class="w-4 h-4"></i>
+                  TXT
+                </button>
+                <button @click="exportFormat = 'json'" :class="exportFormat==='json' ? 'ring-2 ring-blue-500 bg-blue-50' : 'hover:bg-gray-50'" class="p-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex items-center justify-center gap-2 transition-all">
+                  <i data-lucide="braces" class="w-4 h-4"></i>
+                  JSON
+                </button>
+              </div>
+            </div>
+            <div>
+              <p class="text-sm font-medium text-gray-700 mb-3">Какие кампании</p>
+              <div class="flex flex-wrap gap-2">
+                <button @click="toggleStatusAll({target:{checked:true}})" class="px-3 py-1.5 rounded-full border text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">Все</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'sent')" :class="chipClass('sent')" class="px-3 py-1.5 rounded-full border text-sm">Выполненные</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'sending')" :class="chipClass('sending')" class="px-3 py-1.5 rounded-full border text-sm">В очереди</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'draft')" :class="chipClass('draft')" class="px-3 py-1.5 rounded-full border text-sm">Черновики</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'failed')" :class="chipClass('failed')" class="px-3 py-1.5 rounded-full border text-sm">Ошибки</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'pending')" :class="chipClass('pending')" class="px-3 py-1.5 rounded-full border text-sm">Ожидает модерации</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'approved')" :class="chipClass('approved')" class="px-3 py-1.5 rounded-full border text-sm">Одобрено</button>
+                <button @click="exportStatuses = toggleChip(exportStatuses,'rejected')" :class="chipClass('rejected')" class="px-3 py-1.5 rounded-full border text-sm">Отклонено</button>
+              </div>
+              <p class="mt-2 text-xs text-gray-500">Подсказка: если в списке отмечены конкретные кампании — экспортируется именно этот выбор, иначе — по выбранным статусам.</p>
+            </div>
+          </div>
+          <div class="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
+            <button @click="showExportModal = false" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white">Отмена</button>
+            <button @click="confirmExport()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm">Экспорт</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -528,6 +605,11 @@
         showPreviewModal: false,
         selectedCampaign: null,
         isRetrying: false,
+        exportFormat: 'xlsx',
+        selectedCampaignIds: [],
+        showExportModal: false,
+        exportStatuses: [],
+        exportStatusSelection: [],
 
         isAdmin: false, // Добавляем переменную isAdmin
         sidebarItems: [
@@ -671,6 +753,15 @@
             .map(c => c.sender_email.email))];
         },
 
+        // helpers for export chips
+        chipClass(status) {
+          const active = this.exportStatuses.includes(status);
+          return active ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+        },
+        toggleChip(arr, value) {
+          return arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value];
+        },
+
         async deleteCampaign() {
           if (!this.showDeleteConfirm) return;
           
@@ -767,6 +858,48 @@
             alert('Ошибка при повторной отправке рассылки');
           } finally {
             this.isRetrying = false;
+          }
+        },
+
+        async exportSelected() {
+          this.showExportModal = true;
+        },
+        toggleStatusAll(evt) {
+          if (evt.target.checked) {
+            this.exportStatuses = ['sent','sending','draft','failed','pending','approved','rejected'];
+          } else {
+            this.exportStatuses = [];
+          }
+        },
+        async confirmExport() {
+          try {
+            const ids = this.selectedCampaignIds.length ? this.selectedCampaignIds : [];
+            const payload = ids.length ? { campaign_ids: ids, format: this.exportFormat } : { statuses: this.exportStatuses, format: this.exportFormat };
+            const response = await fetch('/campaigns/api/campaigns/export/', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
+              },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+              throw new Error('Failed to export reports');
+            }
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `campaign_reports.${this.exportFormat === 'xlsx' ? 'xlsx' : this.exportFormat}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            this.showExportModal = false;
+          } catch (e) {
+            alert('Ошибка экспорта отчета');
           }
         }
       }

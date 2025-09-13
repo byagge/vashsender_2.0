@@ -58,36 +58,12 @@ def get_plans_api(request):
         # Получаем все активные тарифы
         plans = Plan.objects.filter(is_active=True).select_related('plan_type').order_by('sort_order')
         
-        print(f"DEBUG: Found {plans.count()} plans")
-        
         # Группируем по типам
         plans_data = {
             'free': [],
             'subscribers': [],
             'letters': []
         }
-        
-        for plan in plans:
-            print(f"DEBUG: Processing plan {plan.id}: {plan.title} ({plan.plan_type.name})")
-            plan_data = {
-                'id': plan.id,
-                'title': plan.title,
-                'price': float(plan.get_final_price()),
-                'subscribers': plan.subscribers,
-                'emails_per_month': plan.emails_per_month,
-                'max_emails_per_day': plan.max_emails_per_day,
-                'is_featured': plan.is_featured,
-                'sort_order': plan.sort_order
-            }
-            
-            if plan.plan_type.name == 'Free':
-                plans_data['free'].append(plan_data)
-            elif plan.plan_type.name == 'Subscribers':
-                plans_data['subscribers'].append(plan_data)
-            elif plan.plan_type.name == 'Letters':
-                plans_data['letters'].append(plan_data)
-        
-        print(f"DEBUG: Final data - Free: {len(plans_data['free'])}, Subscribers: {len(plans_data['subscribers'])}, Letters: {len(plans_data['letters'])}")
         
         response = JsonResponse({
             'success': True,
@@ -97,7 +73,6 @@ def get_plans_api(request):
         return response
         
     except Exception as e:
-        print(f"DEBUG: Error in get_plans_api: {e}")
         import traceback
         traceback.print_exc()
         return JsonResponse({
