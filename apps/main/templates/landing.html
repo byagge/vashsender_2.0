@@ -557,8 +557,8 @@
   // Функция выбора тарифа
   function handleChoosePlan(planType, isFree) {
     if (isFree) {
-      // Бесплатный тариф - редирект на регистрацию
-      window.location.href = '/accounts/signup/';
+      // Бесплатный тариф - активируем сразу
+      window.location.href = '/billing/activate-free/';
       return;
     }
 
@@ -583,8 +583,7 @@
     if (selectedPlan) {
       window.location.href = `/billing/confirm/?plan_id=${selectedPlan.id}`;
     } else {
-      // Если не нашли план, редиректим на страницу pricing
-      window.location.href = '/pricing/';
+      alert('Ошибка: не удалось найти подходящий тариф');
     }
   }
 
