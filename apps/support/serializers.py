@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import SupportTicket, SupportMessage, SupportAttachment, SupportChat, SupportChatMessage
+from django.core.mail import EmailMultiAlternatives
+from django.conf import settings
 
 class SupportTicketListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,6 +28,26 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
             message_author=request.user,
             message_text=ticket.ticket_description
         )
+        try:
+            # Уведомление в поддержку о новом тикете
+            support_email = 'support@vashsender.ru'
+            subject = f"[Support] Новый тикет от {request.user.email}: {ticket.ticket_subject}"
+            text_body = (
+                f"Пользователь: {request.user.email}\n"
+                f"Тема: {ticket.ticket_subject}\n\n"
+                f"Описание:\n{ticket.ticket_description}\n\n"
+                f"ID тикета: {ticket.ticket_id}\n"
+            )
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                to=[support_email]
+            )
+            msg.send(fail_silently=True)
+        except Exception:
+            # Безопасно игнорируем сбои уведомлений, чтобы не мешать созданию тикета
+            pass
         return ticket
 
 class SupportTicketDetailSerializer(serializers.ModelSerializer):
@@ -73,6 +95,26 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
                 attachment_file_size=attachment_file.size,
                 attachment_mime_type=attachment_file.content_type
             )
+        try:
+            # Уведомление в поддержку о новом сообщении в тикете
+            support_email = 'support@vashsender.ru'
+            subject = f"[Support] Новое сообщение в тикете {message.message_ticket.ticket_id.hex[:8]} от {message.message_author.email}"
+            text_body = (
+                f"Тикет: {message.message_ticket.ticket_subject}\n"
+                f"Автор: {message.message_author.email}\n\n"
+                f"Сообщение:\n{message.message_text}\n\n"
+                f"ID тикета: {message.message_ticket.ticket_id}\n"
+                f"ID сообщения: {message.message_id}\n"
+            )
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                to=[support_email]
+            )
+            msg.send(fail_silently=True)
+        except Exception:
+            pass
         return message 
 
 class SupportChatSerializer(serializers.ModelSerializer):

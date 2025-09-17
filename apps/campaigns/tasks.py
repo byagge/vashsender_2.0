@@ -178,7 +178,7 @@ def test_celery():
     return "Test task completed successfully"
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns', 
-            time_limit=3600, soft_time_limit=3300)  # 60 минут максимум, 55 минут мягкий лимит
+            time_limit=14400, soft_time_limit=13800)  # 4 часа максимум, 3ч50м мягкий лимит
 def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict[str, Any]:
     """
     Основная задача для отправки кампании
@@ -192,7 +192,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
     
     try:
         # Проверяем таймаут
-        if time.time() - start_time > 3300:  # 55 минут
+        if time.time() - start_time > 13800:  # 3ч50м
             raise TimeoutError("Task timeout approaching")
         
         # Принудительно обновляем состояние задачи
@@ -236,6 +236,27 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             # Обновляем статус кампании на pending
             campaign.status = Campaign.STATUS_PENDING
             campaign.save(update_fields=['status'])
+
+            # Уведомляем поддержку о новой кампании на модерации
+            try:
+                support_email = 'support@vashsender.ru'
+                subject = f"[Moderation] Новая кампания на модерации: {campaign.name or campaign.id}"
+                body = (
+                    f"Пользователь: {user.email}\n"
+                    f"Кампания: {campaign.name or ''}\n"
+                    f"Тема: {campaign.subject or ''}\n"
+                    f"ID кампании: {campaign.id}\n"
+                    f"Статус: {campaign.get_status_display()}\n"
+                )
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=True)
+            except Exception:
+                pass
             
             return {
                 'campaign_id': campaign_id,
@@ -323,12 +344,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
-        # Разбиваем на батчи (уменьшено для предотвращения баунса)
-        batch_size = getattr(settings, 'EMAIL_BATCH_SIZE', 10)   # Уменьшено до 10 для лучшей доставляемости
-        batches = [
-            contacts_list[i:i + batch_size] 
-            for i in range(0, len(contacts_list), batch_size)
-        ]
+        # Разбиваем на батчи (можно отправлять все сразу)
+        batch_size = len(contacts_list)
+        batches = [contacts_list]
         
         print(f"Кампания {campaign.name}: {total_contacts} писем, {len(batches)} батчей")
         
@@ -342,11 +360,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 raise TimeoutError("Task timeout approaching before launching all batches")
             
             try:
-                # Добавляем задержку между батчами для лучшей доставляемости
-                if i > 0:
-                    import random
-                    batch_delay = random.uniform(25.0, 30.0)  # 25-30 секунд между батчами (соответствует 1 письму в 5 секунд)
-                    time.sleep(batch_delay)
+                # Без искусственных задержек между батчами
                 
                 result = send_email_batch.apply_async(
                     args=[campaign_id, [c.id for c in batch], i + 1, len(batches)],
@@ -381,7 +395,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 continue
         
         # Ждем завершения всех батчей с увеличенным таймаутом
-        max_wait_time = 2400  # 40 минут максимум ожидания
+        max_wait_time = 14400  # 4 часа максимум ожидания
         wait_start = time.time()
         
         while time.time() - wait_start < max_wait_time:
@@ -497,7 +511,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=1200, soft_time_limit=1000)  # 20 минут максимум, 16 минут мягкий лимит
+            time_limit=5400, soft_time_limit=4800)  # 90 минут максимум, 80 минут мягкий лимит
 def send_email_batch(self, campaign_id: str, contact_ids: List[int], 
                     batch_number: int, total_batches: int) -> Dict[str, Any]:
     """
@@ -510,13 +524,13 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         print(f"Starting send_email_batch for campaign {campaign_id}, batch {batch_number}/{total_batches}")
         
         # Проверяем таймаут
-        if time.time() - start_time > 1000:  # 16 минут
+        if time.time() - start_time > 4800:  # 80 минут
             raise TimeoutError("Batch task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
-        contacts = Contact.objects.filter(id__in=contact_ids)
-        print(f"Found {contacts.count()} contacts in batch")
-        print(f"Campaign current status: {campaign.status}")
+        # Отправляем только валидным контактам
+        from apps.mailer.models import Contact as MailerContact
+        contacts = Contact.objects.filter(id__in=contact_ids, status=MailerContact.VALID)
         
         # Получаем SMTP соединение из пула
         smtp_connection = smtp_pool.get_connection()
@@ -524,38 +538,27 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         sent_count = 0
         failed_count = 0
-        # Снижаем скорость отправки для предотвращения баунса
-        rate_limit = getattr(settings, 'EMAIL_RATE_LIMIT', 0.2)  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
-        # Настраиваем интервал отправки для достижения заданной скорости (писем в секунду)
-        try:
-            emails_per_second = float(rate_limit)
-            if emails_per_second <= 0:
-                emails_per_second = 0.2  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
-        except Exception:
-            emails_per_second = 0.2  # Снижено до 0.2 писем в секунду (1 письмо в 5 секунд)
-        send_interval = 1.0 / emails_per_second
-        last_scheduled_at = time.monotonic() - send_interval
+        # Без искусственного rate limiting — все письма планируются сразу
          
+        # Рассчитываем шаг задержки на основе настраиваемой скорости
+        delay_step_seconds = 0
+        try:
+            from .models import SendingSettings
+            emails_per_minute = SendingSettings.get_current_rate()
+            if emails_per_minute and emails_per_minute > 0:
+                delay_step_seconds = 60.0 / float(emails_per_minute)
+        except Exception:
+            delay_step_seconds = 0
+
         for i, contact in enumerate(contacts):
             try:
                 # Проверяем таймаут в цикле
-                if time.time() - start_time > 1000:
+                if time.time() - start_time > 4800:
                     raise TimeoutError("Batch task timeout approaching during email sending")
                 
-                # Добавляем дополнительную задержку в начале для предотвращения быстрого выброса
-                if i < 10:  # Первые 10 писем отправляем с увеличенной задержкой
-                    import random
-                    initial_delay = random.uniform(5.0, 7.0)  # 5-7 секунд между первыми письмами (соответствует 1 письму в 5 секунд)
-                    time.sleep(initial_delay)
-                
-                # Планируем отправку задач с шагом, обеспечивающим целевую скорость (по умолчанию 0.2 писем/сек - 1 письмо в 5 секунд)
-                now = time.monotonic()
-                elapsed = now - last_scheduled_at
-                if elapsed < send_interval:
-                    time.sleep(send_interval - elapsed)
-                # Отправляем письмо асинхронно
-                send_single_email.apply_async(args=[campaign_id, contact.id])
-                last_scheduled_at = time.monotonic()
+                # Планируем отправку письма с учётом настраиваемой скорости
+                countdown = int(i * delay_step_seconds) if delay_step_seconds > 0 else 0
+                send_single_email.apply_async(args=[campaign_id, contact.id], countdown=countdown)
                 # Не ждем результат, просто планируем задачу; обработка результата в send_single_email
                 sent_count += 1  # Предполагаем успех, так как не ждем результат
                 # Обновляем прогресс
@@ -680,7 +683,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=600, soft_time_limit=480, rate_limit='0.2/s')  # 10 минут максимум, 8 минут мягкий лимит, 0.2 письма в секунду
+            time_limit=3600, soft_time_limit=3000)  # до 60 минут на письмо
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
@@ -692,11 +695,24 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"Starting send_single_email for campaign {campaign_id}, contact {contact_id}")
         
         # Проверяем таймаут
-        if time.time() - start_time > 480:  # 8 минут
+        if time.time() - start_time > 3000:  # 50 минут
             raise TimeoutError("Single email task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
         contact = Contact.objects.get(id=contact_id)
+        # Пропускаем невалидные адреса
+        try:
+            from apps.mailer.models import Contact as MailerContact
+            if contact.status != MailerContact.VALID:
+                
+                return {
+                    'success': False,
+                    'skipped': True,
+                    'reason': 'invalid_contact',
+                    'email': contact.email
+                }
+        except Exception:
+            pass
         print(f"Sending to: {contact.email}")
         
         # Создаем tracking_id для трекинга

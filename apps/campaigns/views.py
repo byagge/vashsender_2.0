@@ -126,29 +126,25 @@ class CampaignViewSet(viewsets.ModelViewSet):
         plan = getattr(user, 'current_plan', None)
         if not plan:
             return Response({'error': 'Не найден тариф пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
-        daily_limit = getattr(plan, 'max_emails_per_day', 0)
-        monthly_limit = getattr(plan, 'emails_per_month', 0)
-        # Считаем сколько писем пользователь уже отправил сегодня и за месяц
-        from django.utils import timezone
-        from datetime import timedelta
-        now = timezone.now()
-        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        sent_today = CampaignRecipient.objects.filter(
-            campaign__user=user,
-            sent_at__gte=start_of_day
-        ).count()
-        sent_this_month = CampaignRecipient.objects.filter(
-            campaign__user=user,
-            sent_at__gte=start_of_month
-        ).count()
+        
         # Сколько писем будет отправлено в этой кампании
         recipients_count = sum(cl.contacts.count() for cl in campaign.contact_lists.all())
-        # Проверяем лимиты
-        if daily_limit and sent_today + recipients_count > daily_limit:
-            return Response({'error': f'Превышен дневной лимит отправки писем по вашему тарифу: {daily_limit}.'}, status=status.HTTP_400_BAD_REQUEST)
-        if monthly_limit and sent_this_month + recipients_count > monthly_limit:
-            return Response({'error': f'Превышен месячный лимит отправки писем по вашему тарифу: {monthly_limit}.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем только фактический тарифный доступ (без дневных/искусственных лимитов)
+        from apps.billing.utils import can_user_send_emails, get_user_plan_info
+        plan_info = get_user_plan_info(user)
+        
+        if plan_info['has_plan'] and plan_info['plan_type'] == 'Letters':
+            if not can_user_send_emails(user, recipients_count):
+                return Response({
+                    'error': f'Недостаточно писем в тарифе. Доступно: {plan_info["emails_remaining"]}, требуется: {recipients_count}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        elif plan_info['has_plan'] and plan_info['plan_type'] == 'Subscribers':
+            if plan_info['is_expired']:
+                return Response({
+                    'error': 'Тариф истёк. Пожалуйста, продлите тариф для отправки кампаний.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        # Бесплатный тариф: без месячных и дневных ограничений (0 = неограниченно)
 
         # --- ВАЛИДАЦИЯ ПОЛЕЙ КАМПАНИИ ---
         print("Validating campaign fields:")
@@ -717,7 +713,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
         writer.writerow(['Кликнули (кол-во)', clicks])
         writer.writerow(['Отписались (кол-во)', unsubscribed])
         writer.writerow([])
-        writer.writerow(['Email', 'Открыто', 'Кликов', 'Отписан'])
+        writer.writerow(['Email', 'Отправитель', 'Открыто', 'Кликов', 'Отписан'])
 
         # По каждому получателю
         trackings = EmailTracking.objects.filter(campaign=campaign).select_related('contact')
@@ -726,9 +722,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))
         ).values_list('id', flat=True))
 
+        sender_mailbox = campaign.sender_email.email if campaign.sender_email else ''
         for t in trackings:
             writer.writerow([
                 t.contact.email,
+                sender_mailbox,
                 1 if t.opened_at else 0,
                 1 if t.clicked_at else 0,
                 1 if t.contact_id in unsubscribed_ids else 0

@@ -238,3 +238,25 @@ class CampaignRecipient(models.Model):
             self.is_sent = True
             self.sent_at = timezone.now()
             self.save()
+
+
+class SendingSettings(models.Model):
+    """
+    Глобальные настройки скорости отправки рассылок.
+    emails_per_minute = 0 означает без ограничений (как можно быстрее).
+    """
+    emails_per_minute = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Настройки скорости отправки'
+        verbose_name_plural = 'Настройки скорости отправки'
+
+    def __str__(self):
+        rate = self.emails_per_minute or 'без ограничений'
+        return f"Скорость: {rate} писем/мин"
+
+    @classmethod
+    def get_current_rate(cls) -> int:
+        obj, _ = cls.objects.get_or_create(id=1)
+        return int(obj.emails_per_minute or 0)

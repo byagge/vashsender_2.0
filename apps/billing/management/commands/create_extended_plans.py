@@ -29,14 +29,14 @@ class Command(BaseCommand):
         self.stdout.write(f"📋 Тип тарифа 'Letters': {letters_type.name}")
         self.stdout.write(f"📋 Тип тарифа 'Subscribers': {subscribers_type.name}")
         
-        # Тарифы с лимитом писем
+        # Тарифы с лимитом писем - убираем дневные лимиты, можно отправить все письма сразу
         letters_plans = [
             {
                 'title': 'Письма 1,000',
                 'plan_type': letters_type,
                 'emails_per_month': 1000,
                 'subscribers': 0,
-                'max_emails_per_day': 200,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 430,
                 'discount': 0,
                 'is_featured': False,
@@ -47,7 +47,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 2000,
                 'subscribers': 0,
-                'max_emails_per_day': 400,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 800,
                 'discount': 0,
                 'is_featured': False,
@@ -58,7 +58,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 5000,
                 'subscribers': 0,
-                'max_emails_per_day': 1000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 1500,
                 'discount': 0,
                 'is_featured': False,
@@ -69,7 +69,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 10000,
                 'subscribers': 0,
-                'max_emails_per_day': 2000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 2500,
                 'discount': 0,
                 'is_featured': True,
@@ -80,7 +80,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 25000,
                 'subscribers': 0,
-                'max_emails_per_day': 5000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 5500,
                 'discount': 0,
                 'is_featured': False,
@@ -91,7 +91,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 50000,
                 'subscribers': 0,
-                'max_emails_per_day': 10000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 9999,
                 'discount': 0,
                 'is_featured': False,
@@ -102,7 +102,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 100000,
                 'subscribers': 0,
-                'max_emails_per_day': 20000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 17999,
                 'discount': 0,
                 'is_featured': False,
@@ -113,7 +113,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 250000,
                 'subscribers': 0,
-                'max_emails_per_day': 50000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 39999,
                 'discount': 0,
                 'is_featured': False,
@@ -124,7 +124,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 500000,
                 'subscribers': 0,
-                'max_emails_per_day': 100000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 69999,
                 'discount': 0,
                 'is_featured': False,
@@ -135,7 +135,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'emails_per_month': 1000000,
                 'subscribers': 0,
-                'max_emails_per_day': 200000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 129999,
                 'discount': 0,
                 'is_featured': False,
@@ -143,7 +143,7 @@ class Command(BaseCommand):
             }
         ]
         
-        # Тарифы с лимитом подписчиков
+        # Тарифы с лимитом подписчиков - оставляем дневные лимиты для контроля нагрузки
         subscribers_plans = [
             {
                 'title': 'Подписчики 1,000',
@@ -296,4 +296,4 @@ class Command(BaseCommand):
                     limit = f"{plan.emails_per_month:,} писем"
                 else:
                     limit = f"{plan.subscribers:,} подписчиков"
-                self.stdout.write(f"  - {plan.title}: {limit} - {plan.price}₽") 
+                self.stdout.write(f"  - {plan.title}: {limit} - {plan.price}₽")

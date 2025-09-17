@@ -174,7 +174,7 @@ class BillingSettings(models.Model):
     """Настройки биллинга"""
     free_plan_subscribers = models.PositiveIntegerField(default=100, help_text=_("Количество подписчиков в бесплатном тарифе"))
     free_plan_emails = models.PositiveIntegerField(default=100, help_text=_("Количество писем в бесплатном тарифе"))
-    free_plan_daily_limit = models.PositiveIntegerField(default=50, help_text=_("Дневной лимит писем в бесплатном тарифе"))
+    free_plan_daily_limit = models.PositiveIntegerField(default=0, help_text=_("Дневной лимит писем в бесплатном тарифе (0 = неограниченно)"))
     
     # CloudPayments настройки
     cloudpayments_public_id = models.CharField(max_length=100, blank=True, help_text=_("Public ID CloudPayments"))

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Campaign, EmailTracking, CampaignStats, CampaignRecipient
+from .models import Campaign, EmailTracking, CampaignStats, CampaignRecipient, SendingSettings
 
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
@@ -26,3 +26,9 @@ class CampaignRecipientAdmin(admin.ModelAdmin):
     list_display = ('campaign', 'contact', 'created_at', 'is_sent', 'sent_at')
     list_filter = ('is_sent', 'created_at', 'sent_at')
     search_fields = ('campaign__name', 'contact__email')
+
+
+@admin.register(SendingSettings)
+class SendingSettingsAdmin(admin.ModelAdmin):
+    list_display = ('emails_per_minute', 'updated_at')
+    fields = ('emails_per_minute',)

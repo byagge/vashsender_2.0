@@ -105,13 +105,13 @@ EMAIL_SSL_CONTEXT = ssl.create_default_context()
 EMAIL_SSL_CONTEXT.check_hostname = False
 EMAIL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
-# Email sending configuration для продакшена - оптимизировано для 1 письма в 5 секунд
-EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=10, cast=int)    # Увеличено до 10 для максимальной скорости
-EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=0.2, cast=float)   # 0.2 писем в секунду (1 письмо в 5 секунд для предотвращения баунса)
-EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=2, cast=int)  # Уменьшено для быстрой обработки
-EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=60, cast=int) # Уменьшено до 1 минуты для быстрого повтора
-EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=15, cast=int)  # Уменьшено для быстрого подключения
-EMAIL_SEND_TIMEOUT = config('EMAIL_SEND_TIMEOUT', default=30, cast=int)  # Уменьшено для быстрой отправки
+# Email sending configuration — без искусственных лимитов, управляется только тарифами
+EMAIL_BATCH_SIZE = config('EMAIL_BATCH_SIZE', default=0, cast=int)  # 0 = без разбиения
+EMAIL_RATE_LIMIT = config('EMAIL_RATE_LIMIT', default=0.0, cast=float)  # 0 = без ограничения скорости
+EMAIL_MAX_RETRIES = config('EMAIL_MAX_RETRIES', default=2, cast=int)
+EMAIL_RETRY_DELAY = config('EMAIL_RETRY_DELAY', default=60, cast=int)
+EMAIL_CONNECTION_TIMEOUT = config('EMAIL_CONNECTION_TIMEOUT', default=15, cast=int)
+EMAIL_SEND_TIMEOUT = config('EMAIL_SEND_TIMEOUT', default=30, cast=int)
 
 # Статические файлы
 STATIC_ROOT = '/var/www/vashsender/static/'
@@ -287,8 +287,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 EMAIL_TIMEOUT = 30
 
 # Настройки для Celery
-CELERY_TASK_TIME_LIMIT = 30 * 60
-CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
+CELERY_TASK_TIME_LIMIT = 4 * 60 * 60  # 4 часа
+CELERY_TASK_SOFT_TIME_LIMIT = 3 * 60 * 60 + 30 * 60  # 3.5 часа
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 CELERY_TASK_ACKS_LATE = True

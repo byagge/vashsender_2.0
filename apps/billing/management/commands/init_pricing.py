@@ -50,7 +50,7 @@ class Command(BaseCommand):
                 'plan_type': free_type,
                 'subscribers': 200,
                 'emails_per_month': 0,  # неограниченно
-                'max_emails_per_day': 50,
+                'max_emails_per_day': 0,  # Неограниченно для бесплатного тарифа
                 'price': 0.00,
                 'discount': 0,
                 'is_active': True,
@@ -94,7 +94,7 @@ class Command(BaseCommand):
                 defaults={
                     'subscribers': subs,
                     'emails_per_month': 0,
-                    'max_emails_per_day': self._get_daily_limit(subs),
+                    'max_emails_per_day': 0,  # Без дневного лимита — можно отправить все сразу
                     'price': price,
                     'discount': 0,
                     'is_active': True,
@@ -108,7 +108,7 @@ class Command(BaseCommand):
                 # Обновляем существующий тариф
                 plan.subscribers = subs
                 plan.price = price
-                plan.max_emails_per_day = self._get_daily_limit(subs)
+                plan.max_emails_per_day = 0
                 plan.is_featured = (subs == 1000)
                 plan.sort_order = idx
                 plan.save()
@@ -159,7 +159,7 @@ class Command(BaseCommand):
             defaults={
                 'free_plan_subscribers': 200,
                 'free_plan_emails': 0,  # неограниченно
-                'free_plan_daily_limit': 50,
+                'free_plan_daily_limit': 0,  # Неограниченно для бесплатного тарифа
                 'cloudpayments_test_mode': True,
                 'auto_renewal_enabled': True,
                 'auto_renewal_days_before': 3
@@ -186,18 +186,5 @@ class Command(BaseCommand):
         )
     
     def _get_daily_limit(self, subscribers):
-        """Определяет дневной лимит писем на основе количества подписчиков"""
-        if subscribers <= 1000:
-            return 200
-        elif subscribers <= 5000:
-            return 500
-        elif subscribers <= 10000:
-            return 1000
-        elif subscribers <= 50000:
-            return 2000
-        elif subscribers <= 100000:
-            return 5000
-        elif subscribers <= 500000:
-            return 10000
-        else:
-            return 20000 
+        """Дневной лимит отключен: 0 = без ограничений."""
+        return 0

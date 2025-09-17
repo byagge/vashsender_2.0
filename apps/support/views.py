@@ -8,6 +8,8 @@ from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
+from django.core.mail import EmailMultiAlternatives
+from django.conf import settings
 
 from .models import SupportTicket, SupportMessage, SupportCategory, SupportChat, SupportChatMessage
 from .serializers import (
@@ -264,6 +266,25 @@ class SupportChatViewSet(viewsets.ModelViewSet):
             # Обновляем время последнего обновления чата
             chat.chat_updated_at = timezone.now()
             chat.save(update_fields=['chat_updated_at'])
+
+            # Уведомление поддержки о новом чате/сообщении
+            try:
+                support_email = 'support@vashsender.ru'
+                subject = f"[Support Chat] Новое сообщение от {user.email}"
+                text_body = (
+                    f"Пользователь: {user.email}\n"
+                    f"Чат: {chat.chat_id}\n\n"
+                    f"Сообщение:\n{message_text}\n"
+                )
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=True)
+            except Exception:
+                pass
         
         return Response({
             'chat_id': chat.chat_id,
@@ -310,6 +331,25 @@ class SupportChatViewSet(viewsets.ModelViewSet):
         chat.chat_updated_at = timezone.now()
         chat.save(update_fields=['chat_updated_at'])
         
+        # Уведомление поддержки о новом сообщении в чате
+        try:
+            support_email = 'support@vashsender.ru'
+            subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
+            text_body = (
+                f"Пользователь: {request.user.email}\n"
+                f"Чат: {chat.chat_id}\n\n"
+                f"Сообщение:\n{message_text}\n"
+            )
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                to=[support_email]
+            )
+            msg.send(fail_silently=True)
+        except Exception:
+            pass
+
         serializer = SupportChatMessageSerializer(message)
         return Response(serializer.data, status=201)
     

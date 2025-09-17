@@ -90,13 +90,13 @@
 
                 <!-- Export controls -->
                 <div class="flex items-center gap-2">
-                  <button @click="showExportModal = true" class="bg-gray-700 text-white px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2">
+                  <button @click="showExportModal = true" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2.5 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 font-medium">
                     <i data-lucide="download" class="w-4 h-4"></i>
                     Экспорт
                   </button>
                 </div>
 
-                <a href="/campaigns/new/" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2">
+                <a href="/campaigns/new/" class="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2.5 rounded-xl hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 font-medium">
                   <i data-lucide="plus" class="w-4 h-4"></i>
                   Новая рассылка
                 </a>
@@ -111,7 +111,6 @@
                 <div class="p-6">
                   <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-4">
-                      <input type="checkbox" :value="campaign.id" x-model="selectedCampaignIds" class="rounded border-gray-300">
                       <h3 class="text-lg font-semibold text-gray-900" x-text="campaign.name"></h3>
                       <span :class="'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ' + getStatusColor(campaign.status)">
                         <span x-show="campaign.status === 'sent'"><i data-lucide="check-circle" class="w-4 h-4"></i></span>
@@ -281,28 +280,61 @@
           <div x-show="totalPages() > 1" class="flex items-center justify-between mt-8">
             <p class="text-sm text-gray-700">
               Показано <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> - 
-              <span x-text="Math.min((currentPage - 1) * itemsPerPage + itemsPerPage, filteredCampaigns().length)"></span> из 
-              <span x-text="filteredCampaigns().length"></span> рассылок
+              <span x-text="Math.min(currentPage * itemsPerPage, count)"></span> из 
+              <span x-text="count"></span> рассылок
             </p>
             <div class="flex items-center gap-2">
+              <!-- Previous button -->
               <button
-                @click="currentPage = Math.max(1, currentPage - 1)"
+                @click="goToPage(currentPage - 1)"
                 :disabled="currentPage === 1"
-                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent"
               >
                 Назад
               </button>
-              <template x-for="page in Array.from({ length: totalPages() }, (_, i) => i + 1)" :key="page">
+              
+              <!-- First page -->
+              <template x-if="currentPage > 3">
                 <button
-                  @click="currentPage = page"
-                  :class="currentPage === page ? 'px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white' : 'px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100'"
+                  @click="goToPage(1)"
+                  class="px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300"
+                  x-text="1"
+                ></button>
+              </template>
+              
+              <!-- Ellipsis after first page -->
+              <template x-if="currentPage > 4">
+                <span class="px-2 text-gray-500">...</span>
+              </template>
+              
+              <!-- Page numbers around current page -->
+              <template x-for="page in getVisiblePages()" :key="page">
+                <button
+                  @click="goToPage(page)"
+                  :class="currentPage === page ? 'px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white border border-blue-600' : 'px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300'"
                   x-text="page"
                 ></button>
               </template>
+              
+              <!-- Ellipsis before last page -->
+              <template x-if="currentPage < totalPages() - 3">
+                <span class="px-2 text-gray-500">...</span>
+              </template>
+              
+              <!-- Last page -->
+              <template x-if="currentPage < totalPages() - 2">
+                <button
+                  @click="goToPage(totalPages())"
+                  class="px-3 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300"
+                  x-text="totalPages()"
+                ></button>
+              </template>
+              
+              <!-- Next button -->
               <button
-                @click="currentPage = Math.min(totalPages(), currentPage + 1)"
+                @click="goToPage(currentPage + 1)"
                 :disabled="currentPage === totalPages()"
-                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent"
               >
                 Вперед
               </button>
@@ -330,7 +362,7 @@
           <p class="text-gray-500 mb-8 max-w-md">
             Создайте свою первую email-рассылку, чтобы связаться с аудиторией и отслеживать результаты.
           </p>
-          <a href="/campaigns/new/" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto">
+          <a href="/campaigns/new/" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-xl font-medium hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-3 mx-auto shadow-lg hover:shadow-xl transform hover:-translate-y-1">
             <i data-lucide="plus" class="w-5 h-5"></i>
             Создать первую рассылку
           </a>
@@ -576,7 +608,7 @@
                 <button @click="exportStatuses = toggleChip(exportStatuses,'approved')" :class="chipClass('approved')" class="px-3 py-1.5 rounded-full border text-sm">Одобрено</button>
                 <button @click="exportStatuses = toggleChip(exportStatuses,'rejected')" :class="chipClass('rejected')" class="px-3 py-1.5 rounded-full border text-sm">Отклонено</button>
               </div>
-              <p class="mt-2 text-xs text-gray-500">Подсказка: если в списке отмечены конкретные кампании — экспортируется именно этот выбор, иначе — по выбранным статусам.</p>
+              <p class="mt-2 text-xs text-gray-500">Экспортируются все кампании с выбранными статусами.</p>
             </div>
           </div>
           <div class="px-6 py-4 bg-gray-50 border-t flex justify-end gap-2">
@@ -606,7 +638,6 @@
         selectedCampaign: null,
         isRetrying: false,
         exportFormat: 'xlsx',
-        selectedCampaignIds: [],
         showExportModal: false,
         exportStatuses: [],
         exportStatusSelection: [],
@@ -719,6 +750,44 @@
         paginatedCampaigns() {
           // Теперь серверная пагинация, возвращаем просто this.campaigns
           return this.campaigns;
+        },
+
+        // Функция для получения видимых страниц в пагинаторе
+        getVisiblePages() {
+          const total = this.totalPages();
+          const current = this.currentPage;
+          const pages = [];
+          
+          // Определяем диапазон страниц для отображения
+          let start = Math.max(1, current - 2);
+          let end = Math.min(total, current + 2);
+          
+          // Если мы близко к началу, показываем больше страниц справа
+          if (current <= 3) {
+            end = Math.min(total, 5);
+          }
+          
+          // Если мы близко к концу, показываем больше страниц слева
+          if (current >= total - 2) {
+            start = Math.max(1, total - 4);
+          }
+          
+          // Генерируем массив страниц
+          for (let i = start; i <= end; i++) {
+            pages.push(i);
+          }
+          
+          return pages;
+        },
+
+        // Функция для перехода на страницу
+        async goToPage(page) {
+          if (page < 1 || page > this.totalPages() || page === this.currentPage) {
+            return;
+          }
+          
+          this.currentPage = page;
+          await this.loadCampaigns(page);
         },
 
         toggleRowExpansion(id) {
@@ -873,8 +942,7 @@
         },
         async confirmExport() {
           try {
-            const ids = this.selectedCampaignIds.length ? this.selectedCampaignIds : [];
-            const payload = ids.length ? { campaign_ids: ids, format: this.exportFormat } : { statuses: this.exportStatuses, format: this.exportFormat };
+            const payload = { statuses: this.exportStatuses, format: this.exportFormat };
             const response = await fetch('/campaigns/api/campaigns/export/', {
               method: 'POST',
               credentials: 'same-origin',

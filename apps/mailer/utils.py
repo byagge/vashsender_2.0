@@ -38,6 +38,30 @@ IMPORTANT_DOMAINS = {
     'live.com', 'msn.com', 'me.com', 'mac.com'
 }
 
+# Allowlist доменов - никогда не попадают в черный список
+ALLOWLIST_DOMAINS = {
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+    'yandex.ru', 'mail.ru', 'rambler.ru', 'bk.ru',
+    'icloud.com', 'protonmail.com', 'zoho.com', 'aol.com',
+    'live.com', 'msn.com', 'me.com', 'mac.com',
+    'googlemail.com', 'yahoo.co.uk', 'yahoo.fr', 'yahoo.de',
+    'outlook.co.uk', 'hotmail.co.uk', 'live.co.uk',
+    'yandex.com', 'yandex.by', 'yandex.kz', 'yandex.ua',
+    'mail.com', 'gmx.com', 'gmx.de', 'web.de', 't-online.de',
+    'orange.fr', 'free.fr', 'laposte.net', 'wanadoo.fr',
+    'comcast.net', 'verizon.net', 'att.net', 'sbcglobal.net',
+    'cox.net', 'charter.net', 'bellsouth.net', 'earthlink.net',
+    'rediffmail.com', 'sify.com', 'indiatimes.com',
+    'qq.com', '163.com', '126.com', 'sina.com', 'sohu.com',
+    'naver.com', 'daum.net', 'hanmail.net',
+    'tutanota.com', 'fastmail.com', 'mailbox.org', 'srv1.mail-tester.com',
+    'srv2.mail-tester.com', 'srv3.mail-tester.com', 'srv4.mail-tester.com',
+    'srv5.mail-tester.com', 'srv6.mail-tester.com', 'srv7.mail-tester.com',
+    'srv8.mail-tester.com', 'srv9.mail-tester.com', 'srv10.mail-tester.com',
+    'mail-tester.com', 'mail-tester.net', 'mail-tester.org', 'mail-tester.ru',
+    'vashsender.ru', 'protonmail.ch', 'tutanota.de', 'tuta.io', 'tutamail.com',
+}
+
 def load_disposable_domains():
     """
     Загружает список disposable-доменов только один раз при первом вызове.
@@ -204,6 +228,12 @@ def is_important_domain(domain: str) -> bool:
     """
     return domain.lower() in IMPORTANT_DOMAINS
 
+def is_allowlist_domain(domain: str) -> bool:
+    """
+    Проверка, является ли домен в allowlist (никогда не попадает в черный список)
+    """
+    return domain.lower() in ALLOWLIST_DOMAINS
+
 def check_smtp_connection(email: str) -> dict:
     """
     Глубокая SMTP проверка существования email адреса
@@ -315,7 +345,8 @@ def validate_email_production(email: str) -> dict:
         result['errors'].append('Зарезервированный домен')
         return result
     
-    if is_disposable_domain(domain):
+    # Проверка на disposable домены (но не для allowlist доменов)
+    if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         result['status'] = Contact.BLACKLIST
         result['confidence'] = 'high'
         result['warnings'].append('Временный email домен')
@@ -370,8 +401,8 @@ def classify_email(email: str) -> str:
     if is_reserved_domain(domain):
         return Contact.INVALID
     
-    # 4. Проверка на disposable домены
-    if is_disposable_domain(domain):
+    # 4. Проверка на disposable домены (но не для allowlist доменов)
+    if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         return Contact.BLACKLIST
     
     # 5. Проверка MX записей (обязательны для email)
@@ -417,8 +448,8 @@ def validate_email_strict(email: str) -> dict:
         result['errors'].append('Зарезервированный домен')
         return result
     
-    # Проверка disposable доменов
-    if is_disposable_domain(domain):
+    # Проверка disposable доменов (но не для allowlist доменов)
+    if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         result['status'] = Contact.BLACKLIST
         result['warnings'].append('Временный email домен')
         return result
@@ -458,8 +489,8 @@ def validate_email_fast(email: str) -> dict:
     if is_reserved_domain(domain):
         return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Reserved domain'}
     
-    # Проверка disposable доменов
-    if is_disposable_domain(domain):
+    # Проверка disposable доменов (но не для allowlist доменов)
+    if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         return {'is_valid': False, 'status': Contact.BLACKLIST, 'reason': 'Disposable domain'}
     
     # Проверяем только важные домены (основные почтовые провайдеры)

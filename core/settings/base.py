@@ -280,7 +280,7 @@ HANDLER400 = 'core.error_handlers.handler400'
 HANDLER401 = 'core.error_handlers.handler401'
 
 # DKIM settings
-DKIM_SELECTOR = 'ep1'  # Селектор для DKIM записей
+DKIM_SELECTOR = 'vashsender'  # Селектор для DKIM записей
 DKIM_KEYS_DIR = '/etc/opendkim/keys'  # Директория для хранения DKIM ключей
 
 # Password Reset settings

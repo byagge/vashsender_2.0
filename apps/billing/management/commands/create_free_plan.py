@@ -20,7 +20,7 @@ class Command(BaseCommand):
             'plan_type': free_type,
             'subscribers': 200,
             'emails_per_month': 0,  # неограниченно
-            'max_emails_per_day': 50,
+            'max_emails_per_day': 0,  # Неограниченно для бесплатного тарифа
             'price': 0,
             'discount': 0,
             'is_active': True,

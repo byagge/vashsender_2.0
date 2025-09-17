@@ -22,7 +22,7 @@ class DKIMService:
     def __init__(self):
         self.is_windows = platform.system() == 'Windows'
         self.keys_dir = getattr(settings, 'DKIM_KEYS_DIR', '/etc/opendkim/keys')
-        self.selector = getattr(settings, 'DKIM_SELECTOR', 'ep1')
+        self.selector = getattr(settings, 'DKIM_SELECTOR', 'vashsender')
         
     def can_generate_keys(self) -> bool:
         """Проверяет, можно ли генерировать DKIM ключи"""
@@ -80,7 +80,12 @@ class DKIMService:
     
     def generate_keys(self, domain: str) -> Optional[Tuple[str, str]]:
         """
-        Генерирует DKIM ключи для домена
+        Генерирует DKIM ключи для домена согласно инструкции:
+        - mkdir -p /etc/opendkim/keys/{domain}
+        - opendkim-genkey -D /etc/opendkim/keys/{domain} --domain {domain} --selector {selector}
+        - append to /etc/opendkim/KeyTable and SigningTable
+        - chown opendkim:opendkim -R /etc/opendkim/keys/
+        - systemctl restart opendkim
         Возвращает (public_key, private_key_path) или None при ошибке
         """
         if not self.can_generate_keys():
@@ -93,7 +98,21 @@ class DKIMService:
                 result = subprocess.run(['opendkim-genkey', '--version'], 
                                       capture_output=True, text=True, check=False)
                 if result.returncode == 0:
-                    return self.generate_keys_opendkim(domain)
+                    # Пытаемся сгенерировать напрямую в /etc/opendkim/keys/{domain}
+                    generated = self.generate_keys_opendkim(domain)
+                    if generated:
+                        public_key, private_key_path = generated
+                        # Обновляем конфиги OpenDKIM
+                        self.update_opendkim_config(domain, private_key_path)
+                        try:
+                            subprocess.run(['chown', 'opendkim:opendkim', '-R', self.keys_dir], check=True)
+                        except Exception:
+                            pass
+                        try:
+                            subprocess.run(['systemctl', 'restart', 'opendkim'], check=True)
+                        except Exception:
+                            pass
+                        return public_key, private_key_path
             except FileNotFoundError:
                 pass
         
@@ -104,29 +123,28 @@ class DKIMService:
     def generate_keys_opendkim(self, domain: str) -> Optional[Tuple[str, str]]:
         """Генерирует DKIM ключи используя OpenDKIM"""
         try:
-            # Создаем временную директорию для ключей
-            temp_dir = tempfile.mkdtemp(prefix=f'dkim_{domain}_')
+            # Создаем каталог домена
+            domain_dir = os.path.join(self.keys_dir, domain)
+            os.makedirs(domain_dir, exist_ok=True)
             
             # Генерируем ключи
             subprocess.run([
                 'opendkim-genkey',
-                '-D', temp_dir,
-                '-d', domain,
-                '-s', self.selector
+                '-D', domain_dir,
+                '--domain', domain,
+                '--selector', self.selector
             ], check=True)
             
-            # Читаем публичный ключ
-            public_txt = os.path.join(temp_dir, f'{self.selector}.txt')
-            private_path = os.path.join(temp_dir, f'{self.selector}.private')
+            # Пути к файлам ключей
+            public_txt = os.path.join(domain_dir, f'{self.selector}.txt')
+            private_path = os.path.join(domain_dir, f'{self.selector}.private')
             
+            # Читаем публичный ключ из .txt (как есть)
             with open(public_txt, 'r') as f:
                 public_key = f.read().strip()
             
-            # Читаем приватный ключ
-            with open(private_path, 'r') as f:
-                private_key = f.read()
-            
-            return public_key, private_key
+            # Возвращаем путь к приватному ключу (используется Postfix/DKIM lib)
+            return public_key, private_path
             
         except Exception as e:
             print(f"Error generating DKIM keys with OpenDKIM for {domain}: {e}")

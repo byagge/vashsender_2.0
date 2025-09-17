@@ -32,7 +32,7 @@ class UserManager(BaseUserManager):
                     'plan_type': free_plan_type,
                     'subscribers': settings.free_plan_subscribers,
                     'emails_per_month': settings.free_plan_emails,
-                    'max_emails_per_day': settings.free_plan_daily_limit,
+                    'max_emails_per_day': 0,  # Неограниченно для бесплатного тарифа
                     'price': 0,
                     'is_active': True,
                     'sort_order': 1,
@@ -71,9 +71,5 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
 
     def has_exceeded_daily_limit(self):
-        if not self.current_plan:
-            # Если нет плана, используем бесплатные лимиты
-            from apps.billing.models import BillingSettings
-            settings = BillingSettings.get_settings()
-            return self.emails_sent_today >= settings.free_plan_daily_limit
-        return self.emails_sent_today >= self.current_plan.max_emails_per_day
+        # Дневные лимиты отключены: 0 = без ограничений
+        return False

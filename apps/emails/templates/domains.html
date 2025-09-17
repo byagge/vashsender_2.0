@@ -616,16 +616,9 @@
                         <i data-lucide="shield" class="w-5 h-5 text-green-600 mr-2"></i>
                         <h4 class="font-semibold text-green-800">DKIM-запись</h4>
                         </div>
-                        <button
-                            @click="regenerateDkim(selectedDomain.id)"
-                            class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
-                            :disabled="isChecking[selectedDomain.id]"
-                        >
-                            <span x-show="!isChecking[selectedDomain.id]">Перегенерировать</span>
-                            <span x-show="isChecking[selectedDomain.id]">Генерация...</span>
-                        </button>
+                        
                     </div>
-                    <p class="text-sm text-green-700 mb-3">Добавьте эту TXT-запись с селектором «ep1»:</p>
+                    <p class="text-sm text-green-700 mb-3">Добавьте эту TXT-запись с селектором «vashsender»:</p>
                     <div class="bg-white p-3 rounded border">
                         <template x-if="selectedDomain.dkim_dns_record && selectedDomain.dkim_dns_record.trim() !== ''">
                             <div>
@@ -657,15 +650,7 @@
                         </template>
                         <template x-if="!selectedDomain.dkim_dns_record || selectedDomain.dkim_dns_record.trim() === ''">
                             <div class="text-center py-4">
-                                <p class="text-sm text-gray-500 mb-2">DKIM ключи не сгенерированы</p>
-                                <button
-                                    @click="regenerateDkim(selectedDomain.id)"
-                                    class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
-                                    :disabled="isChecking[selectedDomain.id]"
-                                >
-                                    <span x-show="!isChecking[selectedDomain.id]">Сгенерировать DKIM</span>
-                                    <span x-show="isChecking[selectedDomain.id]">Генерация...</span>
-                                </button>
+                                <p class="text-sm text-gray-500 mb-2">DKIM ключи будут сгенерированы автоматически</p>
                             </div>
                         </template>
                     </div>

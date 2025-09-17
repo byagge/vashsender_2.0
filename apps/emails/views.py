@@ -90,7 +90,8 @@ class DomainViewSet(viewsets.ModelViewSet):
         spf_ok = has_spf(domain.domain_name)
         
         # DKIM проверка с использованием утилиты
-        dkim_ok = has_dkim(domain.domain_name, selector='ep1')
+        from django.conf import settings as dj_settings
+        dkim_ok = has_dkim(domain.domain_name, selector=getattr(dj_settings, 'DKIM_SELECTOR', 'vashsender'))
         
         # DMARC проверка с использованием утилиты
         dmarc_ok = has_dmarc(domain.domain_name)

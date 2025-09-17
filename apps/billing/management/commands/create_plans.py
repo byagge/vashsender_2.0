@@ -38,7 +38,7 @@ class Command(BaseCommand):
                 'plan_type': subscribers_type,
                 'subscribers': 1000,
                 'emails_per_month': 5000,
-                'max_emails_per_day': 200,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 299,
                 'sort_order': 2
             },
@@ -47,7 +47,7 @@ class Command(BaseCommand):
                 'plan_type': subscribers_type,
                 'subscribers': 5000,
                 'emails_per_month': 25000,
-                'max_emails_per_day': 1000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 799,
                 'sort_order': 3
             },
@@ -56,7 +56,7 @@ class Command(BaseCommand):
                 'plan_type': subscribers_type,
                 'subscribers': 10000,
                 'emails_per_month': 50000,
-                'max_emails_per_day': 2000,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 1499,
                 'sort_order': 4
             }
@@ -80,7 +80,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'subscribers': 1000,
                 'emails_per_month': 10000,
-                'max_emails_per_day': 500,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 199,
                 'sort_order': 5
             },
@@ -89,7 +89,7 @@ class Command(BaseCommand):
                 'plan_type': letters_type,
                 'subscribers': 5000,
                 'emails_per_month': 50000,
-                'max_emails_per_day': 2500,
+                'max_emails_per_day': 0,  # Неограниченно - можно отправить все письма сразу
                 'price': 499,
                 'sort_order': 6
             }
