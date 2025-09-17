@@ -23,6 +23,7 @@ class DKIMService:
         self.is_windows = platform.system() == 'Windows'
         self.keys_dir = getattr(settings, 'DKIM_KEYS_DIR', '/etc/opendkim/keys')
         self.selector = getattr(settings, 'DKIM_SELECTOR', 'vashsender')
+        self.helper_path = getattr(settings, 'DKIM_HELPER_PATH', '/usr/local/bin/provision_dkim.sh')
         
     def can_generate_keys(self) -> bool:
         """Проверяет, можно ли генерировать DKIM ключи"""
@@ -113,12 +114,39 @@ class DKIMService:
                         except Exception:
                             pass
                         return public_key, private_key_path
+                    # Если прямой доступ невозможен (например, нет прав) — пробуем helper
+                    helper_generated = self.generate_keys_with_helper(domain)
+                    if helper_generated:
+                        return helper_generated
             except FileNotFoundError:
                 pass
         
         # Если OpenDKIM недоступен, используем Python
         print(f"Using Python cryptography for DKIM generation for domain: {domain}")
         return self.generate_keys_python(domain)
+
+    def generate_keys_with_helper(self, domain: str) -> Optional[Tuple[str, str]]:
+        """Пробует вызвать привилегированный helper-скрипт для провижининга DKIM.
+        Ожидается, что скрипт создаст ключи, обновит KeyTable/SigningTable/TrustedHosts и
+        выведет публичный ключ в stdout. Возвращает (public_key, private_key_path)."""
+        if self.is_windows:
+            return None
+        try:
+            # Вызов через sudo, если доступно в sudoers без пароля
+            cmd = ['sudo', self.helper_path, domain, self.selector, self.keys_dir]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"DKIM helper failed for {domain}: {result.stderr.strip()}")
+                return None
+            public_key = result.stdout.strip()
+            private_key_path = os.path.join(self.keys_dir, domain, f"{self.selector}.private")
+            if not os.path.exists(private_key_path):
+                print(f"DKIM helper did not create private key at {private_key_path}")
+                return None
+            return public_key, private_key_path
+        except Exception as e:
+            print(f"Error invoking DKIM helper for {domain}: {e}")
+            return None
     
     def generate_keys_opendkim(self, domain: str) -> Optional[Tuple[str, str]]:
         """Генерирует DKIM ключи используя OpenDKIM"""

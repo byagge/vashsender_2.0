@@ -32,3 +32,19 @@ class CampaignRecipientAdmin(admin.ModelAdmin):
 class SendingSettingsAdmin(admin.ModelAdmin):
     list_display = ('emails_per_minute', 'updated_at')
     fields = ('emails_per_minute',)
+
+    def has_add_permission(self, request):
+        # Запрещаем добавление новой записи, если уже существует хотя бы одна
+        from .models import SendingSettings
+        if SendingSettings.objects.exists():
+            return False
+        return super().has_add_permission(request)
+
+    def changelist_view(self, request, extra_context=None):
+        # Редирект на изменение единственной записи, если она существует
+        from django.shortcuts import redirect
+        from .models import SendingSettings
+        obj = SendingSettings.objects.order_by('-updated_at').first()
+        if obj:
+            return redirect(f"./{obj.id}/change/")
+        return super().changelist_view(request, extra_context=extra_context)

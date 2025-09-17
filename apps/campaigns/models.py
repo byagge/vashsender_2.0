@@ -258,5 +258,8 @@ class SendingSettings(models.Model):
 
     @classmethod
     def get_current_rate(cls) -> int:
-        obj, _ = cls.objects.get_or_create(id=1)
+        # Берём последнюю сохранённую запись; если нет — создаём с id=1
+        obj = cls.objects.order_by('-updated_at').first()
+        if obj is None:
+            obj, _ = cls.objects.get_or_create(id=1)
         return int(obj.emails_per_minute or 0)

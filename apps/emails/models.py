@@ -8,8 +8,8 @@ from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-DKIM_KEYS_DIR = '/etc/opendkim/keys'
-DKIM_SELECTOR = 'default'
+DKIM_KEYS_DIR = getattr(settings, 'DKIM_KEYS_DIR', '/etc/opendkim/keys')
+DKIM_SELECTOR = getattr(settings, 'DKIM_SELECTOR', 'vashsender')
 
 class Domain(models.Model):
     owner = models.ForeignKey(
