@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser
 
 from .models import ContactList, Contact, ImportTask
-from .serializers import ContactListSerializer, ContactSerializer, ContactListListSerializer, ContactListDetailSerializer
+from .serializers import ContactListSerializer, ContactSerializer, ContactListListSerializer, ContactListDetailSerializer, MailerDomainSerializer
 from .utils import parse_emails, classify_email
 from apps.billing.models import Plan
 
@@ -552,4 +552,29 @@ class ListSpaView(LoginRequiredMixin, TemplateView):
 
 class ImportTasksView(LoginRequiredMixin, TemplateView):
     template_name = 'import_tasks.html'
+
+
+class DomainProxyViewSet(viewsets.ModelViewSet):
+    """
+    Проксирует управление доменами для раздела mailer, используя apps.emails.Domain.
+    На create сразу генерирует DKIM и возвращает реальные DNS записи.
+    """
+    serializer_class = MailerDomainSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from apps.emails.models import Domain
+        return Domain.objects.filter(owner=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    @action(detail=True, methods=['post'], url_path='generate-dkim')
+    def generate_dkim(self, request, pk=None):
+        from apps.emails.models import Domain
+        domain = Domain.objects.get(id=pk, owner=request.user)
+        ok = domain.generate_dkim_keys()
+        if ok:
+            return Response({'message': 'DKIM сгенерирован', 'dkim_dns_record': domain.dkim_dns_record})
+        return Response({'error': 'Не удалось сгенерировать DKIM'}, status=status.HTTP_400_BAD_REQUEST)
 

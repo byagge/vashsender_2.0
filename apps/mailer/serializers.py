@@ -3,6 +3,41 @@
 from rest_framework import serializers
 from .models import ContactList, Contact
 
+# Проксирующий сериализатор для доменов из apps.emails
+class MailerDomainSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    domain_name = serializers.CharField()
+    is_verified = serializers.BooleanField(read_only=True)
+    spf_verified = serializers.BooleanField(read_only=True)
+    dkim_verified = serializers.BooleanField(read_only=True)
+    dkim_dns_record = serializers.CharField(read_only=True)
+    dmarc_dns_record = serializers.CharField(read_only=True)
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        owner = getattr(request, 'user', None)
+        from apps.emails.models import Domain
+        domain = Domain.objects.create(owner=owner, domain_name=validated_data['domain_name'])
+        # Генерируем DKIM ключи сразу при создании
+        try:
+            domain.generate_dkim_keys()
+        except Exception:
+            pass
+        return domain
+
+    def to_representation(self, instance):
+        # instance — это apps.emails.models.Domain
+        data = {
+            'id': instance.id,
+            'domain_name': instance.domain_name,
+            'is_verified': instance.is_verified,
+            'spf_verified': instance.spf_verified,
+            'dkim_verified': instance.dkim_verified,
+            'dkim_dns_record': getattr(instance, 'dkim_dns_record', ''),
+            'dmarc_dns_record': getattr(instance, 'dmarc_dns_record', ''),
+        }
+        return data
+
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
