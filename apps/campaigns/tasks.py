@@ -344,6 +344,52 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             }
         )
         
+        # Для небольших рассылок отправляем синхронно в рамках этой задачи,
+        # чтобы не зависеть от очереди 'email'
+        if total_contacts <= 50:
+            print(f"Small campaign optimization: sending {total_contacts} emails synchronously")
+            sent_ok = 0
+            for idx, contact in enumerate(contacts_list, start=1):
+                try:
+                    # Выполняем задачу локально, без постановки в очередь
+                    res = send_single_email.apply(args=[str(campaign_id), int(contact.id)])
+                    if res and isinstance(res.result, dict) and res.result.get('success'):
+                        sent_ok += 1
+                except Exception as e:
+                    print(f"Error sending to contact {contact.id}: {e}")
+                # Обновление прогресса
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total_contacts,
+                        'status': f'Sent {idx}/{total_contacts} synchronously',
+                        'timestamp': time.time()
+                    }
+                )
+            print(f"Synchronous sending completed: {sent_ok}/{total_contacts}")
+            # Завершение статуса кампании
+            try:
+                campaign.refresh_from_db()
+                total_sent = CampaignRecipient.objects.filter(campaign_id=campaign_id, is_sent=True).count()
+                if total_sent > 0:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = timezone.now()
+                else:
+                    campaign.status = Campaign.STATUS_FAILED
+                campaign.celery_task_id = None
+                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
+            except Exception:
+                pass
+            execution_time = time.time() - start_time
+            return {
+                'campaign_id': campaign_id,
+                'total_contacts': total_contacts,
+                'status': 'sent_synchronously',
+                'execution_time': execution_time,
+                'worker': self.request.hostname
+            }
+
         # Разбиваем на батчи (можно отправлять все сразу)
         batch_size = len(contacts_list)
         batches = [contacts_list]
@@ -364,6 +410,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 
                 result = send_email_batch.apply_async(
                     args=[campaign_id, [c.id for c in batch], i + 1, len(batches)],
+                    queue='email',
                     countdown=0,
                     expires=1800,  # 30 минут
                     retry=True,
