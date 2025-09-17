@@ -187,8 +187,19 @@ class CampaignViewSet(viewsets.ModelViewSet):
             
             # Запускаем задачу Celery с дополнительными параметрами
             print("Starting Celery task...")
+            # Условия безопасного пропуска модерации:
+            # - доверенный или персонал
+            # - небольшая рассылка (до 50 получателей)
+            skip_moderation = (
+                getattr(request.user, 'is_trusted_user', False)
+                or getattr(request.user, 'is_staff', False)
+                or recipients_count <= 50
+            )
+
             task = send_campaign.apply_async(
                 args=[campaign.id],
+                kwargs={'skip_moderation': skip_moderation},
+                queue='campaigns',
                 countdown=1,  # Запуск через 1 секунду
                 expires=1800,  # Истекает через 30 минут
                 retry=True,
