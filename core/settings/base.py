@@ -279,9 +279,9 @@ HANDLER403 = 'core.error_handlers.handler403'
 HANDLER400 = 'core.error_handlers.handler400'
 HANDLER401 = 'core.error_handlers.handler401'
 
-# DKIM settings
-DKIM_SELECTOR = 'vashsender'  # Селектор для DKIM записей
-DKIM_KEYS_DIR = '/etc/opendkim/keys'  # Директория для хранения DKIM ключей
+DKIM_SELECTOR = 'vashsender'
+DKIM_KEYS_DIR = '/etc/opendkim/keys'
+DKIM_HELPER_PATH = '/usr/local/bin/provision_dkim.sh'
 
 # Password Reset settings
 PASSWORD_RESET_TIMEOUT = 86400  # 24 часа в секундах
