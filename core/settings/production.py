@@ -14,6 +14,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '146.185.196.123',
+    '146.185.196.52',
 ]
 
 # Надёжные источники для CSRF-проверки
@@ -22,6 +23,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://www.vashsender.ru',
     'https://api.vashsender.ru',
     'https://admin.vashsender.ru',
+    'https://146.185.196.123',
+    'https://146.185.196.52',
 ]
 
 # Безопасные куки (обязательно при HTTPS)

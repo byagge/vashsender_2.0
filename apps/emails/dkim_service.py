@@ -119,9 +119,14 @@ class DKIMService:
                     if helper_generated:
                         return helper_generated
             except FileNotFoundError:
-                pass
+                # У текущего пользователя нет доступа к бинарю opendkim-genkey — пробуем helper
+                if not self.is_windows:
+                    helper_generated = self.generate_keys_with_helper(domain)
+                    if helper_generated:
+                        return helper_generated
         
         # Если OpenDKIM недоступен, используем Python
+        # В качестве последнего шага — Python ключи (они не настраивают OpenDKIM)
         print(f"Using Python cryptography for DKIM generation for domain: {domain}")
         return self.generate_keys_python(domain)
 
