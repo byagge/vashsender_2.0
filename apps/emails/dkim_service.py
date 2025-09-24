@@ -189,6 +189,23 @@ class DKIMService:
             return ""
             
         name = f"{self.selector}._domainkey.{domain}"
-        # public_key уже нормализован как "v=DKIM1; k=rsa; p=..."
-        value = public_key.strip().strip('"')
+        raw = public_key.strip()
+        # Удаляем комментарии после ;
+        if ' ;' in raw:
+            raw = raw.split(' ;', 1)[0]
+        # Если вдруг попалось "name IN TXT ( "..." "p=..." )" — убираем имя/скобки/кавычки и склеиваем
+        cleaned = raw.replace('(', '').replace(')', '')
+        parts = []
+        for token in cleaned.split():
+            token = token.strip().strip('"')
+            if token:
+                parts.append(token)
+        merged = ' '.join(parts)
+        # Найти начало с v=DKIM1
+        idx = merged.find('v=DKIM1')
+        if idx != -1:
+            merged = merged[idx:]
+        # Убедимся, что есть только один p=...
+        # (оставляем как есть — главное, что это чистое значение)
+        value = merged
         return f"{name} IN TXT \"{value}\""

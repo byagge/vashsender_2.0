@@ -152,13 +152,14 @@ def sign_email_with_dkim(msg, domain_name):
             private_key = f.read()
         
         # Подписываем письмо
-        headers = ['From', 'To', 'Subject', 'Date', 'Message-ID']
+        headers = [h.lower() for h in ['From', 'To', 'Subject', 'Date', 'Message-ID']]
         sig = dkim.sign(
             message=msg.as_bytes(),
-            selector=domain.dkim_selector,
-            domain=domain_name,
+            selector=domain.dkim_selector.encode('utf-8'),
+            domain=domain_name.encode('utf-8'),
             privkey=private_key,
-            include_headers=headers
+            include_headers=headers,
+            canonicalize=(b'relaxed', b'relaxed')
         )
         
         # Добавляем подпись в заголовки
