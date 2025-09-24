@@ -1,6 +1,7 @@
 # emails/utils.py
 import dns.resolver
 import re
+from django.conf import settings
 
 def has_spf(domain_name):
     """
@@ -64,12 +65,14 @@ def validate_spf_record(spf_record):
     
     return True
 
-def has_dkim(domain_name, selector='ep1'):
+def has_dkim(domain_name, selector=None):
     """
     Проверяет наличие DKIM записи
     """
     try:
-        # например для ep1._domainkey.domain.com
+        if selector is None:
+            selector = getattr(settings, 'DKIM_SELECTOR', 'vashsender')
+        # например для {selector}._domainkey.domain.com
         name = f'{selector}._domainkey.{domain_name}'
         answers = dns.resolver.resolve(name, 'TXT')
         for r in answers:

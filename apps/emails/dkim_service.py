@@ -3,132 +3,97 @@
 import os
 import platform
 import subprocess
-import tempfile
-import base64
+import shutil
 from django.conf import settings
 from typing import Optional, Tuple
 
-try:
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.hazmat.backends import default_backend
-    CRYPTOGRAPHY_AVAILABLE = True
-except ImportError:
-    CRYPTOGRAPHY_AVAILABLE = False
-
 class DKIMService:
-    """Сервис для генерации и управления DKIM ключами"""
+    """Сервис для генерации и управления DKIM ключами с использованием реальных OpenDKIM ключей"""
     
     def __init__(self):
         self.is_windows = platform.system() == 'Windows'
         self.keys_dir = getattr(settings, 'DKIM_KEYS_DIR', '/etc/opendkim/keys')
         self.selector = getattr(settings, 'DKIM_SELECTOR', 'vashsender')
         self.helper_path = getattr(settings, 'DKIM_HELPER_PATH', '/usr/local/bin/provision_dkim.sh')
-        
-    def can_generate_keys(self) -> bool:
-        """Проверяет, можно ли генерировать DKIM ключи"""
-        # Сначала пробуем OpenDKIM
-        if not self.is_windows:
-            try:
-                result = subprocess.run(['opendkim-genkey', '--version'], 
-                                      capture_output=True, text=True, check=False)
-                if result.returncode == 0:
-                    return True
-            except FileNotFoundError:
-                pass
-        
-        # Если OpenDKIM недоступен, пробуем Python cryptography
-        return CRYPTOGRAPHY_AVAILABLE
+        # Resolve sudo path dynamically (systemd may have restricted PATH)
+        self.sudo_path = shutil.which('sudo') or '/usr/bin/sudo'
     
-    def generate_keys_python(self, domain: str) -> Optional[Tuple[str, str]]:
-        """Генерирует DKIM ключи используя Python cryptography"""
-        if not CRYPTOGRAPHY_AVAILABLE:
-            return None
-            
-        try:
-            # Генерируем RSA ключ
-            private_key = rsa.generate_private_key(
-                public_exponent=65537,
-                key_size=2048,
-                backend=default_backend()
-            )
-            
-            # Получаем публичный ключ
-            public_key = private_key.public_key()
-            
-            # Сериализуем приватный ключ в PEM формате
-            private_pem = private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            ).decode('utf-8')
-            
-            # Сериализуем публичный ключ в DER формате и кодируем в base64
-            public_der = public_key.public_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
-            )
-            public_b64 = base64.b64encode(public_der).decode('utf-8')
-            
-            # Формируем DKIM публичный ключ
-            dkim_public = f"v=DKIM1; k=rsa; p={public_b64}"
-            
-            return dkim_public, private_pem
-            
-        except Exception as e:
-            print(f"Error generating DKIM keys with Python for {domain}: {e}")
-            return None
+    def _domain_dir(self, domain: str) -> str:
+        return os.path.join(self.keys_dir, domain)
+    
+    def _public_txt_path(self, domain: str) -> str:
+        return os.path.join(self._domain_dir(domain), f'{self.selector}.txt')
+    
+    def _private_key_path(self, domain: str) -> str:
+        return os.path.join(self._domain_dir(domain), f'{self.selector}.private')
+    
+    def read_public_key(self, domain: str) -> Optional[str]:
+        """Читает публичный DKIM ключ из файла {selector}.txt, если существует."""
+        public_txt = self._public_txt_path(domain)
+        if os.path.exists(public_txt):
+            try:
+                with open(public_txt, 'r') as f:
+                    content = f.read().strip()
+                # Извлечём строку, начинающуюся с v=DKIM1 (уберём скобки/кавычки)
+                # Файл обычно формата: name IN TXT ( "v=DKIM1; k=rsa; " "p=..." )
+                lines = [line.strip() for line in content.replace('(', '').replace(')', '').split('\n')]
+                merged = ' '.join(part.strip('"') for line in lines for part in line.split() if part)
+                # Найти подстроку начиная с v=DKIM1
+                idx = merged.find('v=DKIM1')
+                if idx != -1:
+                    return merged[idx:]
+                return merged
+            except Exception as e:
+                print(f"Error reading DKIM public key for {domain}: {e}")
+                return None
+        return None
     
     def generate_keys(self, domain: str) -> Optional[Tuple[str, str]]:
         """
-        Генерирует DKIM ключи для домена согласно инструкции:
-        - mkdir -p /etc/opendkim/keys/{domain}
-        - opendkim-genkey -D /etc/opendkim/keys/{domain} --domain {domain} --selector {selector}
-        - append to /etc/opendkim/KeyTable and SigningTable
-        - chown opendkim:opendkim -R /etc/opendkim/keys/
-        - systemctl restart opendkim
-        Возвращает (public_key, private_key_path) или None при ошибке
+        Обеспечивает наличие реальных DKIM ключей для домена под OpenDKIM.
+        1) Если ключи уже есть в {keys_dir}/{domain}, читает и возвращает их
+        2) Пытается сгенерировать через opendkim-genkey (если доступно)
+        3) Если нет прав — вызывает привилегированный helper-скрипт через sudo
+        Никогда не генерирует "искусственные" ключи.
+        Возвращает (public_key_text, private_key_path) или None.
         """
-        if not self.can_generate_keys():
-            print(f"DKIM key generation not available for domain: {domain}")
+        if self.is_windows:
+            print(f"DKIM real key provisioning is not supported on Windows for domain: {domain}")
             return None
-            
-        # Сначала пробуем OpenDKIM
-        if not self.is_windows:
-            try:
-                result = subprocess.run(['opendkim-genkey', '--version'], 
-                                      capture_output=True, text=True, check=False)
-                if result.returncode == 0:
-                    # Пытаемся сгенерировать напрямую в /etc/opendkim/keys/{domain}
-                    generated = self.generate_keys_opendkim(domain)
-                    if generated:
-                        public_key, private_key_path = generated
-                        # Обновляем конфиги OpenDKIM
-                        self.update_opendkim_config(domain, private_key_path)
-                        try:
-                            subprocess.run(['chown', 'opendkim:opendkim', '-R', self.keys_dir], check=True)
-                        except Exception:
-                            pass
-                        try:
-                            subprocess.run(['systemctl', 'restart', 'opendkim'], check=True)
-                        except Exception:
-                            pass
-                        return public_key, private_key_path
-                    # Если прямой доступ невозможен (например, нет прав) — пробуем helper
-                    helper_generated = self.generate_keys_with_helper(domain)
-                    if helper_generated:
-                        return helper_generated
-            except FileNotFoundError:
-                # У текущего пользователя нет доступа к бинарю opendkim-genkey — пробуем helper
-                if not self.is_windows:
-                    helper_generated = self.generate_keys_with_helper(domain)
-                    if helper_generated:
-                        return helper_generated
         
-        # Если OpenDKIM недоступен, используем Python
-        # В качестве последнего шага — Python ключи (они не настраивают OpenDKIM)
-        print(f"Using Python cryptography for DKIM generation for domain: {domain}")
-        return self.generate_keys_python(domain)
+        # 1) Уже существуют?
+        existing_public = self.read_public_key(domain)
+        existing_private = self._private_key_path(domain)
+        if existing_public and os.path.exists(existing_private):
+            return existing_public, existing_private
+        
+        # 2) Пробуем напрямую opendkim-genkey
+        try:
+            result = subprocess.run(['opendkim-genkey', '--version'], capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                generated = self.generate_keys_opendkim(domain)
+                if generated:
+                    public_key, private_key_path = generated
+                    self.update_opendkim_config(domain, private_key_path)
+                    try:
+                        subprocess.run(['chown', 'opendkim:opendkim', '-R', self.keys_dir], check=True)
+                    except Exception:
+                        pass
+                    try:
+                        subprocess.run(['systemctl', 'restart', 'opendkim'], check=True)
+                    except Exception:
+                        pass
+                    return public_key, private_key_path
+        except FileNotFoundError:
+            pass
+        
+        # 3) Пробуем helper через sudo
+        helper_generated = self.generate_keys_with_helper(domain)
+        if helper_generated:
+            return helper_generated
+        
+        print(f"Failed to provision real DKIM keys for domain: {domain}")
+        return None
 
     def generate_keys_with_helper(self, domain: str) -> Optional[Tuple[str, str]]:
         """Пробует вызвать привилегированный helper-скрипт для провижининга DKIM.
@@ -138,7 +103,11 @@ class DKIMService:
             return None
         try:
             # Вызов через sudo, если доступно в sudoers без пароля
-            cmd = ['sudo', self.helper_path, domain, self.selector, self.keys_dir]
+            # Use resolved sudo path; if not available, abort to avoid falling back silently
+            if not self.sudo_path or not os.path.exists(self.sudo_path):
+                print(f"DKIM helper cannot run because 'sudo' is not available on this system")
+                return None
+            cmd = [self.sudo_path, self.helper_path, domain, self.selector, self.keys_dir]
             result = subprocess.run(cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
                 print(f"DKIM helper failed for {domain}: {result.stderr.strip()}")
@@ -174,7 +143,12 @@ class DKIMService:
             
             # Читаем публичный ключ из .txt (как есть)
             with open(public_txt, 'r') as f:
-                public_key = f.read().strip()
+                content = f.read().strip()
+            # Нормализуем к виду: v=DKIM1; k=rsa; p=...
+            lines = [line.strip() for line in content.replace('(', '').replace(')', '').split('\n')]
+            merged = ' '.join(part.strip('"') for line in lines for part in line.split() if part)
+            idx = merged.find('v=DKIM1')
+            public_key = merged[idx:] if idx != -1 else merged
             
             # Возвращаем путь к приватному ключу (используется Postfix/DKIM lib)
             return public_key, private_path
@@ -215,21 +189,6 @@ class DKIMService:
             return ""
             
         name = f"{self.selector}._domainkey.{domain}"
-        
-        # Очищаем ключ от лишних символов
-        key_value = public_key.strip()
-        
-        # Для реальных ключей извлекаем значение
-        if 'p=' in key_value:
-            # Ищем строку, содержащую публичный ключ
-            lines = key_value.split('\n')
-            for line in lines:
-                if 'p=' in line:
-                    value = line.strip().strip('"')
-                    break
-            else:
-                value = key_value.strip()
-        else:
-            value = key_value.strip()
-            
-        return f"{name} IN TXT \"{value}\"" 
+        # public_key уже нормализован как "v=DKIM1; k=rsa; p=..."
+        value = public_key.strip().strip('"')
+        return f"{name} IN TXT \"{value}\""
