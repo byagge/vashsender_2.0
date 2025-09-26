@@ -95,7 +95,8 @@ class RegisterView(View):
             f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
             settings.DEFAULT_FROM_EMAIL,
             [user.email],
-            html_message=html_message
+            html_message=html_message,
+            fail_silently=True
         )
 
         # Входим сразу (активируем после подтверждения почты)
@@ -155,7 +156,8 @@ class ResendEmailView(LoginRequiredMixin, View):
                 f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
                 settings.DEFAULT_FROM_EMAIL,
                 [user.email],
-                html_message=html_message
+                html_message=html_message,
+                fail_silently=True
             )
             messages.success(request, 'Письмо отправлено повторно!')
         except Exception as e:
