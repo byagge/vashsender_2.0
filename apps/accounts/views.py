@@ -91,24 +91,27 @@ class RegisterView(View):
         })
         
         # Отправляем через Celery и общий SMTP пул
+        # Сначала отправляем синхронно через общий SMTP пул (надежно без Celery)
+        from apps.emails.tasks import send_verification_email, send_verification_email_sync
+        subject = 'Подтвердите ваш Email - vashsender'
+        plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
         try:
-            from apps.emails.tasks import send_verification_email, send_verification_email_sync
-            subject = 'Подтвердите ваш Email - vashsender'
-            plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+            send_verification_email_sync(user.email, subject, plain, html_message)
+        except Exception:
+            # Резервный путь — через стандартный Django SMTP
+            send_mail(
+                'Подтвердите ваш Email - vashsender',
+                f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                html_message=html_message,
+                fail_silently=False
+            )
+        # Опционально ставим в очередь повторную отправку для подстраховки
+        try:
             send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
         except Exception:
-            # Резервный путь — синхронно через Django только если Celery недоступен
-            try:
-                send_verification_email_sync(user.email, subject, plain, html_message)
-            except Exception:
-                send_mail(
-                    'Подтвердите ваш Email - vashsender',
-                    f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    html_message=html_message,
-                    fail_silently=False
-                )
+            pass
 
         # Входим сразу (активируем после подтверждения почты)
         login(request, user, backend='apps.accounts.backends.EmailBackend')
@@ -162,23 +165,25 @@ class ResendEmailView(LoginRequiredMixin, View):
                 'domain': request.get_host(),
             })
             
+            from apps.emails.tasks import send_verification_email, send_verification_email_sync
+            subject = 'Подтвердите ваш Email - vashsender'
+            plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
             try:
-                from apps.emails.tasks import send_verification_email, send_verification_email_sync
-                subject = 'Подтвердите ваш Email - vashsender'
-                plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+                send_verification_email_sync(user.email, subject, plain, html_message)
+                messages.success(request, 'Письмо отправлено повторно!')
+            except Exception:
+                send_mail(
+                    'Подтвердите ваш Email - vashsender',
+                    f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    html_message=html_message,
+                    fail_silently=False
+                )
+            try:
                 send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
             except Exception:
-                try:
-                    send_verification_email_sync(user.email, subject, plain, html_message)
-                except Exception:
-                    send_mail(
-                        'Подтвердите ваш Email - vashsender',
-                        f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-                        settings.DEFAULT_FROM_EMAIL,
-                        [user.email],
-                        html_message=html_message,
-                        fail_silently=False
-                    )
+                pass
             messages.success(request, 'Письмо отправлено повторно!')
         except Exception as e:
             messages.error(request, 'Не удалось отправить письмо. Попробуйте позже.')
