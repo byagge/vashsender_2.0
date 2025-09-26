@@ -90,14 +90,22 @@ class RegisterView(View):
             'domain': request.get_host(),
         })
         
-        send_mail(
-            'Подтвердите ваш Email - vashsender',
-            f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-            settings.DEFAULT_FROM_EMAIL,
-            [user.email],
-            html_message=html_message,
-            fail_silently=True
-        )
+        # Отправляем через Celery и общий SMTP пул
+        try:
+            from apps.emails.tasks import send_verification_email
+            subject = 'Подтвердите ваш Email - vashsender'
+            plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+            send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
+        except Exception:
+            # Резервный путь — синхронно через Django только если Celery недоступен
+            send_mail(
+                'Подтвердите ваш Email - vashsender',
+                f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                html_message=html_message,
+                fail_silently=False
+            )
 
         # Входим сразу (активируем после подтверждения почты)
         login(request, user, backend='apps.accounts.backends.EmailBackend')
@@ -151,14 +159,20 @@ class ResendEmailView(LoginRequiredMixin, View):
                 'domain': request.get_host(),
             })
             
-            send_mail(
-                'Подтвердите ваш Email - vashsender',
-                f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                html_message=html_message,
-                fail_silently=True
-            )
+            try:
+                from apps.emails.tasks import send_verification_email
+                subject = 'Подтвердите ваш Email - vashsender'
+                plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+                send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
+            except Exception:
+                send_mail(
+                    'Подтвердите ваш Email - vashsender',
+                    f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    html_message=html_message,
+                    fail_silently=False
+                )
             messages.success(request, 'Письмо отправлено повторно!')
         except Exception as e:
             messages.error(request, 'Не удалось отправить письмо. Попробуйте позже.')
