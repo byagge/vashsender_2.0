@@ -45,18 +45,96 @@ class SMTPConnectionPool:
             if self.connections:
                 return self.connections.pop()
             
-            # Создать новое соединение, привязываем исходящий IP к 146.185.196.52
-            connection = smtplib.SMTP(
-                settings.EMAIL_HOST,
-                settings.EMAIL_PORT,
-                timeout=settings.EMAIL_CONNECTION_TIMEOUT,
-                source_address=("146.185.196.52", 0)  # <-- Привязка исходящего IP (по запросу пользователя)
-            )
+            # Подготовка кандидатов для подключения (failover)
+            primary_host = getattr(settings, 'EMAIL_HOST', 'localhost')
+            fallback_hosts = list(getattr(settings, 'EMAIL_FALLBACK_HOSTS', []))
+            host_candidates = []
+            if primary_host:
+                host_candidates.append(primary_host)
+            host_candidates.extend(h for h in fallback_hosts if h and h not in host_candidates)
+            # Добавляем 127.0.0.1 как запасной, если не равен текущему
+            if '127.0.0.1' not in host_candidates:
+                host_candidates.append('127.0.0.1')
+
+            port = getattr(settings, 'EMAIL_PORT', 25)
+            timeout = getattr(settings, 'EMAIL_CONNECTION_TIMEOUT', 30)
+            use_tls = getattr(settings, 'EMAIL_USE_TLS', False)
+            use_ssl = getattr(settings, 'EMAIL_USE_SSL', False)
+            source_ip = getattr(settings, 'EMAIL_SOURCE_IP', '146.185.196.52')
+
+            last_error = None
+            connection = None
+            for host in host_candidates:
+                # Пытаемся с привязкой исходящего IP
+                for bind_source in [(source_ip, 0), None]:
+                    try:
+                        if use_ssl:
+                            connection = smtplib.SMTP_SSL(host=host, port=port, timeout=timeout)
+                        else:
+                            connection = smtplib.SMTP(host=host, port=port, timeout=timeout, source_address=bind_source) if bind_source else smtplib.SMTP(host=host, port=port, timeout=timeout)
+
+                        # Устанавливаем правильный HELO/EHLO
+                        helo_domain = primary_host if primary_host != 'localhost' else 'vashsender.ru'
+                        try:
+                            connection.helo(helo_domain)
+                            connection.ehlo(helo_domain)
+                        except Exception:
+                            try:
+                                connection.helo('localhost')
+                                connection.ehlo('localhost')
+                            except Exception:
+                                pass
+
+                        if use_tls and not use_ssl:
+                            try:
+                                connection.starttls()
+                                # Повторяем HELO/EHLO после STARTTLS
+                                try:
+                                    connection.helo(helo_domain)
+                                    connection.ehlo(helo_domain)
+                                except Exception:
+                                    try:
+                                        connection.helo('localhost')
+                                        connection.ehlo('localhost')
+                                    except Exception:
+                                        pass
+                            except Exception as e:
+                                last_error = e
+                                try:
+                                    connection.quit()
+                                except Exception:
+                                    pass
+                                connection = None
+                                continue
+
+                        if getattr(settings, 'EMAIL_HOST_USER', '') and getattr(settings, 'EMAIL_HOST_PASSWORD', ''):
+                            connection.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+
+                        # Успех
+                        last_error = None
+                        break
+                    except Exception as e:
+                        last_error = e
+                        # Закрываем, если частично инициализировался
+                        try:
+                            if connection:
+                                connection.quit()
+                        except Exception:
+                            pass
+                        connection = None
+                        continue
+                if connection:
+                    break
+
+            if not connection:
+                # Не удалось установить соединение ни с одним хостом
+                raise last_error or ConnectionError('Failed to connect to any SMTP host')
             
             # Устанавливаем правильный HELO для улучшения доставляемости
             try:
                 # Используем реальный домен вместо localhost
-                helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
+                helo_domain = getattr(settings, 'EMAIL_HOST', 'localhost')
+                helo_domain = helo_domain if helo_domain != 'localhost' else 'vashsender.ru'
                 connection.helo(helo_domain)
                 print(f"SMTP HELO set to: {helo_domain}")
                 
