@@ -213,14 +213,19 @@ def is_reserved_domain(domain: str) -> bool:
 
 def is_disposable_domain(domain: str) -> bool:
     """
-    Проверка на disposable домены
+    Проверка на disposable домены.
+    Если домен в allowlist — считаем НЕ disposable.
     """
     try:
+        # Если в allowlist — не считаем disposable (гарантированный проход)
+        if is_allowlist_domain(domain):
+            return False
+
         disposable_domains = load_disposable_domains()
-        result = domain.lower() in disposable_domains
-        return result
-    except Exception as e:
+        return domain.lower() in disposable_domains
+    except Exception:
         return False
+
 
 def is_important_domain(domain: str) -> bool:
     """
@@ -319,7 +324,8 @@ def check_smtp_connection(email: str) -> dict:
 
 def validate_email_production(email: str) -> dict:
     """
-    Продакшен-валидация: быстрая + точная с проверкой существования email
+    Продакшен-валидация: быстрая + точная с проверкой существования email.
+    Если домен в allowlist — сразу считаем валидным (very_high confidence).
     """
     result = {
         'email': email,
@@ -329,29 +335,36 @@ def validate_email_production(email: str) -> dict:
         'errors': [],
         'warnings': []
     }
-    
+
     # УРОВЕНЬ 1: Быстрые проверки (0.1 сек)
     if not is_syntax_valid(email):
         result['errors'].append('Неверный синтаксис email адреса')
         return result
-    
+
     try:
         domain = email.split('@', 1)[1].lower()
     except (ValueError, IndexError):
         result['errors'].append('Не удалось извлечь домен')
         return result
-    
+
+    # Если домен в allowlist — сразу валидный (обходим дальнейшие проверки)
+    if is_allowlist_domain(domain):
+        result['is_valid'] = True
+        result['status'] = Contact.VALID
+        result['confidence'] = 'very_high'
+        return result
+
     if is_reserved_domain(domain):
         result['errors'].append('Зарезервированный домен')
         return result
-    
+
     # Проверка на disposable домены (но не для allowlist доменов)
     if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         result['status'] = Contact.BLACKLIST
         result['confidence'] = 'high'
         result['warnings'].append('Временный email домен')
         return result
-    
+
     # УРОВЕНЬ 2: DNS проверки (0.5 сек) - с обработкой ошибок
     try:
         if not has_mx_record(domain):
@@ -360,9 +373,8 @@ def validate_email_production(email: str) -> dict:
     except Exception as e:
         result['errors'].append(f'Ошибка проверки DNS: {str(e)}')
         return result
-    
+
     # УРОВЕНЬ 3: SMTP проверка существования email (2-5 сек)
-    # Проверяем ВСЕ домены, а не только важные
     try:
         smtp_result = check_smtp_connection(email)
         if not smtp_result['valid']:
@@ -373,42 +385,42 @@ def validate_email_production(email: str) -> dict:
         # Если SMTP проверка не удалась, считаем email валидным на основе DNS
         result['warnings'].append(f'SMTP проверка пропущена: {str(e)}')
         result['confidence'] = 'medium'
-    
+
     result['is_valid'] = True
     result['status'] = Contact.VALID
     return result
 
 def classify_email(email: str) -> str:
     """
-    Глубокая классификация email адресов с проверкой существования:
-    1) Синтаксис → INVALID
-    2) Зарезервированные домены → INVALID  
-    3) Временные/дроп-домены → BLACKLIST
-    4) Нет MX записей → INVALID (MX обязательны для email)
-    5) SMTP проверка существования → VALID/INVALID
+    Глубокая классификация email адресов с проверкой существования.
+    Если домен в allowlist — сразу VALID (обходим blacklist / disposable).
     """
     # 1. Синтаксическая проверка
     if not is_syntax_valid(email):
         return Contact.INVALID
-    
+
     # 2. Извлечение домена
     try:
         domain = email.split('@', 1)[1].lower()
     except (ValueError, IndexError):
         return Contact.INVALID
-    
+
+    # 2.1 Allowlist: немедленный проход
+    if is_allowlist_domain(domain):
+        return Contact.VALID
+
     # 3. Проверка на зарезервированные домены
     if is_reserved_domain(domain):
         return Contact.INVALID
-    
-    # 4. Проверка на disposable домены (но не для allowlist доменов)
+
+    # 4. Проверка на disposable домены (но не для allowlist доменов) — теперь allowlist уже обработан
     if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         return Contact.BLACKLIST
-    
+
     # 5. Проверка MX записей (обязательны для email)
     if not has_mx_record(domain):
         return Contact.INVALID
-    
+
     # 6. SMTP проверка существования email
     try:
         smtp_result = check_smtp_connection(email)
@@ -422,7 +434,8 @@ def classify_email(email: str) -> str:
 
 def validate_email_strict(email: str) -> dict:
     """
-    Расширенная валидация с детальной информацией
+    Расширенная валидация с детальной информацией.
+    Домены из allowlist проходят сразу.
     """
     result = {
         'email': email,
@@ -431,68 +444,80 @@ def validate_email_strict(email: str) -> dict:
         'errors': [],
         'warnings': []
     }
-    
+
     # Синтаксическая проверка
     if not is_syntax_valid(email):
         result['errors'].append('Неверный синтаксис email адреса')
         return result
-    
+
     try:
         domain = email.split('@', 1)[1].lower()
     except (ValueError, IndexError):
         result['errors'].append('Не удалось извлечь домен')
         return result
-    
+
+    # Allowlist: сразу валидный
+    if is_allowlist_domain(domain):
+        result['is_valid'] = True
+        result['status'] = Contact.VALID
+        return result
+
     # Проверка зарезервированных доменов
     if is_reserved_domain(domain):
         result['errors'].append('Зарезервированный домен')
         return result
-    
+
     # Проверка disposable доменов (но не для allowlist доменов)
     if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         result['status'] = Contact.BLACKLIST
         result['warnings'].append('Временный email домен')
         return result
-    
+
     # Проверка MX записей (обязательны для email)
     if not has_mx_record(domain):
         result['errors'].append('Домен не имеет MX записей (не может принимать почту)')
         return result
-    
+
     # Дополнительная проверка A записей (для информации)
     if not has_a_record(domain):
         result['warnings'].append('Домен не имеет A записей (IP адресов)')
-    
+
     result['is_valid'] = True
     result['status'] = Contact.VALID
     return result
 
 def validate_email_fast(email: str) -> dict:
     """
-    Быстрая валидация email для импорта - только базовые проверки без DNS для большинства доменов
+    Быстрая валидация email для импорта - только базовые проверки без DNS для большинства доменов.
+    Если домен в allowlist — сразу валидный.
     """
     if not email or not isinstance(email, str):
         return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Empty or invalid input'}
-    
+
     email = email.lower().strip()
-    
+
     # Базовая проверка синтаксиса
     if not is_syntax_valid(email):
         return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Invalid syntax'}
-    
+
     try:
         local_part, domain = email.split('@', 1)
+        domain = domain.lower()
     except ValueError:
         return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Invalid format'}
-    
+
+    # Allowlist: сразу валидный
+    if is_allowlist_domain(domain):
+        return {'is_valid': True, 'status': Contact.VALID, 'reason': 'Allowlisted domain'}
+
     # Проверка зарезервированных доменов
     if is_reserved_domain(domain):
         return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Reserved domain'}
-    
+
     # Проверка disposable доменов (но не для allowlist доменов)
     if is_disposable_domain(domain) and not is_allowlist_domain(domain):
         return {'is_valid': False, 'status': Contact.BLACKLIST, 'reason': 'Disposable domain'}
-    
+
     # Проверяем только важные домены (основные почтовые провайдеры)
     if domain in IMPORTANT_DOMAINS:
         # Для важных доменов делаем быструю проверку MX
@@ -503,5 +528,5 @@ def validate_email_fast(email: str) -> dict:
         # и считаем валидными (DNS проверка будет позже при отправке)
         if len(domain) < 3 or '.' not in domain:
             return {'is_valid': False, 'status': Contact.INVALID, 'reason': 'Invalid domain structure'}
-    
+
     return {'is_valid': True, 'status': Contact.VALID, 'reason': 'Valid email'}
