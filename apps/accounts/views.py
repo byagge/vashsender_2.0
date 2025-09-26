@@ -99,14 +99,18 @@ class RegisterView(View):
             send_verification_email_sync(user.email, subject, plain, html_message)
         except Exception:
             # Резервный путь — через стандартный Django SMTP
-            send_mail(
-                'Подтвердите ваш Email - vashsender',
-                f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                html_message=html_message,
-                fail_silently=False
-            )
+            try:
+                send_mail(
+                    'Подтвердите ваш Email - vashsender',
+                    f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    html_message=html_message,
+                    fail_silently=False
+                )
+            except Exception:
+                # Не валим 500 при недоступном SMTP — продолжаем и покажем уведомление
+                messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
         # Опционально ставим в очередь повторную отправку для подстраховки
         try:
             send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
@@ -172,14 +176,17 @@ class ResendEmailView(LoginRequiredMixin, View):
                 send_verification_email_sync(user.email, subject, plain, html_message)
                 messages.success(request, 'Письмо отправлено повторно!')
             except Exception:
-                send_mail(
-                    'Подтвердите ваш Email - vashsender',
-                    f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    html_message=html_message,
-                    fail_silently=False
-                )
+                try:
+                    send_mail(
+                        'Подтвердите ваш Email - vashsender',
+                        f'Чтобы активировать аккаунт, перейдите по ссылке: {link}',
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+                except Exception:
+                    messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
             try:
                 send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
             except Exception:
