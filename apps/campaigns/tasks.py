@@ -229,14 +229,26 @@ def sign_email_with_dkim(msg, domain_name):
             print(f"Domain {domain_name} not found in database, skipping DKIM signing")
             return msg
         
-        # Проверяем наличие приватного ключа
-        if not domain.private_key_path or not os.path.exists(domain.private_key_path):
+        # Получаем приватный ключ: сначала по сохраненному пути, иначе пробуем стандартный путь из DKIM_KEYS_DIR
+        private_key = None
+        if domain.private_key_path and os.path.exists(domain.private_key_path):
+            with open(domain.private_key_path, 'rb') as f:
+                private_key = f.read()
+        else:
+            from django.conf import settings as dj_settings
+            keys_dir = getattr(dj_settings, 'DKIM_KEYS_DIR', '/etc/opendkim/keys')
+            selector = domain.dkim_selector
+            candidate_path = os.path.join(keys_dir, domain_name, f"{selector}.private")
+            if os.path.exists(candidate_path):
+                try:
+                    with open(candidate_path, 'rb') as f:
+                        private_key = f.read()
+                    print(f"Loaded DKIM private key from fallback path: {candidate_path}")
+                except Exception as e:
+                    print(f"Failed to read fallback DKIM key {candidate_path}: {e}")
+        if not private_key:
             print(f"Private key not found for domain {domain_name}, skipping DKIM signing")
             return msg
-        
-        # Читаем приватный ключ
-        with open(domain.private_key_path, 'rb') as f:
-            private_key = f.read()
         
         # Подписываем письмо
         headers = [h.lower() for h in ['From', 'To', 'Subject', 'Date', 'Message-ID']]
