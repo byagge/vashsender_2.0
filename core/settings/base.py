@@ -283,6 +283,10 @@ DKIM_SELECTOR = 'vashsender'
 DKIM_KEYS_DIR = '/etc/opendkim/keys'
 DKIM_HELPER_PATH = '/usr/local/bin/provision_dkim.sh'
 
+# When True, messages are expected to be signed by OpenDKIM milter in the MTA path
+# and in-app DKIM (dkimpy) signing is disabled.
+EMAIL_USE_OPENDKIM = True
+
 # Password Reset settings
 PASSWORD_RESET_TIMEOUT = 86400  # 24 часа в секундах
 

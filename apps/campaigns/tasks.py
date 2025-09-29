@@ -207,6 +207,15 @@ def sign_email_with_dkim(msg, domain_name):
     """
     Подписывает письмо DKIM подписью
     """
+    # If configured to use OpenDKIM milter via local MTA, skip in-app signing
+    try:
+        from django.conf import settings as dj_settings
+        if getattr(dj_settings, 'EMAIL_USE_OPENDKIM', False):
+            print("OpenDKIM mode enabled, skipping in-app DKIM signing")
+            return msg
+    except Exception:
+        pass
+
     if not DKIM_AVAILABLE:
         print("DKIM library not available, skipping DKIM signing")
         return msg

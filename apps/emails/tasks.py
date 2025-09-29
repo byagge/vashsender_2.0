@@ -35,7 +35,7 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
         html_part = MIMEText(html, 'html', 'utf-8')
         msg.attach(html_part)
 
-    # DKIM sign
+    # DKIM: if OpenDKIM mode is enabled, signing will happen in MTA; otherwise call in-app
     domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
     msg = sign_email_with_dkim(msg, domain_name)
     return msg
