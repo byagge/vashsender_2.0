@@ -261,8 +261,11 @@ def sign_email_with_dkim(msg, domain_name):
             canonicalize=(b'relaxed', b'relaxed')
         )
         
-        # Добавляем подпись в заголовки
-        msg['DKIM-Signature'] = sig[len('DKIM-Signature: '):]
+        # Добавляем подпись в заголовки (bytes -> str)
+        signature_value = sig[len('DKIM-Signature: '):]
+        if isinstance(signature_value, bytes):
+            signature_value = signature_value.decode('ascii')
+        msg['DKIM-Signature'] = signature_value
         print(f"DKIM signature added for domain {domain_name}")
         
     except Exception as e:
@@ -1086,7 +1089,8 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"Email sent successfully to {contact.email}")
         
         # Создаем запись получателя и tracking с транзакцией
-        from django.db import transaction
+        # transaction already imported at module level
+        # transaction already imported at module level
         with transaction.atomic():
             # Создаем CampaignRecipient
             recipient, created = CampaignRecipient.objects.get_or_create(
