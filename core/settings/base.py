@@ -285,7 +285,7 @@ DKIM_HELPER_PATH = '/usr/local/bin/provision_dkim.sh'
 
 # When True, messages are expected to be signed by OpenDKIM milter in the MTA path.
 # Set to False to sign in-app using keys from apps/emails (dkimpy).
-EMAIL_USE_OPENDKIM = False
+EMAIL_USE_OPENDKIM = True
 
 # Password Reset settings
 PASSWORD_RESET_TIMEOUT = 86400  # 24 часа в секундах
