@@ -20,7 +20,14 @@
       document.addEventListener('DOMContentLoaded', () => {
         lucide.createIcons();
       });
-    
+      // Глобальные ловушки ошибок, чтобы видеть детали в консоли
+      window.addEventListener('error', (event) => {
+        console.error('[Global Error]', event.error || event.message, event);
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        console.error('[Unhandled Promise Rejection]', event.reason);
+      });
+
       // Константы API
       const API_DOMAINS = '/emails/api/domains/';
       const API_EMAILS  = '/emails/api/emails/';
@@ -63,12 +70,58 @@
             await this.loadDomains();
             await this.loadEmails();
           },
+
+          // ---- ВСПОМОГАТЕЛЬНЫЕ: детализированные ошибки ----
+          describeHttpError(status) {
+            if (status === 0) return 'Нет ответа от сервера. Проверьте сеть.';
+            if (status === 400) return 'Некорректный запрос (400). Проверьте введённые данные.';
+            if (status === 401) return 'Требуется авторизация (401). Перезайдите в систему.';
+            if (status === 403) return 'Доступ запрещён (403). Недостаточно прав или CSRF.';
+            if (status === 404) return 'Ресурс не найден (404).';
+            if (status === 409) return 'Конфликт (409). Возможно, такой объект уже существует.';
+            if (status === 422) return 'Невалидные данные (422).';
+            if (status === 429) return 'Слишком много запросов (429). Подождите немного.';
+            if (status >= 500 && status <= 599) return `Внутренняя ошибка сервера (${status}).`;
+            return `Неизвестная ошибка (${status}).`;
+          },
+
+          async readErrorBody(res) {
+            try {
+              const text = await res.text();
+              try { return { text, json: JSON.parse(text) }; }
+              catch { return { text, json: null }; }
+            } catch (readErr) {
+              console.error('[readErrorBody] Failed to read body', readErr);
+              return { text: '', json: null };
+            }
+          },
+
+          logFetchError(action, res, body, extra = undefined) {
+            try {
+              console.error(
+                `[${action}] HTTP ${res.status} ${res.statusText}`,
+                {
+                  url: res.url,
+                  bodyText: body?.text,
+                  bodyJson: body?.json,
+                  extra
+                }
+              );
+            } catch (e) {
+              console.error(`[${action}] Failed to log error`, e);
+            }
+          },
     
           // --- DOMAINS ---
           async loadDomains() {
             try {
               const res = await fetch(API_DOMAINS, { credentials: 'same-origin' });
-              if (!res.ok) throw new Error('Не удалось загрузить домены');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Загрузка доменов', res, body);
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               const data = await res.json();
               this.domains = data.map(d => ({
                 id: d.id,
@@ -84,23 +137,7 @@
               }));
               this.domains.forEach(d => this.isChecking[d.id] = false);
             } catch (e) {
-              this.showNotification(e.message, 'error');
-            }
-          },
-    
-          async resendConfirmation(email) {
-            try {
-              const res = await fetch(`${API_BASE}emails/${email.id}/resend/`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                  'X-CSRFToken': getCSRFToken(),
-                }
-              });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.detail || 'Ошибка при повторной отправке');
-              this.showNotification(data.detail, 'success');
-            } catch (e) {
+              console.error('[Загрузка доменов] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },
@@ -118,8 +155,10 @@
                 body: JSON.stringify({ domain_name: this.newDomain.trim() })
               });
               if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Ошибка при создании домена');
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Создание домена', res, body, { submitted: this.newDomain.trim() });
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
               }
               const d = await res.json();
               this.newDomain = '';
@@ -129,6 +168,7 @@
               await this.loadDomains();
               this.activeSection = 'domains';
             } catch (e) {
+              console.error('[Создание домена] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },
@@ -140,10 +180,16 @@
                 credentials: 'same-origin',
                 headers: { 'X-CSRFToken': getCSRFToken() }
               });
-              if (!res.ok) throw new Error('Не удалось удалить домен');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Удаление домена', res, body, { id });
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               this.showNotification('Домен удалён');
               await this.loadDomains();
             } catch (e) {
+              console.error('[Удаление домена] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },
@@ -162,7 +208,12 @@
                 credentials: 'same-origin',
                 headers: { 'X-CSRFToken': getCSRFToken() }
               });
-              if (!res.ok) throw new Error('Ошибка проверки DNS');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Проверка DNS', res, body, { id });
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               const upd = await res.json();
               this.showNotification('DNS проверен');
               const idx = this.domains.findIndex(d => d.id === id);
@@ -174,6 +225,7 @@
                 });
               }
             } catch (e) {
+              console.error('[Проверка DNS] Exception', e);
               this.showNotification(e.message, 'error');
             } finally {
               this.isChecking[id] = false;
@@ -188,12 +240,18 @@
                 credentials: 'same-origin',
                 headers: { 'X-CSRFToken': getCSRFToken() }
               });
-              if (!res.ok) throw new Error('Ошибка перегенерации DKIM');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Перегенерация DKIM', res, body, { id });
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               const result = await res.json();
               this.showNotification('DKIM ключи перегенерированы');
               // Обновляем данные домена
               await this.loadDomains();
             } catch (e) {
+              console.error('[Перегенерация DKIM] Exception', e);
               this.showNotification(e.message, 'error');
             } finally {
               this.isChecking[id] = false;
@@ -204,18 +262,23 @@
           async loadEmails() {
             try {
               const res = await fetch(API_EMAILS, { credentials: 'same-origin' });
-              if (!res.ok) throw new Error('Не удалось загрузить адреса отправителей');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Загрузка отправителей', res, body);
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               const data = await res.json();
-              console.log('Emails API response:', data); // Debug log
+              console.log('Emails API response:', data);
               this.senderEmails = data.map(e => ({
                 id: e.id,
                 email: e.email,
                 domain: e.domain_name || '',
                 verified: e.is_verified || false
               }));
-              console.log('Mapped sender emails:', this.senderEmails); // Debug log
+              console.log('Mapped sender emails:', this.senderEmails);
             } catch (e) {
-              console.error('Error loading emails:', e); // Debug log
+              console.error('[Загрузка отправителей] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },
@@ -240,19 +303,41 @@
                   email: fullEmail
                 })
               });
-              
-              const data = await res.json();
+
               if (!res.ok) {
-                throw new Error(data.detail || data.message || 'Ошибка при создании почты');
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Создание отправителя', res, body, { email: fullEmail });
+                const rawText = (body?.text || '').toLowerCase();
+                const looksLikeMailSendFailure =
+                  res.status >= 500 ||
+                  rawText.includes('connectionrefusederror') ||
+                  rawText.includes('connection refused') ||
+                  rawText.includes('smtp') ||
+                  rawText.includes('email') && rawText.includes('failed');
+
+                if (looksLikeMailSendFailure) {
+                  // Сервер вернул 5xx / отказ соединения при отправке письма.
+                  // Закрываем модалку, обновляем список и показываем понятное уведомление.
+                  this.showAddEmailModal = false;
+                  this.newEmailLocal = '';
+                  this.newEmailDomain = '';
+                  await this.loadEmails();
+                  this.showNotification('Не удалось отправить письмо подтверждения. Адрес будет в статусе ожидания.', 'error');
+                  return;
+                }
+
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
               }
-              
+
+              const data = await res.json();
               this.newEmailLocal = '';
               this.newEmailDomain = '';
               this.showAddEmailModal = false;
               this.showNotification('Адрес отправителя добавлен, проверьте свой ящик');
               await this.loadEmails();
             } catch (e) {
-              console.error('Error adding email:', e); // Debug log
+              console.error('[Создание отправителя] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },
@@ -264,10 +349,16 @@
                 credentials: 'same-origin',
                 headers: { 'X-CSRFToken': getCSRFToken() }
               });
-              if (!res.ok) throw new Error('Не удалось удалить почту');
+              if (!res.ok) {
+                const body = await this.readErrorBody(res);
+                this.logFetchError('Удаление отправителя', res, body, { id });
+                const msg = body?.json?.detail || body?.json?.message || this.describeHttpError(res.status);
+                throw new Error(msg);
+              }
               this.showNotification('Адрес отправителя удален');
               await this.loadEmails();
             } catch (e) {
+              console.error('[Удаление отправителя] Exception', e);
               this.showNotification(e.message, 'error');
             }
           },

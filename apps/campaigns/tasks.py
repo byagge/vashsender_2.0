@@ -1067,7 +1067,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         # Добавляем блок отписки в HTML низ письма
         unsubscribe_block = f"""
         <div style=\"margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280;\">
-            Это письмо отправлено сервисом VashSender. 
             Если вы больше не хотите получать подобные письма, 
             <a href=\"{unsubscribe_url}\" style=\"color:#2563eb;\">отпишитесь по ссылке</a>.
         </div>

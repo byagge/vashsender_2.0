@@ -175,6 +175,15 @@
                   </div>
                 </div>
                 <div class="flex space-x-3">
+                  <div class="relative">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+                    <input
+                      type="text"
+                      placeholder="Поиск контактов..."
+                      x-model="contactSearchTerm"
+                      class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                   <button @click="showImportModal=true"
                           class="flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
                     <i data-lucide="upload" class="w-4 h-4 mr-2"></i> Импортировать
@@ -254,23 +263,55 @@
               <!-- PAGINATION -->
               <div class="flex items-center justify-between mt-6">
                 <p class="text-sm text-gray-600">
-                  Показаны <span x-text="startIndex()+1"></span> с <span x-text="endIndex()"></span> по <span x-text="count || contacts.length"></span> контактов
+                  Показаны <span x-text="startIndex()+1"></span> – <span x-text="endIndex()"></span> из <span x-text="count || contacts.length"></span> контактов
                 </p>
-                <div class="flex space-x-2">
-                  <button @click="prevPage()" :disabled="page===1"
-                          class="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
-                      Предыдущий
+                <div class="flex items-center gap-2">
+                  <button
+                    @click="goToPage(page - 1)"
+                    :disabled="page === 1"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent"
+                  >
+                    Назад
                   </button>
-                  <template x-for="p in totalPages()" :key="p">
-                    <button @click="page = p"
-                            class="px-3 py-1 border rounded text-sm"
-                            :class="page===p? 'bg-blue-600 text-white border-blue-600':'border-gray-300 hover:bg-gray-50'">
-                      <span x-text="p"></span>
-                    </button>
+
+                  <template x-if="page > 3">
+                    <button
+                      @click="goToPage(1)"
+                      class="px-3 py-1.5 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300"
+                      x-text="1"
+                    ></button>
                   </template>
-                  <button @click="nextPage()" :disabled="page===totalPages()"
-                          class="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-...">
-                      Следующий
+
+                  <template x-if="page > 4">
+                    <span class="px-2 text-gray-500">...</span>
+                  </template>
+
+                  <template x-for="p in getVisiblePages()" :key="p">
+                    <button
+                      @click="goToPage(p)"
+                      :class="page === p ? 'px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white border border-blue-600' : 'px-3 py-1.5 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300'"
+                      x-text="p"
+                    ></button>
+                  </template>
+
+                  <template x-if="page < totalPages() - 3">
+                    <span class="px-2 text-gray-500">...</span>
+                  </template>
+
+                  <template x-if="page < totalPages() - 2">
+                    <button
+                      @click="goToPage(totalPages())"
+                      class="px-3 py-1.5 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-gray-300"
+                      x-text="totalPages()"
+                    ></button>
+                  </template>
+
+                  <button
+                    @click="goToPage(page + 1)"
+                    :disabled="page === totalPages()"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent"
+                  >
+                    Вперед
                   </button>
                 </div>
               </div>
@@ -594,6 +635,8 @@
         isExporting: false,
         count: 0,
         num_pages: 1,
+        contactSearchTerm: '',
+        contactSearchDebounce: null,
   
         async init() {
             this.initLucide();
@@ -602,6 +645,7 @@
 
             this.$watch('view', () => setTimeout(() => this.refreshIcons(), 0));
             this.$watch('page', () => setTimeout(() => this.refreshIcons(), 0));
+            this.$watch('contactSearchTerm', () => this.debouncedContactsReload());
           },
 
         async fetchLists() {
@@ -670,7 +714,13 @@
           const fresh = this.lists.find(l => l.id === list.id);
           if (fresh) this.selectedList = { ...fresh };
 
-          const url = `${API_BASE}${list.id}/contacts/?page=${this.page}&page_size=${this.contactsPerPage}`;
+          const params = new URLSearchParams();
+          params.set('page', this.page);
+          params.set('page_size', this.contactsPerPage);
+          if ((this.contactSearchTerm || '').trim() !== '') {
+            params.set('search', this.contactSearchTerm.trim());
+          }
+          const url = `${API_BASE}${list.id}/contacts/?${params.toString()}`;
           const res = await fetch(url, { credentials: 'same-origin' });
           const data = await res.json();
           this.contacts = data.results || [];
@@ -725,6 +775,36 @@
         totalPages() { return this.num_pages || 1; },
         prevPage() { if (this.page > 1) this.viewList(this.selectedList, this.page - 1); },
         nextPage() { if (this.page < this.totalPages()) this.viewList(this.selectedList, this.page + 1); },
+        getVisiblePages() {
+          const total = this.totalPages();
+          const current = this.page;
+          const pages = [];
+          let start = Math.max(1, current - 2);
+          let end = Math.min(total, current + 2);
+          if (current <= 3) {
+            end = Math.min(total, 5);
+          }
+          if (current >= total - 2) {
+            start = Math.max(1, total - 4);
+          }
+          for (let i = start; i <= end; i++) pages.push(i);
+          return pages;
+        },
+        async goToPage(p) {
+          if (!this.selectedList) return;
+          if (p < 1 || p > this.totalPages() || p === this.page) return;
+          await this.viewList(this.selectedList, p);
+        },
+        debouncedContactsReload() {
+          if (this.contactSearchDebounce) {
+            clearTimeout(this.contactSearchDebounce);
+          }
+          this.contactSearchDebounce = setTimeout(() => {
+            if (this.selectedList) {
+              this.viewList(this.selectedList, 1);
+            }
+          }, 350);
+        },
         startIndex() { return (this.page - 1) * this.contactsPerPage; },
         endIndex() { return Math.min(this.page * this.contactsPerPage, this.count || this.contacts.length); },
   

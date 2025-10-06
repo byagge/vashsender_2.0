@@ -106,12 +106,12 @@
 
           <!-- Campaigns List -->
           <div class="space-y-4">
-            <template x-for="campaign in paginatedCampaigns()" :key="campaign.id">
+            <template x-for="campaign in filteredCampaigns()" :key="campaign.id">
               <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div class="p-6">
                   <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-4">
-                      <h3 class="text-lg font-semibold text-gray-900" x-text="campaign.name"></h3>
+                      <h3 class="text-lg font-semibold text-gray-900" x-text="campaign.name || 'Без названия'"></h3>
                       <span :class="'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ' + getStatusColor(campaign.status)">
                         <span x-show="campaign.status === 'sent'"><i data-lucide="check-circle" class="w-4 h-4"></i></span>
                         <span x-show="campaign.status === 'draft'"><i data-lucide="file-text" class="w-4 h-4"></i></span>
@@ -147,15 +147,15 @@
                     <div>
                       <p class="text-sm text-gray-500 mb-1">Отправитель</p>
                       <p class="text-sm font-medium text-gray-900">
-                        <template x-if="campaign.sender_name || campaign.sender_email">
+                        <template x-if="campaign.sender_name || campaign.sender_email || campaign.sender_email_detail">
                           <span>
                             <span x-text="campaign.sender_name"></span>
-                            <template x-if="campaign.sender_email">
-                              <span> (<span x-text="campaign.sender_email.email"></span>)</span>
+                            <template x-if="campaign.sender_email_detail?.email || campaign.sender_email?.email">
+                              <span> (<span x-text="campaign.sender_email_detail?.email || campaign.sender_email?.email"></span>)</span>
                             </template>
                           </span>
                         </template>
-                        <template x-if="!campaign.sender_name && !campaign.sender_email">
+                        <template x-if="!campaign.sender_name && !campaign.sender_email && !campaign.sender_email_detail">
                           <span class="text-gray-500">Не указан</span>
                         </template>
                       </p>
@@ -277,7 +277,7 @@
           </div>
 
           <!-- Pagination -->
-          <div x-show="totalPages() > 1" class="flex items-center justify-between mt-8">
+          <div x-show="searchTerm === '' && statusFilter === 'All' && senderFilter === 'All' && totalPages() > 1" class="flex items-center justify-between mt-8">
             <p class="text-sm text-gray-700">
               Показано <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> - 
               <span x-text="Math.min(currentPage * itemsPerPage, count)"></span> из 
@@ -386,7 +386,7 @@
     <div x-show="showStatsModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
         <div class="flex justify-between items-center mb-6">
-          <h3 class="text-lg font-semibold" x-text="'Статистика: ' + (selectedCampaign?.name || '')"></h3>
+          <h3 class="text-lg font-semibold" x-text="'Статистика: ' + (selectedCampaign?.name || '') + ((selectedCampaign?.sender_email_detail?.email) ? ' (' + selectedCampaign.sender_email_detail.email + ')' : (selectedCampaign?.sender_email?.email ? ' (' + selectedCampaign.sender_email.email + ')' : ''))"></h3>
           <button @click="showStatsModal = false" class="text-gray-400 hover:text-gray-600">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
@@ -437,7 +437,7 @@
             <h4 class="font-medium text-gray-900 mb-2">Детали рассылки</h4>
             <div class="space-y-2 text-sm">
               <p><span class="text-gray-500">Тема:</span> <span x-text="selectedCampaign?.subject || 'Без темы'"></span></p>
-              <p><span class="text-gray-500">Отправитель:</span> <span x-text="(selectedCampaign?.sender_name || '') + ' (' + (selectedCampaign?.sender_email?.email || '') + ')'"></span></p>
+              <p><span class="text-gray-500">Отправитель:</span> <span x-text="(selectedCampaign?.sender_name || '') + ' (' + (selectedCampaign?.sender_email_detail?.email || selectedCampaign?.sender_email?.email || '') + ')' "></span></p>
               <p><span class="text-gray-500">Дата создания:</span> <span x-text="formatDate(selectedCampaign?.created_at)"></span></p>
               <p><span class="text-gray-500">Дата отправки:</span> <span x-text="formatDate(selectedCampaign?.sent_at)"></span></p>
             </div>
@@ -467,7 +467,7 @@
     <div x-show="showPreviewModal" x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
         <div class="flex justify-between items-center p-6 border-b border-gray-200">
-          <h3 class="text-lg font-semibold" x-text="'Просмотр: ' + (selectedCampaign?.name || '')"></h3>
+          <h3 class="text-lg font-semibold" x-text="'Просмотр: ' + (selectedCampaign?.name || '') + ((selectedCampaign?.sender_email_detail?.email) ? ' (' + selectedCampaign.sender_email_detail.email + ')' : (selectedCampaign?.sender_email?.email ? ' (' + selectedCampaign.sender_email.email + ')' : ''))"></h3>
           <button @click="showPreviewModal = false" class="text-gray-400 hover:text-gray-600">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
@@ -479,7 +479,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
                 <p class="text-gray-500 mb-1">От:</p>
-                <p class="font-medium" x-text="(selectedCampaign?.sender_name || '') + ' <' + (selectedCampaign?.sender_email?.email || '') + '>'"></p>
+                <p class="font-medium" x-text="(selectedCampaign?.sender_name || '') + ' <' + (selectedCampaign?.sender_email_detail?.email || selectedCampaign?.sender_email?.email || '') + '>'"></p>
               </div>
               <div>
                 <p class="text-gray-500 mb-1">Тема:</p>
@@ -629,6 +629,7 @@
         expandedRows: new Set(),
         currentPage: 1,
         itemsPerPage: 6,
+        searchDebounce: null,
         campaigns: [],
         count: 0,
         num_pages: 1,
@@ -656,6 +657,9 @@
         init() {
           lucide.createIcons();
           this.loadCampaigns();
+          this.$watch('searchTerm', () => this.debouncedReload());
+          this.$watch('statusFilter', () => this.debouncedReload());
+          this.$watch('senderFilter', () => this.debouncedReload());
           
           // Автоматическое обновление данных каждые 5 секунд для кампаний в статусе "sending"
           this.autoRefreshInterval = setInterval(() => {
@@ -664,6 +668,17 @@
               this.loadCampaigns();
             }
           }, 5000);
+        },
+
+        debouncedReload() {
+          if (this.searchDebounce) {
+            clearTimeout(this.searchDebounce);
+          }
+          this.searchDebounce = setTimeout(() => {
+            // when searching or filtering, start from first page
+            this.currentPage = 1;
+            this.loadCampaigns(1);
+          }, 350);
         },
 
         // Очистка интервала при уничтожении компонента
@@ -675,7 +690,16 @@
 
         async loadCampaigns(page = this.currentPage) {
           try {
-            const response = await fetch(`/campaigns/api/campaigns/?page=${page}&page_size=${this.itemsPerPage}`, {
+            const params = new URLSearchParams();
+            params.set('page', page);
+            const isFiltering = (this.searchTerm || '') !== '' || this.statusFilter !== 'All' || this.senderFilter !== 'All';
+            // When filtering/searching, request more items to span multiple pages server-side
+            params.set('page_size', isFiltering ? 100 : this.itemsPerPage);
+            if ((this.searchTerm || '').trim() !== '') params.set('search', this.searchTerm.trim());
+            if (this.statusFilter !== 'All') params.set('status', this.statusFilter);
+            if (this.senderFilter !== 'All') params.set('sender', this.senderFilter);
+
+            const response = await fetch(`/campaigns/api/campaigns/?${params.toString()}`, {
               credentials: 'same-origin',
               headers: {
                 'Accept': 'application/json',
@@ -727,12 +751,14 @@
         },
 
         filteredCampaigns() {
+          const term = (this.searchTerm || '').toLowerCase();
           const filtered = this.campaigns.filter(campaign => {
-            const matchesSearch = campaign.name.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-                                campaign.subject.toLowerCase().includes(this.searchTerm.toLowerCase());
+            const name = (campaign.name || '').toLowerCase();
+            const subject = (campaign.subject || '').toLowerCase();
+            const matchesSearch = term === '' || name.includes(term) || subject.includes(term);
             const matchesStatus = this.statusFilter === 'All' || campaign.status === this.statusFilter;
-            const matchesSender = this.senderFilter === 'All' || 
-              (campaign.sender_email && campaign.sender_email.email === this.senderFilter);
+            const senderEmail = campaign.sender_email_detail?.email || campaign.sender_email?.email || '';
+            const matchesSender = this.senderFilter === 'All' || senderEmail === this.senderFilter;
             return matchesSearch && matchesStatus && matchesSender;
           });
 
@@ -818,8 +844,8 @@
 
         uniqueSenders() {
           return [...new Set(this.campaigns
-            .filter(c => c.sender_email && c.sender_email.email)
-            .map(c => c.sender_email.email))];
+            .map(c => c.sender_email_detail?.email || c.sender_email?.email)
+            .filter(Boolean))];
         },
 
         // helpers for export chips

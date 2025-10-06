@@ -72,6 +72,10 @@ class ContactListViewSet(viewsets.ModelViewSet):
 
         if request.method == 'GET':
             qs = contact_list.contacts.all().order_by('-id')
+            # --- FILTERING ---
+            search_query = request.query_params.get('search', '').strip()
+            if search_query:
+                qs = qs.filter(email__icontains=search_query)
             # --- PAGINATION ---
             page = int(request.query_params.get('page', 1))
             page_size = int(request.query_params.get('page_size', 20))

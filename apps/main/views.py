@@ -49,7 +49,7 @@ def landing_page(request):
 
 def pricing_page(request):
     """Страница тарифов с динамической загрузкой данных"""
-    return render(request, 'pricing.html')
+    return redirect('main:landing')
 
 
 def get_plans_api(request):
