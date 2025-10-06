@@ -4,6 +4,8 @@ from django.http import JsonResponse, HttpResponseServerError
 from django.utils import timezone
 from django.db.models import Q
 from django.core.serializers.json import DjangoJSONEncoder
+from django.core.mail import EmailMultiAlternatives
+from django.conf import settings
 import json
 from .models import CampaignModeration
 from apps.campaigns.models import Campaign
@@ -30,11 +32,31 @@ def moderation_dashboard(request):
         for campaign in pending_campaigns:
             # Проверяем, нет ли уже записи в CampaignModeration
             if not CampaignModeration.objects.filter(campaign=campaign).exists():
-                CampaignModeration.objects.create(
+                moderation = CampaignModeration.objects.create(
                     campaign=campaign,
                     status='pending',
                     created_at=timezone.now()
                 )
+                # Уведомляем поддержку о новой кампании на модерации
+                try:
+                    support_email = 'support@vashsender.ru'
+                    subject = f"[Moderation] Новая кампания на модерации: {campaign.name}"
+                    text_body = (
+                        f"Кампания: {campaign.name}\n"
+                        f"Тема: {campaign.subject}\n"
+                        f"Пользователь: {campaign.user.email if campaign.user else '—'}\n\n"
+                        f"ID кампании: {campaign.id}\n"
+                        f"ID модерации: {moderation.id}\n"
+                    )
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        to=[support_email]
+                    )
+                    msg.send(fail_silently=True)
+                except Exception:
+                    pass
         
         # Обновляем список модерированных кампаний
         moderated_campaigns = CampaignModeration.objects.select_related(
