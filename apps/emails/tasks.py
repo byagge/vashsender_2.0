@@ -41,6 +41,31 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
     return msg
 
 
+def _build_plain_text_message(to_email: str, subject: str, plain_text: str, from_email: str):
+    """Build a simple plain-text MIME message using the same headers and DKIM policy."""
+    msg = MIMEMultipart('alternative')
+    if subject and any(ord(c) > 127 for c in subject):
+        msg['Subject'] = Header(subject, 'utf-8', header_name='Subject')
+    else:
+        msg['Subject'] = subject
+
+    display_name = 'VashSender'
+    msg['From'] = formataddr((str(Header(display_name, 'utf-8')), from_email))
+    msg['To'] = to_email
+    msg['Reply-To'] = from_email
+
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[1] if '@' in from_email else 'vashsender.ru')
+    msg['X-Mailer'] = 'VashSender Notifications 1.0'
+
+    text_part = MIMEText(plain_text or '', 'plain', 'utf-8')
+    msg.attach(text_part)
+
+    domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+    msg = sign_email_with_dkim(msg, domain_name)
+    return msg
+
+
 def send_verification_email_sync(to_email: str, subject: str, plain_text: str, html: str) -> None:
     """
     Synchronous sender using the shared SMTP pool and DKIM, for fallback paths.
@@ -49,6 +74,22 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     smtp_connection = None
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
+    smtp_connection = smtp_pool.get_connection()
+    try:
+        smtp_connection.send_message(msg)
+    finally:
+        if smtp_connection:
+            try:
+                smtp_pool.return_connection(smtp_connection)
+            except Exception:
+                pass
+
+
+def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -> None:
+    """Synchronous plain-text sender via the shared SMTP pool (DKIM-aware)."""
+    smtp_connection = None
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    msg = _build_plain_text_message(to_email, subject, plain_text, from_email)
     smtp_connection = smtp_pool.get_connection()
     try:
         smtp_connection.send_message(msg)

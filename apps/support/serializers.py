@@ -38,13 +38,21 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
                 f"Описание:\n{ticket.ticket_description}\n\n"
                 f"ID тикета: {ticket.ticket_id}\n"
             )
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_body,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                to=[support_email]
-            )
-            msg.send(fail_silently=True)
+            try:
+                from apps.emails.tasks import send_plain_notification_sync
+                send_plain_notification_sync(
+                    to_email=support_email,
+                    subject=subject,
+                    plain_text=text_body,
+                )
+            except Exception:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=True)
         except Exception:
             # Безопасно игнорируем сбои уведомлений, чтобы не мешать созданию тикета
             pass
@@ -106,13 +114,21 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
                 f"ID тикета: {message.message_ticket.ticket_id}\n"
                 f"ID сообщения: {message.message_id}\n"
             )
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_body,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                to=[support_email]
-            )
-            msg.send(fail_silently=True)
+            try:
+                from apps.emails.tasks import send_plain_notification_sync
+                send_plain_notification_sync(
+                    to_email=support_email,
+                    subject=subject,
+                    plain_text=text_body,
+                )
+            except Exception:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=True)
         except Exception:
             pass
         return message 

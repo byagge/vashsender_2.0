@@ -340,13 +340,21 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                 f"Чат: {chat.chat_id}\n\n"
                 f"Сообщение:\n{message_text}\n"
             )
-            msg = EmailMultiAlternatives(
-                subject=subject,
-                body=text_body,
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                to=[support_email]
-            )
-            msg.send(fail_silently=True)
+            try:
+                from apps.emails.tasks import send_plain_notification_sync
+                send_plain_notification_sync(
+                    to_email=support_email,
+                    subject=subject,
+                    plain_text=text_body,
+                )
+            except Exception:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=text_body,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=True)
         except Exception:
             pass
 

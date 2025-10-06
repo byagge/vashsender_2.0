@@ -236,13 +236,23 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
             confirm_url = request.build_absolute_uri(
                 f"/emails/confirm-sender/?token={token}"
             )
-            send_mail(
-                subject="Подтверждение отправителя",
-                message=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email_addr],
-                fail_silently=False,
-            )
+            # Use shared SMTP pool to match campaigns delivery behavior
+            try:
+                from apps.emails.tasks import send_plain_notification_sync
+                send_plain_notification_sync(
+                    to_email=email_addr,
+                    subject="Подтверждение отправителя",
+                    plain_text=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}"
+                )
+            except Exception:
+                # Fallback: try Django send_mail as last resort
+                send_mail(
+                    subject="Подтверждение отправителя",
+                    message=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email_addr],
+                    fail_silently=True,
+                )
 
             return Response(
                 SenderEmailSerializer(sender).data,
