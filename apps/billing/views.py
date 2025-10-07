@@ -462,23 +462,60 @@ def check_auth_status(request):
 @login_required
 @require_http_methods(["POST"])
 def activate_payment(request):
-    """Активация тарифа после успешной оплаты через CloudPayments"""
+    """Активация тарифа после успешной оплаты через CloudPayments
+
+    Поддерживает стандартные планы (передан числовой plan_id) и fallback-планы
+    со страницы подтверждения (когда plan_id не передан или равен 0). В случае
+    fallback создается или находится реальный Plan на основе переданных метаданных.
+    """
     try:
         print(f"DEBUG: activate_payment called with user {request.user.email}")
         data = json.loads(request.body)
         print(f"DEBUG: Received data: {data}")
         plan_id = data.get('plan_id')
         payment_data = data.get('payment_data', {})
+        plan_meta = data.get('plan_meta') or {}
         print(f"DEBUG: Plan ID: {plan_id}, Payment data: {payment_data}")
         
-        if not plan_id:
-            return JsonResponse({
-                'success': False,
-                'error': 'Plan ID is required'
-            }, status=400)
-        
-        # Получаем план
-        plan = get_object_or_404(Plan, id=plan_id, is_active=True)
+        # Получаем план: если передан валидный ID — берем из БД, иначе пробуем
+        # восстановить его из метаданных fallback-плана
+        plan = None
+        if plan_id:
+            try:
+                plan = get_object_or_404(Plan, id=plan_id, is_active=True)
+            except Exception:
+                plan = None
+
+        if plan is None:
+            # Пытаемся создать/найти план по метаданным
+            from apps.billing.models import PlanType
+            meta_title = plan_meta.get('title') or plan_meta.get('name')
+            meta_price = plan_meta.get('price')
+            meta_emails = plan_meta.get('emails_per_month') or 0
+            meta_subscribers = plan_meta.get('subscribers') or 0
+            meta_plan_type_name = plan_meta.get('plan_type') or 'Emails'
+
+            if meta_title is None or meta_price is None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Plan ID is required'
+                }, status=400)
+
+            plan_type, _ = PlanType.objects.get_or_create(
+                name=meta_plan_type_name,
+                defaults={'description': f'Тип плана {meta_plan_type_name}'}
+            )
+
+            plan, _ = Plan.objects.get_or_create(
+                title=meta_title,
+                plan_type=plan_type,
+                price=int(meta_price),
+                defaults={
+                    'emails_per_month': int(meta_emails or 0),
+                    'subscribers': int(meta_subscribers or 0),
+                    'is_active': True,
+                },
+            )
         user = request.user
         print(f"DEBUG: Found plan: {plan.title}, User: {user.email}")
         

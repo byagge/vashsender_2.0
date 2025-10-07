@@ -222,6 +222,19 @@
       padding: 0.2em 0.4em;
       border-radius: 0.25em;
     }
+    /* Clickable, blue, underlined links in preview */
+    .preview-content a {
+      color: #2563eb; /* blue-600 */
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .preview-content a:visited {
+      color: #1e40af; /* blue-800 */
+    }
+    .preview-content a:hover {
+      color: #1d4ed8; /* blue-700 */
+      text-decoration-color: #1d4ed8;
+    }
   </style>
 </head>
 <body class="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50 font-sans">

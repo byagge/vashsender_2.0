@@ -717,90 +717,60 @@
 
   // Поиск тарифа по количеству подписчиков
   function findPlanBySubscribers(count) {
-    console.log('=== DEBUG findPlanBySubscribers ===');
-    console.log('Looking for count:', count);
-    
+    console.log('=== DEBUG findPlanBySubscribers (exact) ===');
+    console.log('Looking for exact count:', count);
+
     const plans = plansData.subscribers;
-    console.log('Available plans:', plans);
-    console.log('Plans length:', plans ? plans.length : 'undefined');
-    
-    if (!plans || plans.length === 0) {
-      console.warn('No subscribers plans available');
-      return null;
+
+    // Если есть точный план из БД — используем его
+    if (plans && plans.length > 0) {
+      const exact = plans.find(p => p.subscribers === count);
+      if (exact) return exact;
     }
-    
-    // Сначала ищем точное совпадение
-    let exactMatch = plans.find(plan => plan.subscribers === count);
-    console.log('Exact match:', exactMatch);
-    if (exactMatch) return exactMatch;
-    
-    // Сортируем планы по количеству подписчиков
-    const sortedPlans = plans.sort((a, b) => a.subscribers - b.subscribers);
-    console.log('Sorted plans:', sortedPlans.map(p => ({ id: p.id, subscribers: p.subscribers, price: p.price })));
-    
-    // Ищем ближайший тариф по абсолютному значению
-    let bestPlan = null;
-    let minDifference = Infinity;
-    
-    for (let plan of sortedPlans) {
-      const difference = Math.abs(plan.subscribers - count);
-      console.log(`Checking plan: ${plan.id}, subscribers: ${plan.subscribers}, price: ${plan.price}, difference: ${difference}`);
-      
-      if (difference < minDifference) {
-        minDifference = difference;
-        bestPlan = plan;
-        console.log(`New best plan: ${plan.id} with difference: ${difference}`);
-      }
+
+    // Иначе формируем fallback-план с ТОЧНЫМ значением и вычисленной ценой
+    let price;
+    if (plans && plans.length > 0) {
+      price = interpolatePrice(count, plans);
+    } else {
+      price = interpolateFallbackPrice(count, fallbackPrices.subscribers);
     }
-    
-    console.log('Best plan found:', bestPlan);
-    console.log('Fallback plan (first):', plans[0]);
-    
-    return bestPlan;
+
+    return {
+      id: 1000000 + count, // гарантированно >= 1000, распознается как fallback
+      subscribers: count,
+      price: price,
+      name: `${count.toLocaleString()} подписчиков`
+    };
   }
 
   // Поиск тарифа по количеству писем
   function findPlanByEmails(count) {
-    console.log('=== DEBUG findPlanByEmails ===');
-    console.log('Looking for count:', count);
-    
+    console.log('=== DEBUG findPlanByEmails (exact) ===');
+    console.log('Looking for exact count:', count);
+
     const plans = plansData.letters;
-    console.log('Available plans:', plans);
-    console.log('Plans length:', plans ? plans.length : 'undefined');
-    
-    if (!plans || plans.length === 0) {
-      console.warn('No letters plans available');
-      return null;
+
+    // Если есть точный план из БД — используем его
+    if (plans && plans.length > 0) {
+      const exact = plans.find(p => p.emails_per_month === count);
+      if (exact) return exact;
     }
-    
-    // Сначала ищем точное совпадение
-    let exactMatch = plans.find(plan => plan.emails_per_month === count);
-    console.log('Exact match:', exactMatch);
-    if (exactMatch) return exactMatch;
-    
-    // Сортируем планы по количеству писем
-    const sortedPlans = plans.sort((a, b) => a.emails_per_month - b.emails_per_month);
-    console.log('Sorted plans:', sortedPlans.map(p => ({ id: p.id, emails_per_month: p.emails_per_month, price: p.price })));
-    
-    // Ищем ближайший тариф по абсолютному значению
-    let bestPlan = null;
-    let minDifference = Infinity;
-    
-    for (let plan of sortedPlans) {
-      const difference = Math.abs(plan.emails_per_month - count);
-      console.log(`Checking plan: ${plan.id}, emails_per_month: ${plan.emails_per_month}, price: ${plan.price}, difference: ${difference}`);
-      
-      if (difference < minDifference) {
-        minDifference = difference;
-        bestPlan = plan;
-        console.log(`New best plan: ${plan.id} with difference: ${difference}`);
-      }
+
+    // Иначе формируем fallback-план с ТОЧНЫМ значением и вычисленной ценой
+    let price;
+    if (plans && plans.length > 0) {
+      price = interpolatePrice(count, plans);
+    } else {
+      price = interpolateFallbackPrice(count, fallbackPrices.letters);
     }
-    
-    console.log('Best plan found:', bestPlan);
-    console.log('Fallback plan (first):', plans[0]);
-    
-    return bestPlan;
+
+    return {
+      id: 2000000 + count, // гарантированно >= 1000, распознается как fallback
+      emails_per_month: count,
+      price: price,
+      name: `${count.toLocaleString()} писем`
+    };
   }
 
   // Обновление слайдеров на основе загруженных тарифов

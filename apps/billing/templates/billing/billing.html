@@ -90,13 +90,88 @@
                             <div class="text-lg font-semibold" x-text="currentPlan?.days_remaining || 0"></div>
                         </div>
                     </div>
+
+                    <!-- Универсальные счетчики использования -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4" x-show="currentPlan && (currentPlan?.emails_sent !== null && currentPlan?.emails_sent !== undefined)">
+                        <div class="bg-white border rounded-lg p-4">
+                            <div class="text-sm text-gray-500">Использовано</div>
+                            <div class="text-2xl font-semibold">
+                                <span x-text="currentPlan?.emails_sent || 0"></span>
+                                <span class="text-gray-500 text-base ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                <template x-if="currentPlan?.plan_type === 'Letters' && (currentPlan?.emails_per_month || currentPlan?.emails_per_month === 0)">
+                                    <span class="text-gray-500 text-base"> из <span x-text="currentPlan?.emails_per_month || 0"></span></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="bg-white border rounded-lg p-4" x-show="currentPlan?.emails_remaining !== null && currentPlan?.emails_remaining !== undefined">
+                            <div class="text-sm text-gray-500">Осталось</div>
+                            <div class="text-2xl font-semibold">
+                                <span x-text="currentPlan?.emails_remaining || 0"></span>
+                                <span class="text-gray-500 text-base ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Полная статистика по тарифу -->
+                    <div class="bg-white border rounded-lg p-4 mt-4" x-show="currentPlan">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <div class="text-sm text-gray-500">Всего по тарифу</div>
+                                <div class="text-xl font-semibold">
+                                    <span x-text="currentPlan?.plan_type === 'Letters' 
+                                        ? (currentPlan?.emails_per_month || 0) 
+                                        : ((currentPlan?.emails_sent || 0) + (currentPlan?.emails_remaining || 0))"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Использовано</div>
+                                <div class="text-xl font-semibold">
+                                    <span x-text="currentPlan?.emails_sent || 0"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Сегодня</div>
+                                <div class="text-xl font-semibold">
+                                    <span x-text="currentPlan?.emails_sent_today || 0"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-500">Осталось</div>
+                                <div class="text-xl font-semibold">
+                                    <span x-text="currentPlan?.emails_remaining || 0"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Прогресс использования (если известен общий лимит) -->
+                        <div class="mt-4" x-data="{ total: (currentPlan?.plan_type === 'Letters' 
+                                                              ? (currentPlan?.emails_per_month || 0) 
+                                                              : ((currentPlan?.emails_sent || 0) + (currentPlan?.emails_remaining || 0))) }" 
+                             x-show="total > 0">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full" 
+                                     :style="`width: ${Math.min(100, ((currentPlan?.emails_sent || 0) / total) * 100)}%`"></div>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                <span x-text="Math.min(100, Math.round(((currentPlan?.emails_sent || 0) / total) * 100))"></span>% использовано
+                            </div>
+                            <template x-if="currentPlan?.has_exceeded_daily_limit">
+                                <div class="mt-2 text-sm text-red-600">Превышен дневной лимит отправок</div>
+                            </template>
+                        </div>
+                    </div>
                     
                     <!-- Email Limits (for Letters plans) -->
                     <div x-show="currentPlan?.plan_type === 'Letters'" class="bg-gray-50 p-4 rounded-lg">
                         <div class="text-sm text-gray-500 mb-2">Лимит писем</div>
                         <div class="flex items-center justify-between">
                             <span class="text-lg font-semibold">
-                                <span x-text="currentPlan?.emails_sent || 0"></span> / <span x-text="currentPlan?.emails_per_month || 0"></span>
+                                Использовано писем: <span x-text="currentPlan?.emails_sent || 0"></span>
+                                <span class="text-gray-500"> из </span>
+                                <span x-text="currentPlan?.emails_per_month || 0"></span>
                             </span>
                             <div class="w-32 bg-gray-200 rounded-full h-2">
                                 <div class="bg-blue-600 h-2 rounded-full" 
@@ -116,12 +191,19 @@
                                 <span class="text-gray-600">Тип тарифа:</span>
                                 <span class="font-semibold">Подписчики</span>
                             </div>
+                            <!-- Счетчик использования для тарифов 'Подписчики' -->
                             <div class="flex justify-between">
-                                <span class="text-gray-600">Отправлено писем:</span>
+                                <span class="text-gray-600">Использовано подписчиков:</span>
                                 <span class="font-semibold" x-text="currentPlan?.emails_sent || 0"></span>
                             </div>
+                            <template x-if="currentPlan?.emails_remaining !== null && currentPlan?.emails_remaining !== undefined">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Осталось по лимиту:</span>
+                                    <span class="font-semibold" x-text="currentPlan?.emails_remaining || 0"></span>
+                                </div>
+                            </template>
                             <div class="flex justify-between">
-                                <span class="text-gray-600">Отправлено сегодня:</span>
+                                <span class="text-gray-600">Сегодня использовано:</span>
                                 <span class="font-semibold" x-text="currentPlan?.emails_sent_today || 0"></span>
                             </div>
                         </div>
@@ -221,7 +303,7 @@
           
           // API возвращает данные напрямую, без поля success
           if (currentData.has_plan) {
-            this.currentPlan = {
+              this.currentPlan = {
               title: currentData.plan_name,
               description: `Тариф типа: ${currentData.plan_type}`,
               price: currentData.plan_price || null, // Используем цену из API
@@ -232,7 +314,8 @@
               emails_sent: currentData.emails_sent,
               emails_per_month: currentData.emails_limit,
               emails_remaining: currentData.emails_remaining,
-              emails_sent_today: currentData.emails_sent_today
+              emails_sent_today: currentData.emails_sent_today,
+              has_exceeded_daily_limit: currentData.has_exceeded_daily_limit
             };
           } else {
             console.warn('No active plan found:', currentData);

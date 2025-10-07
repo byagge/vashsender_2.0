@@ -71,6 +71,32 @@
             await this.loadEmails();
           },
 
+          // ---- ВСПОМОГАТЕЛЬНЫЕ: парсинг DNS и копирование ----
+          stripQuotes(str) {
+            if (!str) return '';
+            if (str.length >= 2 && str[0] === '"' && str[str.length - 1] === '"') {
+              return str.slice(1, -1);
+            }
+            return str;
+          },
+          extractTxtName(record) {
+            if (!record) return '';
+            return record.split(' ')[0] || '';
+          },
+          extractTxtValue(record) {
+            if (!record) return '';
+            const after = record.split('TXT ')[1] || '';
+            return this.stripQuotes(after.trim());
+          },
+          copyDkimAll() {
+            const value = this.extractTxtValue(this.selectedDomain.dkim_dns_record);
+            if (value) this.copyToClipboard(value);
+          },
+          copyDmarcAll() {
+            const value = this.extractTxtValue(this.selectedDomain.dmarc_dns_record);
+            if (value) this.copyToClipboard(value);
+          },
+
           // ---- ВСПОМОГАТЕЛЬНЫЕ: детализированные ошибки ----
           describeHttpError(status) {
             if (status === 0) return 'Нет ответа от сервера. Проверьте сеть.';
@@ -493,6 +519,21 @@
                                                         </svg>
                                                       </template>
                                                     </div>
+                                                    
+                                                    <!-- DMARC -->
+                                                    <div class="flex items-center">
+                                                      <span class="text-sm text-gray-600 mr-2">DMARC:</span>
+                                                      <template x-if="domain.dmarc_policy">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                      </template>
+                                                      <template x-if="!domain.dmarc_policy">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                      </template>
+                                                    </div>
                                                   </div>
                                                 <p class="text-sm text-gray-500">Добавлено: <span x-text="domain.addedDate"></span></p>
                                             </div>
@@ -716,9 +757,9 @@
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="text-sm font-medium">Название:</span>
                                     <div class="flex items-center">
-                                        <code class="text-sm" x-text="selectedDomain.dkim_dns_record.split(' ')[0]"></code>
+                                        <code class="text-sm" x-text="extractTxtName(selectedDomain.dkim_dns_record)"></code>
                                         <button
-                                            @click="copyToClipboard(selectedDomain.dkim_dns_record.split(' ')[0])"
+                                            @click="copyToClipboard(extractTxtName(selectedDomain.dkim_dns_record))"
                                             class="ml-2 text-green-600 hover:text-green-700"
                                         >
                                             <i data-lucide="copy" class="w-4 h-4"></i>
@@ -728,9 +769,9 @@
                                 <div class="flex items-start justify-between">
                                     <span class="text-sm font-medium">Значение:</span>
                                     <div class="flex items-start ml-2">
-                                        <code class="text-sm break-all" x-text="selectedDomain.dkim_dns_record.split('TXT ')[1]"></code>
+                                        <code class="text-sm break-all" x-text="extractTxtValue(selectedDomain.dkim_dns_record)"></code>
                                         <button
-                                            @click="copyToClipboard(selectedDomain.dkim_dns_record.split('TXT ')[1])"
+                                            @click="copyToClipboard(extractTxtValue(selectedDomain.dkim_dns_record))"
                                             class="ml-2 text-green-600 hover:text-green-700 flex-shrink-0"
                                         >
                                             <i data-lucide="copy" class="w-4 h-4"></i>
@@ -751,6 +792,7 @@
                     <div class="flex items-center mb-2">
                         <i data-lucide="shield-check" class="w-5 h-5 text-purple-600 mr-2"></i>
                         <h4 class="font-semibold text-purple-800">DMARC-запись</h4>
+                        
                     </div>
                     <p class="text-sm text-purple-700 mb-3">Добавьте эту TXT-запись для DMARC:</p>
                     <div class="bg-white p-3 rounded border">
@@ -759,9 +801,9 @@
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="text-sm font-medium">Название:</span>
                                     <div class="flex items-center">
-                                        <code class="text-sm" x-text="selectedDomain.dmarc_dns_record.split(' ')[0]"></code>
+                                        <code class="text-sm" x-text="extractTxtName(selectedDomain.dmarc_dns_record)"></code>
                                         <button
-                                            @click="copyToClipboard(selectedDomain.dmarc_dns_record.split(' ')[0])"
+                                            @click="copyToClipboard(extractTxtName(selectedDomain.dmarc_dns_record))"
                                             class="ml-2 text-purple-600 hover:text-purple-700"
                                         >
                                             <i data-lucide="copy" class="w-4 h-4"></i>
@@ -771,9 +813,9 @@
                                 <div class="flex items-start justify-between">
                                     <span class="text-sm font-medium">Значение:</span>
                                     <div class="flex items-start ml-2">
-                                        <code class="text-sm break-all" x-text="selectedDomain.dmarc_dns_record.split('TXT ')[1]"></code>
+                                        <code class="text-sm break-all" x-text="extractTxtValue(selectedDomain.dmarc_dns_record)"></code>
                                         <button
-                                            @click="copyToClipboard(selectedDomain.dmarc_dns_record.split('TXT ')[1])"
+                                            @click="copyToClipboard(extractTxtValue(selectedDomain.dmarc_dns_record))"
                                             class="ml-2 text-purple-600 hover:text-purple-700 flex-shrink-0"
                                         >
                                             <i data-lucide="copy" class="w-4 h-4"></i>

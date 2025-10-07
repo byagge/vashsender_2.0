@@ -97,10 +97,13 @@
   </div>
   <!-- Правая часть: Оформление -->
   <div class="md:w-1/2 w-full flex flex-col justify-between bg-white px-0 md:px-8 py-8 md:py-16">
-    <form x-data="purchaseApp()" @submit.prevent="processPurchase()" class="flex flex-col h-full" 
+  <form x-data="purchaseApp()" @submit.prevent="processPurchase()" class="flex flex-col h-full" 
           data-plan-id="{{ plan.id|default:0 }}" 
           data-plan-title="{{ plan.title|escapejs }}" 
           data-plan-price="{{ plan.price|default:0 }}" 
+          data-plan-type="{{ plan.plan_type.name|default:'Emails' }}"
+          data-plan-subscribers="{{ plan.subscribers|default:0 }}"
+          data-plan-emails="{{ plan.emails_per_month|default:0 }}"
           data-user-email="{{ request.user.email|escapejs }}">
       <div>
         <div class="mb-8">
@@ -182,10 +185,14 @@
         console.log('Form element:', form);
         console.log('Form dataset:', form.dataset);
         this.planData = {
-          id: parseInt(form.dataset.planId) || 0,
+          idRaw: form.dataset.planId,
+          id: isNaN(parseInt(form.dataset.planId)) ? null : parseInt(form.dataset.planId),
           title: form.dataset.planTitle || 'Тариф',
           price: parseFloat(form.dataset.planPrice) || 0,
-          userEmail: form.dataset.userEmail || 'user@example.com'
+          userEmail: form.dataset.userEmail || 'user@example.com',
+          planType: form.dataset.planType || 'Emails',
+          subscribers: parseInt(form.dataset.planSubscribers || 0) || 0,
+          emailsPerMonth: parseInt(form.dataset.planEmails || 0) || 0
         };
         console.log('Plan data loaded:', this.planData);
       },
@@ -349,7 +356,14 @@
               'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
             },
             data: JSON.stringify({
-              plan_id: this.planData.id,
+              plan_id: this.planData.id, // может быть null для fallback
+              plan_meta: {
+                title: this.planData.title,
+                price: this.planData.price,
+                emails_per_month: this.planData.emailsPerMonth,
+                subscribers: this.planData.subscribers,
+                plan_type: this.planData.planType
+              },
               payment_data: {
                 ...paymentResult,
                 transaction_id: transactionId
@@ -360,11 +374,7 @@
                 // Показываем успешное сообщение
                 self.showSuccessMessage(result.message || 'Тариф успешно активирован!');
                 setTimeout(() => {
-                  var successUrl = '/purchase/success/?plan_id=' + self.planData.id;
-                  if (transactionId) {
-                    successUrl += '&transaction_id=' + transactionId;
-                  }
-                  window.location.href = successUrl;
+                  window.location.href = '/dashboard/';
                 }, 2000);
               } else {
                 // Показываем ошибку
