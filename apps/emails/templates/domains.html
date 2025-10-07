@@ -12,13 +12,17 @@
     <script defer src="https://unpkg.com/lucide@0.276.0/dist/umd/lucide.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
         });
     </script>
     <!-- Alpine.js Data and Methods -->
     <script>
       document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
       });
       // Глобальные ловушки ошибок, чтобы видеть детали в консоли
       window.addEventListener('error', (event) => {
@@ -414,8 +418,16 @@
       });
     
       // Переинициализация иконок
-      document.addEventListener('alpine:initialized', () => lucide.createIcons());
-      document.addEventListener('alpine:updated',     () => lucide.createIcons());
+      document.addEventListener('alpine:initialized', () => {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      });
+      document.addEventListener('alpine:updated', () => {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      });
     </script>    
 </head>
 <body x-data="emailPlatform" x-init="init()" class="font-inter">
@@ -737,8 +749,13 @@
                         <button
                             @click="copyToClipboard('v=spf1 include:vashsender.ru ~all')"
                             class="text-blue-600 hover:text-blue-700"
+                            aria-label="Скопировать"
+                            title="Скопировать"
                         >
-                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
                         </button>
                     </div>
                 </div>
@@ -759,12 +776,17 @@
                                         <span class="text-sm font-medium mr-2">Название:</span>
                                         <code class="text-sm" x-text="extractTxtName(selectedDomain.dkim_dns_record)"></code>
                                     </div>
-                                    <button
-                                        @click="copyToClipboard(extractTxtName(selectedDomain.dkim_dns_record))"
-                                        class="text-green-600 hover:text-green-700"
-                                    >
-                                        <i data-lucide="copy" class="w-4 h-4"></i>
-                                    </button>
+                                        <button
+                                            @click="copyToClipboard(extractTxtName(selectedDomain.dkim_dns_record))"
+                                            class="text-green-600 hover:text-green-700"
+                                            aria-label="Скопировать"
+                                            title="Скопировать"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                            </svg>
+                                        </button>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-start">
@@ -774,8 +796,13 @@
                                     <button
                                         @click="copyToClipboard(extractTxtValue(selectedDomain.dkim_dns_record))"
                                         class="text-green-600 hover:text-green-700 flex-shrink-0"
+                                        aria-label="Скопировать"
+                                        title="Скопировать"
                                     >
-                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
@@ -803,12 +830,17 @@
                                         <span class="text-sm font-medium mr-2">Название:</span>
                                         <code class="text-sm" x-text="extractTxtName(selectedDomain.dmarc_dns_record)"></code>
                                     </div>
-                                    <button
-                                        @click="copyToClipboard(extractTxtName(selectedDomain.dmarc_dns_record))"
-                                        class="text-purple-600 hover:text-purple-700"
-                                    >
-                                        <i data-lucide="copy" class="w-4 h-4"></i>
-                                    </button>
+                                        <button
+                                            @click="copyToClipboard(extractTxtName(selectedDomain.dmarc_dns_record))"
+                                            class="text-purple-600 hover:text-purple-700"
+                                            aria-label="Скопировать"
+                                            title="Скопировать"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                            </svg>
+                                        </button>
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-start">
@@ -818,8 +850,13 @@
                                     <button
                                         @click="copyToClipboard(extractTxtValue(selectedDomain.dmarc_dns_record))"
                                         class="text-purple-600 hover:text-purple-700 flex-shrink-0"
+                                        aria-label="Скопировать"
+                                        title="Скопировать"
                                     >
-                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                        </svg>
                                     </button>
                                 </div>
                             </div>
@@ -850,13 +887,13 @@
         class="fixed top-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4 z-50"
     >
         <div class="flex items-center">
-            <template x-if="notification.type === 'success'">
+            <template x-if="notification && notification.type === 'success'">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-3 text-green-500" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check-big-icon lucide-circle-check-big"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
             </template>
-            <template x-if="notification.type !== 'success'">
+            <template x-if="notification && notification.type !== 'success'">
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-3 text-red-500" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-alert-icon lucide-circle-alert"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
             </template>
-            <span class="text-gray-900" x-text="notification.message"></span>
+            <span class="text-gray-900" x-text="notification ? notification.message : ''"></span>
         </div>
     </div>
 
