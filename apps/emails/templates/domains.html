@@ -755,28 +755,28 @@
                         <template x-if="selectedDomain.dkim_dns_record && selectedDomain.dkim_dns_record.trim() !== ''">
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium">Название:</span>
                                     <div class="flex items-center">
+                                        <span class="text-sm font-medium mr-2">Название:</span>
                                         <code class="text-sm" x-text="extractTxtName(selectedDomain.dkim_dns_record)"></code>
-                                        <button
-                                            @click="copyToClipboard(extractTxtName(selectedDomain.dkim_dns_record))"
-                                            class="ml-2 text-green-600 hover:text-green-700"
-                                        >
-                                            <i data-lucide="copy" class="w-4 h-4"></i>
-                                        </button>
                                     </div>
+                                    <button
+                                        @click="copyToClipboard(extractTxtName(selectedDomain.dkim_dns_record))"
+                                        class="text-green-600 hover:text-green-700"
+                                    >
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
-                                <div class="flex items-start justify-between">
-                                    <span class="text-sm font-medium">Значение:</span>
-                                    <div class="flex items-start ml-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-start">
+                                        <span class="text-sm font-medium mr-2">Значение:</span>
                                         <code class="text-sm break-all" x-text="extractTxtValue(selectedDomain.dkim_dns_record)"></code>
-                                        <button
-                                            @click="copyToClipboard(extractTxtValue(selectedDomain.dkim_dns_record))"
-                                            class="ml-2 text-green-600 hover:text-green-700 flex-shrink-0"
-                                        >
-                                            <i data-lucide="copy" class="w-4 h-4"></i>
-                                        </button>
                                     </div>
+                                    <button
+                                        @click="copyToClipboard(extractTxtValue(selectedDomain.dkim_dns_record))"
+                                        class="text-green-600 hover:text-green-700 flex-shrink-0"
+                                    >
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
                             </div>
                         </template>
@@ -799,28 +799,28 @@
                         <template x-if="selectedDomain.dmarc_dns_record && selectedDomain.dmarc_dns_record.trim() !== ''">
                             <div>
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-medium">Название:</span>
                                     <div class="flex items-center">
+                                        <span class="text-sm font-medium mr-2">Название:</span>
                                         <code class="text-sm" x-text="extractTxtName(selectedDomain.dmarc_dns_record)"></code>
-                                        <button
-                                            @click="copyToClipboard(extractTxtName(selectedDomain.dmarc_dns_record))"
-                                            class="ml-2 text-purple-600 hover:text-purple-700"
-                                        >
-                                            <i data-lucide="copy" class="w-4 h-4"></i>
-                                        </button>
                                     </div>
+                                    <button
+                                        @click="copyToClipboard(extractTxtName(selectedDomain.dmarc_dns_record))"
+                                        class="text-purple-600 hover:text-purple-700"
+                                    >
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
-                                <div class="flex items-start justify-between">
-                                    <span class="text-sm font-medium">Значение:</span>
-                                    <div class="flex items-start ml-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-start">
+                                        <span class="text-sm font-medium mr-2">Значение:</span>
                                         <code class="text-sm break-all" x-text="extractTxtValue(selectedDomain.dmarc_dns_record)"></code>
-                                        <button
-                                            @click="copyToClipboard(extractTxtValue(selectedDomain.dmarc_dns_record))"
-                                            class="ml-2 text-purple-600 hover:text-purple-700 flex-shrink-0"
-                                        >
-                                            <i data-lucide="copy" class="w-4 h-4"></i>
-                                        </button>
                                     </div>
+                                    <button
+                                        @click="copyToClipboard(extractTxtValue(selectedDomain.dmarc_dns_record))"
+                                        class="text-purple-600 hover:text-purple-700 flex-shrink-0"
+                                    >
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
                                 </div>
                             </div>
                         </template>
