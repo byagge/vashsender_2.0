@@ -147,7 +147,18 @@
                     'Content-Type': 'application/json',
                 },
             })
-            .then(response => response.json())
+            .then(async (response) => {
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    try {
+                        return await response.json();
+                    } catch (e) {
+                        return { success: response.ok };
+                    }
+                }
+                // If server returned HTML (e.g., redirect page), treat as success
+                return { success: response.ok };
+            })
             .then(data => {
                 if (data.success) {
                     // Show success state
