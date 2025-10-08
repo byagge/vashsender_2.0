@@ -123,6 +123,12 @@
                         <a href="/support/" class="text-[#1877ff] hover:underline font-medium">Свяжитесь с поддержкой</a>
                     </p>
                 </div>
+
+                <!-- Debug Output -->
+                <div id="debugBox" class="mt-6 hidden">
+                    <div class="text-xs text-gray-500 mb-2">Debug response</div>
+                    <pre id="debugContent" class="text-xs bg-[#0b1220] text-[#d1d5db] p-3 rounded overflow-auto max-h-64"></pre>
+                </div>
             </div>
         </div>
     </div>
@@ -132,6 +138,8 @@
             const btn = document.querySelector('button');
             const resendText = document.getElementById('resendText');
             const icon = btn.querySelector('i');
+            const debugBox = document.getElementById('debugBox');
+            const debugContent = document.getElementById('debugContent');
             
             // Show loading state
             btn.disabled = true;
@@ -145,11 +153,20 @@
                 headers: {
                     'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                     'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+            .then(async (response) => {
+                const rawText = await response.text();
+                // Try parse JSON, else show raw text/HTML in debug
+                let parsed;
+                try { parsed = JSON.parse(rawText); } catch (_) { parsed = null; }
+
+                // Show debug
+                debugBox.classList.remove('hidden');
+                debugContent.textContent = parsed ? JSON.stringify(parsed, null, 2) : rawText;
+
+                if (response.ok && (parsed?.success === true || !parsed)) {
                     // Show success state
                     btn.style.background = '#10B981';
                     resendText.textContent = 'Письмо отправлено!';
@@ -185,6 +202,9 @@
                 btn.style.background = '#EF4444';
                 resendText.textContent = 'Ошибка отправки';
                 icon.className = 'fa-solid fa-exclamation-triangle';
+                // Debug error
+                debugBox.classList.remove('hidden');
+                debugContent.textContent = String(error);
                 
                 setTimeout(() => {
                     // Reset to original state
