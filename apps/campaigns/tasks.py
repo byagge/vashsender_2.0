@@ -967,6 +967,20 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         
         # Получаем SMTP соединение
         smtp_connection = smtp_pool.get_connection()
+
+        # Вспомогательная нормализация конвертных адресов (ASCII-only)
+        def _normalize_envelope_address(addr: str):
+            try:
+                if '@' not in addr:
+                    return None
+                local, domain = addr.split('@', 1)
+                # ASCII-only local part required if SMTPUTF8 is not available
+                local.encode('ascii')
+                # IDNA-encode domain to ASCII
+                domain_ascii = domain.encode('idna').decode('ascii')
+                return f"{local}@{domain_ascii}"
+            except Exception:
+                return None
         
         # Создаем максимально простое сообщение как обычное письмо
         msg = MIMEMultipart('alternative')
@@ -1083,8 +1097,36 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
         msg = sign_email_with_dkim(msg, domain_name)
         
-        # Отправляем письмо
-        smtp_connection.send_message(msg)
+        # Отправляем письмо с учетом поддержки SMTPUTF8
+        supports_smtputf8 = False
+        try:
+            supports_smtputf8 = bool(getattr(smtp_connection, 'has_extn', lambda *_: False)('smtputf8'))
+        except Exception:
+            supports_smtputf8 = False
+
+        envelope_from = _normalize_envelope_address(from_email)
+        envelope_to = _normalize_envelope_address(contact.email)
+
+        if supports_smtputf8:
+            # Пусть Python/SMTP будет использовать SMTPUTF8 для любых unicode адресов
+            smtp_connection.send_message(
+                msg,
+                from_addr=envelope_from or from_email,
+                to_addrs=[envelope_to or contact.email],
+                mail_options=['SMTPUTF8']
+            )
+        else:
+            # Без SMTPUTF8 обязателен ASCII в конверте
+            if not envelope_from:
+                envelope_from = _normalize_envelope_address(settings.DEFAULT_FROM_EMAIL) or 'noreply@vashsender.ru'
+            if not envelope_to:
+                # Если получатель не ASCII — пропускаем с понятной ошибкой
+                raise Exception('Recipient address requires SMTPUTF8 but server does not support it')
+            smtp_connection.send_message(
+                msg,
+                from_addr=envelope_from,
+                to_addrs=[envelope_to]
+            )
         print(f"Email sent successfully to {contact.email}")
         
         # Создаем запись получателя и tracking с транзакцией
