@@ -26,6 +26,9 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
     msg['From'] = formataddr((str(Header(display_name, 'utf-8')), from_email))
     msg['To'] = to_email
     msg['Reply-To'] = from_email
+    # Align with campaigns headers for better deliverability
+    msg['X-Sender'] = from_email
+    msg['X-Envelope-From'] = from_email
 
     # Standard headers
     msg['Date'] = formatdate(localtime=True)
@@ -76,14 +79,26 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     Raises on failure so callers can handle/report errors.
     """
     smtp_connection = None
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    # Choose a verified/system sender similar to campaigns
+    from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    try:
+        from apps.emails.models import SenderEmail
+        sender = SenderEmail.objects.filter(email=from_email, is_verified=True).first()
+        if sender and sender.reply_to:
+            # Prefer configured reply-to
+            reply_to = sender.reply_to
+        else:
+            reply_to = from_email
+    except Exception:
+        reply_to = from_email
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"Sending verification email to={to_email} subject={subject}")
     # First try the high-performance SMTP pool (local MTA path)
     try:
         smtp_connection = smtp_pool.get_connection()
         try:
-            smtp_connection.send_message(msg)
+            # Explicitly set envelope MAIL FROM like campaigns path
+            smtp_connection.send_message(msg, from_addr=from_email, to_addrs=[to_email])
             logger.info(f"Verification email sent to={to_email} via smtp_pool")
             return
         finally:
@@ -99,6 +114,8 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     try:
         connection = get_connection(fail_silently=False)
         email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=from_email, to=[to_email], connection=connection)
+        if reply_to:
+            email.reply_to = [reply_to]
         if html:
             email.attach_alternative(html, "text/html")
         email.send()
@@ -133,13 +150,13 @@ def send_verification_email(self, to_email: str, subject: str, plain_text: str, 
     with DKIM, matching campaign SMTP behavior.
     """
     smtp_connection = None
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
     # Try SMTP pool first
     try:
         smtp_connection = smtp_pool.get_connection()
-        smtp_connection.send_message(msg)
+        smtp_connection.send_message(msg, from_addr=from_email, to_addrs=[to_email])
         logger.info(f"[celery] Verification email sent to={to_email} via smtp_pool")
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
