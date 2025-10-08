@@ -18,7 +18,7 @@ logger = logging.getLogger('apps.emails')
 def _build_verification_message(to_email: str, subject: str, plain_text: str, html: str, from_email: str):
     msg = MIMEMultipart('alternative')
     if subject and any(ord(c) > 127 for c in subject):
-        msg['Subject'] = Header(subject, 'utf-8', header_name='Subject')
+        msg['Subject'] = str(Header(subject, 'utf-8'))
     else:
         msg['Subject'] = subject
 
@@ -49,7 +49,7 @@ def _build_plain_text_message(to_email: str, subject: str, plain_text: str, from
     """Build a simple plain-text MIME message using the same headers and DKIM policy."""
     msg = MIMEMultipart('alternative')
     if subject and any(ord(c) > 127 for c in subject):
-        msg['Subject'] = Header(subject, 'utf-8', header_name='Subject')
+        msg['Subject'] = str(Header(subject, 'utf-8'))
     else:
         msg['Subject'] = subject
 
