@@ -49,20 +49,32 @@ def moderation_dashboard(request):
                         f"ID модерации: {moderation.id}\n"
                     )
                     try:
-                        from apps.emails.tasks import send_plain_notification_sync
-                        send_plain_notification_sync(
-                            to_email=support_email,
-                            subject=subject,
-                            plain_text=text_body,
-                        )
-                    except Exception:
-                        msg = EmailMultiAlternatives(
-                            subject=subject,
-                            body=text_body,
-                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                            to=[support_email]
-                        )
-                        msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
+                        from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+                        sent_ok = False
+                        try:
+                            send_plain_notification_sync(
+                                to_email=support_email,
+                                subject=subject,
+                                plain_text=text_body,
+                            )
+                            sent_ok = True
+                        except Exception:
+                            try:
+                                msg = EmailMultiAlternatives(
+                                    subject=subject,
+                                    body=text_body,
+                                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                                    to=[support_email]
+                                )
+                                msg.send(fail_silently=False)
+                                sent_ok = True
+                            except Exception:
+                                pass
+                        if not sent_ok:
+                            try:
+                                send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
+                            except Exception:
+                                pass
                 except Exception:
                     pass
         

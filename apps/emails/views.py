@@ -238,21 +238,35 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
             )
             # Use shared SMTP pool to match campaigns delivery behavior
             try:
-                from apps.emails.tasks import send_plain_notification_sync
-                send_plain_notification_sync(
-                    to_email=email_addr,
-                    subject="Подтверждение отправителя",
-                    plain_text=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}"
-                )
+                from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+                sent_ok = False
+                try:
+                    send_plain_notification_sync(
+                        to_email=email_addr,
+                        subject="Подтверждение отправителя",
+                        plain_text=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}"
+                    )
+                    sent_ok = True
+                except Exception:
+                    from django.core.mail import EmailMultiAlternatives
+                    msg = EmailMultiAlternatives(
+                        subject="Подтверждение отправителя",
+                        body=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}",
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        to=[email_addr]
+                    )
+                    try:
+                        msg.send(fail_silently=False)
+                        sent_ok = True
+                    except Exception:
+                        pass
+                if not sent_ok:
+                    try:
+                        send_plain_notification.apply_async(args=[email_addr, "Подтверждение отправителя", f"Пожалуйста, подтвердите ваш адрес: {confirm_url}"], queue='email')
+                    except Exception:
+                        pass
             except Exception:
-                # Fallback: try Django send_mail as last resort
-                send_mail(
-                    subject="Подтверждение отправителя",
-                    message=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email_addr],
-                    fail_silently=True,
-                )
+                pass
 
             return Response(
                 SenderEmailSerializer(sender).data,
@@ -284,23 +298,37 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
             f"/emails/confirm-sender/?token={sender.verification_token}"
         )
 
-        # Единый путь отправки: пул SMTP с фолбэком на Django EmailBackend
+        # Единый путь отправки: синхронно → фолбэк → Celery if needed
         try:
-            from apps.emails.tasks import send_plain_notification_sync
-            send_plain_notification_sync(
-                to_email=sender.email,
-                subject="Подтверждение отправителя (повторное)",
-                plain_text=f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}",
-            )
+            from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+            sent_ok = False
+            try:
+                send_plain_notification_sync(
+                    to_email=sender.email,
+                    subject="Подтверждение отправителя (повторное)",
+                    plain_text=f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}",
+                )
+                sent_ok = True
+            except Exception:
+                from django.core.mail import EmailMultiAlternatives
+                msg = EmailMultiAlternatives(
+                    subject="Подтверждение отправителя (повторное)",
+                    body=f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}",
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[sender.email]
+                )
+                try:
+                    msg.send(fail_silently=False)
+                    sent_ok = True
+                except Exception:
+                    pass
+            if not sent_ok:
+                try:
+                    send_plain_notification.apply_async(args=[sender.email, "Подтверждение отправителя (повторное)", f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}"], queue='email')
+                except Exception:
+                    pass
         except Exception:
-            from django.core.mail import EmailMultiAlternatives
-            msg = EmailMultiAlternatives(
-                subject="Подтверждение отправителя (повторное)",
-                body=f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}",
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                to=[sender.email]
-            )
-            msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
+            pass
 
         return Response({"detail": "Письмо с подтверждением отправлено повторно."})
 

@@ -144,6 +144,45 @@ def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email', time_limit=300, soft_time_limit=240)
+def send_plain_notification(self, to_email: str, subject: str, plain_text: str):
+    """
+    Async plain-text sender via the shared SMTP pool with fallback to the
+    Django EmailBackend, mirroring verification task behavior.
+    """
+    smtp_connection = None
+    try:
+        from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+        msg = _build_plain_text_message(to_email, subject, plain_text, from_email)
+        logger.debug(f"[celery] Sending plain notification to={to_email} subject={subject}")
+        smtp_connection = smtp_pool.get_connection()
+        smtp_connection.send_message(msg, from_addr=from_email, to_addrs=[to_email])
+        logger.info(f"[celery] Plain notification sent to={to_email} via smtp_pool")
+        if smtp_connection:
+            smtp_pool.return_connection(smtp_connection)
+        return {'success': True, 'transport': 'smtp_pool'}
+    except Exception as pool_exc:
+        logger.warning(f"[celery] smtp_pool failed for plain notification to {to_email}: {pool_exc}")
+        try:
+            if smtp_connection:
+                try:
+                    smtp_pool.return_connection(smtp_connection)
+                except Exception:
+                    pass
+        finally:
+            smtp_connection = None
+
+    try:
+        connection = get_connection(fail_silently=False)
+        email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru'), to=[to_email], connection=connection)
+        email.send()
+        logger.info(f"[celery] Plain notification sent to={to_email} via Django EmailBackend")
+        return {'success': True, 'transport': 'django_backend'}
+    except Exception as backend_exc:
+        logger.error(f"[celery] Both transports failed for plain notification to {to_email}: {backend_exc}")
+        raise self.retry(exc=backend_exc, countdown=60, max_retries=3)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email', time_limit=300, soft_time_limit=240)
 def send_verification_email(self, to_email: str, subject: str, plain_text: str, html: str):
     """
     Send account verification emails via the shared SMTP connection pool
