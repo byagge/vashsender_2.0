@@ -276,35 +276,34 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                     f"Чат: {chat.chat_id}\n\n"
                     f"Сообщение:\n{message_text}\n"
                 )
+                from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+                sent_ok = False
                 try:
-                    from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
-                    sent_ok = False
+                    send_plain_notification_sync(
+                        to_email=support_email,
+                        subject=subject,
+                        plain_text=text_body,
+                    )
+                    sent_ok = True
+                except Exception:
                     try:
-                        send_plain_notification_sync(
-                            to_email=support_email,
+                        msg = EmailMultiAlternatives(
                             subject=subject,
-                            plain_text=text_body,
+                            body=text_body,
+                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                            to=[support_email]
                         )
+                        msg.send(fail_silently=False)
                         sent_ok = True
                     except Exception:
-                        try:
-                            msg = EmailMultiAlternatives(
-                                subject=subject,
-                                body=text_body,
-                                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                                to=[support_email]
-                            )
-                            msg.send(fail_silently=False)
-                            sent_ok = True
-                        except Exception:
-                            pass
-                    if not sent_ok:
-                        try:
-                            send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
+                        pass
+                if not sent_ok:
+                    try:
+                        send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         
         return Response({
             'chat_id': chat.chat_id,
@@ -360,33 +359,32 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                 f"Чат: {chat.chat_id}\n\n"
                 f"Сообщение:\n{message_text}\n"
             )
+            from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+            sent_ok = False
             try:
-                from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
-                sent_ok = False
+                send_plain_notification_sync(
+                    to_email=support_email,
+                    subject=subject,
+                    plain_text=text_body,
+                )
+                sent_ok = True
+            except Exception:
                 try:
-                    send_plain_notification_sync(
-                        to_email=support_email,
+                    msg = EmailMultiAlternatives(
                         subject=subject,
-                        plain_text=text_body,
+                        body=text_body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        to=[support_email]
                     )
+                    msg.send(fail_silently=False)
                     sent_ok = True
                 except Exception:
-                    try:
-                        msg = EmailMultiAlternatives(
-                            subject=subject,
-                            body=text_body,
-                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                            to=[support_email]
-                        )
-                        msg.send(fail_silently=False)
-                        sent_ok = True
-                    except Exception:
-                        pass
-                if not sent_ok:
-                    try:
-                        send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
-                    except Exception:
-                        pass
+                    pass
+            if not sent_ok:
+                try:
+                    send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
+                except Exception:
+                    pass
         except Exception:
             pass
 
