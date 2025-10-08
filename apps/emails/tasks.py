@@ -1,3 +1,4 @@
+import logging
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -9,6 +10,8 @@ from django.conf import settings
 
 # Reuse the same SMTP pool and DKIM signing as campaigns
 from apps.campaigns.tasks import smtp_pool, sign_email_with_dkim
+
+logger = logging.getLogger('apps.emails')
 
 
 def _build_verification_message(to_email: str, subject: str, plain_text: str, html: str, from_email: str):
@@ -74,9 +77,11 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     smtp_connection = None
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
+    logger.debug(f"Sending verification email to={to_email} subject={subject}")
     smtp_connection = smtp_pool.get_connection()
     try:
         smtp_connection.send_message(msg)
+        logger.info(f"Verification email sent to={to_email}")
     finally:
         if smtp_connection:
             try:
@@ -90,9 +95,11 @@ def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -
     smtp_connection = None
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     msg = _build_plain_text_message(to_email, subject, plain_text, from_email)
+    logger.debug(f"Sending plain notification to={to_email} subject={subject}")
     smtp_connection = smtp_pool.get_connection()
     try:
         smtp_connection.send_message(msg)
+        logger.info(f"Plain notification sent to={to_email}")
     finally:
         if smtp_connection:
             try:
@@ -111,12 +118,15 @@ def send_verification_email(self, to_email: str, subject: str, plain_text: str, 
     try:
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
         msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
+        logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
         smtp_connection = smtp_pool.get_connection()
         smtp_connection.send_message(msg)
+        logger.info(f"[celery] Verification email sent to={to_email}")
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
         return {'success': True}
     except Exception as exc:
+        logger.error(f"[celery] Failed to send verification email to={to_email}: {exc}")
         if smtp_connection:
             try:
                 smtp_pool.return_connection(smtp_connection)

@@ -30,7 +30,7 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
         )
         try:
             # Уведомление в поддержку о новом тикете
-            support_email = 'support@vashsender.ru'
+            support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
             subject = f"[Support] Новый тикет от {request.user.email}: {ticket.ticket_subject}"
             text_body = (
                 f"Пользователь: {request.user.email}\n"
@@ -52,7 +52,7 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
                     to=[support_email]
                 )
-                msg.send(fail_silently=True)
+                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
         except Exception:
             # Безопасно игнорируем сбои уведомлений, чтобы не мешать созданию тикета
             pass
@@ -105,7 +105,7 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
             )
         try:
             # Уведомление в поддержку о новом сообщении в тикете
-            support_email = 'support@vashsender.ru'
+            support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
             subject = f"[Support] Новое сообщение в тикете {message.message_ticket.ticket_id.hex[:8]} от {message.message_author.email}"
             text_body = (
                 f"Тикет: {message.message_ticket.ticket_subject}\n"
@@ -128,7 +128,7 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
                     to=[support_email]
                 )
-                msg.send(fail_silently=True)
+                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
         except Exception:
             pass
         return message 

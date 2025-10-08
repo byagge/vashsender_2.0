@@ -233,6 +233,10 @@ EMAIL_HOST_PASSWORD = ''
 DEFAULT_FROM_EMAIL = 'noreply@vashsender.ru'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL  # от этого адреса Django шлёт системные письма
 
+# Email debug and notification targets
+EMAIL_DEBUG = os.environ.get('EMAIL_DEBUG', '0') in ('1', 'true', 'True')
+SUPPORT_NOTIFICATIONS_EMAIL = os.environ.get('SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+
 # Дополнительные настройки для улучшения доставляемости
 EMAIL_TIMEOUT = 30  # Timeout для отправки письма
 EMAIL_USE_LOCALTIME = True  # Использовать локальное время в заголовках# Дополнительные настройки для улучшения доставляемости
@@ -278,6 +282,41 @@ HANDLER500 = 'core.error_handlers.handler500'
 HANDLER403 = 'core.error_handlers.handler403'
 HANDLER400 = 'core.error_handlers.handler400'
 HANDLER401 = 'core.error_handlers.handler401'
+
+# Basic logging (focus email and celery warnings/errors)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'apps.emails': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if EMAIL_DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'django.core.mail': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if EMAIL_DEBUG else 'WARNING',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
 
 DKIM_SELECTOR = 'vashsender'
 DKIM_KEYS_DIR = '/etc/opendkim/keys'

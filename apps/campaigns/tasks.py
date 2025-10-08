@@ -342,7 +342,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
 
             # Уведомляем поддержку о новой кампании на модерации
             try:
-                support_email = 'support@vashsender.ru'
+                support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
                 subject = f"[Moderation] Новая кампания на модерации: {campaign.name or campaign.id}"
                 body = (
                     f"Пользователь: {user.email}\n"
@@ -357,7 +357,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
                     to=[support_email]
                 )
-                msg.send(fail_silently=True)
+                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
             except Exception:
                 pass
             

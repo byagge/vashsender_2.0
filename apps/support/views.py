@@ -269,7 +269,7 @@ class SupportChatViewSet(viewsets.ModelViewSet):
 
             # Уведомление поддержки о новом чате/сообщении
             try:
-                support_email = 'support@vashsender.ru'
+                support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
                 subject = f"[Support Chat] Новое сообщение от {user.email}"
                 text_body = (
                     f"Пользователь: {user.email}\n"
@@ -282,7 +282,7 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
                     to=[support_email]
                 )
-                msg.send(fail_silently=True)
+                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
             except Exception:
                 pass
         
@@ -333,7 +333,7 @@ class SupportChatViewSet(viewsets.ModelViewSet):
         
         # Уведомление поддержки о новом сообщении в чате
         try:
-            support_email = 'support@vashsender.ru'
+            support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
             subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
             text_body = (
                 f"Пользователь: {request.user.email}\n"
@@ -354,7 +354,7 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
                     to=[support_email]
                 )
-                msg.send(fail_silently=True)
+                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
         except Exception:
             pass
 
