@@ -95,8 +95,10 @@ class RegisterView(View):
         from apps.emails.tasks import send_verification_email, send_verification_email_sync
         subject = 'Подтвердите ваш Email - vashsender'
         plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+        email_sent = False
         try:
             send_verification_email_sync(user.email, subject, plain, html_message)
+            email_sent = True
         except Exception:
             # Резервный путь — через стандартный Django SMTP
             try:
@@ -108,6 +110,7 @@ class RegisterView(View):
                     html_message=html_message,
                     fail_silently=False
                 )
+                email_sent = True
             except Exception:
                 # Не валим 500 при недоступном SMTP — продолжаем и покажем уведомление
                 messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
@@ -116,6 +119,8 @@ class RegisterView(View):
             send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
         except Exception:
             pass
+        if email_sent:
+            messages.success(request, 'Письмо с подтверждением отправлено. Проверьте вашу почту.')
 
         # Входим сразу (активируем после подтверждения почты)
         login(request, user, backend='apps.accounts.backends.EmailBackend')
@@ -175,11 +180,10 @@ class ResendEmailView(LoginRequiredMixin, View):
             from apps.emails.tasks import send_verification_email, send_verification_email_sync
             subject = 'Подтвердите ваш Email - vashsender'
             plain = f'Чтобы активировать аккаунт, перейдите по ссылке: {link}'
+            email_sent = False
             try:
                 send_verification_email_sync(user.email, subject, plain, html_message)
-                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return Response({'success': True}, status=status.HTTP_200_OK)
-                messages.success(request, 'Письмо отправлено повторно!')
+                email_sent = True
             except Exception:
                 try:
                     send_mail(
@@ -190,8 +194,7 @@ class ResendEmailView(LoginRequiredMixin, View):
                         html_message=html_message,
                         fail_silently=False
                     )
-                    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                        return Response({'success': True}, status=status.HTTP_200_OK)
+                    email_sent = True
                 except Exception:
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return Response({'success': False, 'detail': 'Не удалось отправить письмо'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -201,8 +204,9 @@ class ResendEmailView(LoginRequiredMixin, View):
             except Exception:
                 pass
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return Response({'success': True}, status=status.HTTP_200_OK)
-            messages.success(request, 'Письмо отправлено повторно!')
+                return Response({'success': email_sent}, status=status.HTTP_200_OK if email_sent else status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if email_sent:
+                messages.success(request, 'Письмо отправлено повторно!')
         except Exception as e:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return Response({'success': False, 'detail': 'Ошибка при подготовке письма'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

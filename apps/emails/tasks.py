@@ -7,6 +7,7 @@ from email.utils import formataddr, formatdate, make_msgid
 
 from celery import shared_task
 from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection
 
 # Reuse the same SMTP pool and DKIM signing as campaigns
 from apps.campaigns.tasks import smtp_pool, sign_email_with_dkim
@@ -78,16 +79,33 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"Sending verification email to={to_email} subject={subject}")
-    smtp_connection = smtp_pool.get_connection()
+    # First try the high-performance SMTP pool (local MTA path)
     try:
-        smtp_connection.send_message(msg)
-        logger.info(f"Verification email sent to={to_email}")
-    finally:
-        if smtp_connection:
-            try:
-                smtp_pool.return_connection(smtp_connection)
-            except Exception:
-                pass
+        smtp_connection = smtp_pool.get_connection()
+        try:
+            smtp_connection.send_message(msg)
+            logger.info(f"Verification email sent to={to_email} via smtp_pool")
+            return
+        finally:
+            if smtp_connection:
+                try:
+                    smtp_pool.return_connection(smtp_connection)
+                except Exception:
+                    pass
+    except Exception as pool_exc:
+        logger.warning(f"smtp_pool failed, falling back to Django EmailBackend: {pool_exc}")
+
+    # Fallback to Django EmailBackend using EmailMultiAlternatives
+    try:
+        connection = get_connection(fail_silently=False)
+        email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=from_email, to=[to_email], connection=connection)
+        if html:
+            email.attach_alternative(html, "text/html")
+        email.send()
+        logger.info(f"Verification email sent to={to_email} via Django EmailBackend")
+    except Exception as backend_exc:
+        logger.error(f"Both smtp_pool and Django EmailBackend failed to send to={to_email}: {backend_exc}")
+        raise
 
 
 def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -> None:
@@ -115,23 +133,39 @@ def send_verification_email(self, to_email: str, subject: str, plain_text: str, 
     with DKIM, matching campaign SMTP behavior.
     """
     smtp_connection = None
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
+    logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
+    # Try SMTP pool first
     try:
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
-        msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
-        logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
         smtp_connection = smtp_pool.get_connection()
         smtp_connection.send_message(msg)
-        logger.info(f"[celery] Verification email sent to={to_email}")
+        logger.info(f"[celery] Verification email sent to={to_email} via smtp_pool")
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
-        return {'success': True}
-    except Exception as exc:
-        logger.error(f"[celery] Failed to send verification email to={to_email}: {exc}")
-        if smtp_connection:
-            try:
-                smtp_pool.return_connection(smtp_connection)
-            except Exception:
-                pass
-        raise self.retry(exc=exc, countdown=60, max_retries=3)
+        return {'success': True, 'transport': 'smtp_pool'}
+    except Exception as pool_exc:
+        logger.warning(f"[celery] smtp_pool failed for {to_email}: {pool_exc}")
+        try:
+            if smtp_connection:
+                try:
+                    smtp_pool.return_connection(smtp_connection)
+                except Exception:
+                    pass
+        finally:
+            smtp_connection = None
+
+    # Fallback to Django EmailBackend inside Celery worker
+    try:
+        connection = get_connection(fail_silently=False)
+        email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=from_email, to=[to_email], connection=connection)
+        if html:
+            email.attach_alternative(html, "text/html")
+        email.send()
+        logger.info(f"[celery] Verification email sent to={to_email} via Django EmailBackend")
+        return {'success': True, 'transport': 'django_backend'}
+    except Exception as backend_exc:
+        logger.error(f"[celery] Both transports failed for {to_email}: {backend_exc}")
+        raise self.retry(exc=backend_exc, countdown=60, max_retries=3)
 
 
