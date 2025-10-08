@@ -115,11 +115,12 @@ class RegisterView(View):
             except Exception:
                 # Не валим 500 при недоступном SMTP — продолжаем и покажем уведомление
                 messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
-        # Опционально ставим в очередь повторную отправку для подстраховки
-        try:
-            send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
-        except Exception:
-            pass
+        # Подстраховочная очередь — только если синхронная отправка не удалась
+        if not email_sent:
+            try:
+                send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
+            except Exception:
+                pass
         if email_sent:
             messages.success(request, 'Письмо с подтверждением отправлено. Проверьте вашу почту.')
 
@@ -200,10 +201,12 @@ class ResendEmailView(LoginRequiredMixin, View):
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return JsonResponse({'success': False, 'detail': 'Не удалось отправить письмо'}, status=200)
                     messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
-            try:
-                send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
-            except Exception:
-                pass
+            # Подстраховочная очередь — только если синхронная отправка не удалась
+            if not email_sent:
+                try:
+                    send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
+                except Exception:
+                    pass
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({'success': email_sent}, status=200)
             if email_sent:
