@@ -15,6 +15,7 @@ from django.contrib.auth.views import PasswordResetView, PasswordResetDoneView, 
 from django.contrib.auth.decorators import login_required
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
+from django.http import JsonResponse
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 import re
@@ -157,7 +158,7 @@ class ResendEmailView(LoginRequiredMixin, View):
         if getattr(user, 'is_email_verified', False):
             # For AJAX, return JSON; otherwise redirect
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return Response({'success': False, 'detail': 'Уже подтверждён'}, status=status.HTTP_400_BAD_REQUEST)
+                return JsonResponse({'success': False, 'detail': 'Уже подтверждён'}, status=400)
             return redirect('dashboard')
 
         # Генерируем новый токен и отправляем письмо
@@ -197,19 +198,19 @@ class ResendEmailView(LoginRequiredMixin, View):
                     email_sent = True
                 except Exception:
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                        return Response({'success': False, 'detail': 'Не удалось отправить письмо'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        return JsonResponse({'success': False, 'detail': 'Не удалось отправить письмо'}, status=200)
                     messages.warning(request, 'Не удалось отправить письмо подтверждения. Мы повторим попытку позже.')
             try:
                 send_verification_email.apply_async(args=[user.email, subject, plain, html_message], queue='email')
             except Exception:
                 pass
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return Response({'success': email_sent}, status=status.HTTP_200_OK if email_sent else status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return JsonResponse({'success': email_sent}, status=200)
             if email_sent:
                 messages.success(request, 'Письмо отправлено повторно!')
         except Exception as e:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return Response({'success': False, 'detail': 'Ошибка при подготовке письма'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return JsonResponse({'success': False, 'detail': 'Ошибка при подготовке письма'}, status=200)
             messages.error(request, 'Не удалось отправить письмо. Попробуйте позже.')
         
         return redirect('accounts:email_sent')
