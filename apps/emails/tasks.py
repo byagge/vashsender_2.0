@@ -1,5 +1,4 @@
 import logging
-import idna
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -81,36 +80,7 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     logger.debug(f"Sending verification email to={to_email} subject={subject}")
     smtp_connection = smtp_pool.get_connection()
     try:
-        # Envelope normalization
-        def _normalize_envelope(addr: str):
-            if '@' not in addr:
-                return None
-            local, domain = addr.split('@', 1)
-            try:
-                local.encode('ascii')
-                domain_ascii = idna.encode(domain).decode('ascii')
-                return f"{local}@{domain_ascii}"
-            except Exception:
-                return None
-
-        from_addr = _normalize_envelope(from_email) or from_email
-        to_addr = _normalize_envelope(to_email) or to_email
-
-        supports_smtputf8 = False
-        try:
-            supports_smtputf8 = bool(getattr(smtp_connection, 'has_extn', lambda *_: False)('smtputf8'))
-        except Exception:
-            supports_smtputf8 = False
-
-        if supports_smtputf8:
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr], mail_options=['SMTPUTF8'])
-        else:
-            # Require ASCII-only in envelope
-            if from_addr is None:
-                from_addr = _normalize_envelope(getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')) or 'noreply@vashsender.ru'
-            if to_addr is None:
-                raise Exception('Recipient address requires SMTPUTF8 but server does not support it')
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr])
+        smtp_connection.send_message(msg)
         logger.info(f"Verification email sent to={to_email}")
     finally:
         if smtp_connection:
@@ -128,34 +98,7 @@ def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -
     logger.debug(f"Sending plain notification to={to_email} subject={subject}")
     smtp_connection = smtp_pool.get_connection()
     try:
-        def _normalize_envelope(addr: str):
-            if '@' not in addr:
-                return None
-            local, domain = addr.split('@', 1)
-            try:
-                local.encode('ascii')
-                domain_ascii = idna.encode(domain).decode('ascii')
-                return f"{local}@{domain_ascii}"
-            except Exception:
-                return None
-
-        from_addr = _normalize_envelope(from_email) or from_email
-        to_addr = _normalize_envelope(to_email) or to_email
-
-        supports_smtputf8 = False
-        try:
-            supports_smtputf8 = bool(getattr(smtp_connection, 'has_extn', lambda *_: False)('smtputf8'))
-        except Exception:
-            supports_smtputf8 = False
-
-        if supports_smtputf8:
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr], mail_options=['SMTPUTF8'])
-        else:
-            if from_addr is None:
-                from_addr = _normalize_envelope(getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')) or 'noreply@vashsender.ru'
-            if to_addr is None:
-                raise Exception('Recipient address requires SMTPUTF8 but server does not support it')
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr])
+        smtp_connection.send_message(msg)
         logger.info(f"Plain notification sent to={to_email}")
     finally:
         if smtp_connection:
@@ -177,35 +120,7 @@ def send_verification_email(self, to_email: str, subject: str, plain_text: str, 
         msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
         logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
         smtp_connection = smtp_pool.get_connection()
-        # Envelope normalization and SMTPUTF8 handling
-        def _normalize_envelope(addr: str):
-            if '@' not in addr:
-                return None
-            local, domain = addr.split('@', 1)
-            try:
-                local.encode('ascii')
-                domain_ascii = idna.encode(domain).decode('ascii')
-                return f"{local}@{domain_ascii}"
-            except Exception:
-                return None
-
-        from_addr = _normalize_envelope(from_email) or from_email
-        to_addr = _normalize_envelope(to_email) or to_email
-
-        supports_smtputf8 = False
-        try:
-            supports_smtputf8 = bool(getattr(smtp_connection, 'has_extn', lambda *_: False)('smtputf8'))
-        except Exception:
-            supports_smtputf8 = False
-
-        if supports_smtputf8:
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr], mail_options=['SMTPUTF8'])
-        else:
-            if from_addr is None:
-                from_addr = _normalize_envelope(getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')) or 'noreply@vashsender.ru'
-            if to_addr is None:
-                raise Exception('Recipient address requires SMTPUTF8 but server does not support it')
-            smtp_connection.send_message(msg, from_addr=from_addr, to_addrs=[to_addr])
+        smtp_connection.send_message(msg)
         logger.info(f"[celery] Verification email sent to={to_email}")
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
