@@ -37,7 +37,7 @@ def moderation_dashboard(request):
                     status='pending',
                     created_at=timezone.now()
                 )
-                # Уведомляем поддержку о новой кампании на модерации
+                # Уведомляем поддержку о новой кампании на модерации (единый путь отправки)
                 try:
                     support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
                     subject = f"[Moderation] Новая кампания на модерации: {campaign.name}"
@@ -48,13 +48,21 @@ def moderation_dashboard(request):
                         f"ID кампании: {campaign.id}\n"
                         f"ID модерации: {moderation.id}\n"
                     )
-                    msg = EmailMultiAlternatives(
-                        subject=subject,
-                        body=text_body,
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                        to=[support_email]
-                    )
-                    msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
+                    try:
+                        from apps.emails.tasks import send_plain_notification_sync
+                        send_plain_notification_sync(
+                            to_email=support_email,
+                            subject=subject,
+                            plain_text=text_body,
+                        )
+                    except Exception:
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_body,
+                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                            to=[support_email]
+                        )
+                        msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
                 except Exception:
                     pass
         

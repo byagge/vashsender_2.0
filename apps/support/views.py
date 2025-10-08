@@ -276,13 +276,21 @@ class SupportChatViewSet(viewsets.ModelViewSet):
                     f"Чат: {chat.chat_id}\n\n"
                     f"Сообщение:\n{message_text}\n"
                 )
-                msg = EmailMultiAlternatives(
-                    subject=subject,
-                    body=text_body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                    to=[support_email]
-                )
-                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
+                try:
+                    from apps.emails.tasks import send_plain_notification_sync
+                    send_plain_notification_sync(
+                        to_email=support_email,
+                        subject=subject,
+                        plain_text=text_body,
+                    )
+                except Exception:
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        to=[support_email]
+                    )
+                    msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
             except Exception:
                 pass
         
@@ -333,28 +341,28 @@ class SupportChatViewSet(viewsets.ModelViewSet):
         
         # Уведомление поддержки о новом сообщении в чате
         try:
-            support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
-            subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
-            text_body = (
-                f"Пользователь: {request.user.email}\n"
-                f"Чат: {chat.chat_id}\n\n"
-                f"Сообщение:\n{message_text}\n"
-            )
-            try:
-                from apps.emails.tasks import send_plain_notification_sync
-                send_plain_notification_sync(
-                    to_email=support_email,
-                    subject=subject,
-                    plain_text=text_body,
+                support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+                subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
+                text_body = (
+                    f"Пользователь: {request.user.email}\n"
+                    f"Чат: {chat.chat_id}\n\n"
+                    f"Сообщение:\n{message_text}\n"
                 )
-            except Exception:
-                msg = EmailMultiAlternatives(
-                    subject=subject,
-                    body=text_body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                    to=[support_email]
-                )
-                msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
+                try:
+                    from apps.emails.tasks import send_plain_notification_sync
+                    send_plain_notification_sync(
+                        to_email=support_email,
+                        subject=subject,
+                        plain_text=text_body,
+                    )
+                except Exception:
+                    msg = EmailMultiAlternatives(
+                        subject=subject,
+                        body=text_body,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        to=[support_email]
+                    )
+                    msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
         except Exception:
             pass
 

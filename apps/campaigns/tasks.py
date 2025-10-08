@@ -28,7 +28,8 @@ try:
     DKIM_AVAILABLE = True
 except ImportError:
     DKIM_AVAILABLE = False
-    print("Warning: dkim library not available. DKIM signing will be disabled.")
+    if getattr(settings, 'EMAIL_DEBUG', False):
+        print("Warning: dkim library not available. DKIM signing will be disabled.")
 
 
 class SMTPConnectionPool:
@@ -136,18 +137,22 @@ class SMTPConnectionPool:
                 helo_domain = getattr(settings, 'EMAIL_HOST', 'localhost')
                 helo_domain = helo_domain if helo_domain != 'localhost' else 'vashsender.ru'
                 connection.helo(helo_domain)
-                print(f"SMTP HELO set to: {helo_domain}")
+                if getattr(settings, 'EMAIL_DEBUG', False):
+                    print(f"SMTP HELO set to: {helo_domain}")
                 
                 # Дополнительные настройки для лучшей доставляемости
                 connection.ehlo(helo_domain)  # Также отправляем EHLO
-                print(f"SMTP EHLO set to: {helo_domain}")
+                if getattr(settings, 'EMAIL_DEBUG', False):
+                    print(f"SMTP EHLO set to: {helo_domain}")
                 
             except Exception as e:
-                print(f"Failed to set HELO to {helo_domain}: {e}")
+                if getattr(settings, 'EMAIL_DEBUG', False):
+                    print(f"Failed to set HELO to {helo_domain}: {e}")
                 try:
                     connection.helo('localhost')
                     connection.ehlo('localhost')
-                    print(f"SMTP HELO/EHLO set to: localhost")
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"SMTP HELO/EHLO set to: localhost")
                 except:
                     pass
             
@@ -158,13 +163,16 @@ class SMTPConnectionPool:
                     helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
                     connection.helo(helo_domain)
                     connection.ehlo(helo_domain)
-                    print(f"SMTP HELO/EHLO after STARTTLS set to: {helo_domain}")
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"SMTP HELO/EHLO after STARTTLS set to: {helo_domain}")
                 except Exception as e:
-                    print(f"Failed to set HELO after STARTTLS: {e}")
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"Failed to set HELO after STARTTLS: {e}")
                     try:
                         connection.helo('localhost')
                         connection.ehlo('localhost')
-                        print(f"SMTP HELO/EHLO after STARTTLS set to: localhost")
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            print(f"SMTP HELO/EHLO after STARTTLS set to: localhost")
                     except:
                         pass
             
@@ -211,13 +219,15 @@ def sign_email_with_dkim(msg, domain_name):
     try:
         from django.conf import settings as dj_settings
         if getattr(dj_settings, 'EMAIL_USE_OPENDKIM', False):
-            print("OpenDKIM mode enabled, skipping in-app DKIM signing")
+            if getattr(dj_settings, 'EMAIL_DEBUG', False):
+                print("OpenDKIM mode enabled, skipping in-app DKIM signing")
             return msg
     except Exception:
         pass
 
     if not DKIM_AVAILABLE:
-        print("DKIM library not available, skipping DKIM signing")
+        if getattr(settings, 'EMAIL_DEBUG', False):
+            print("DKIM library not available, skipping DKIM signing")
         return msg
     
     try:
@@ -226,7 +236,8 @@ def sign_email_with_dkim(msg, domain_name):
         try:
             domain = Domain.objects.get(domain_name=domain_name)
         except Domain.DoesNotExist:
-            print(f"Domain {domain_name} not found in database, skipping DKIM signing")
+            if getattr(settings, 'EMAIL_DEBUG', False):
+                print(f"Domain {domain_name} not found in database, skipping DKIM signing")
             return msg
         
         # Получаем приватный ключ: сначала по сохраненному пути, иначе пробуем стандартный путь из DKIM_KEYS_DIR
@@ -243,11 +254,14 @@ def sign_email_with_dkim(msg, domain_name):
                 try:
                     with open(candidate_path, 'rb') as f:
                         private_key = f.read()
-                    print(f"Loaded DKIM private key from fallback path: {candidate_path}")
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"Loaded DKIM private key from fallback path: {candidate_path}")
                 except Exception as e:
-                    print(f"Failed to read fallback DKIM key {candidate_path}: {e}")
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"Failed to read fallback DKIM key {candidate_path}: {e}")
         if not private_key:
-            print(f"Private key not found for domain {domain_name}, skipping DKIM signing")
+            if getattr(settings, 'EMAIL_DEBUG', False):
+                print(f"Private key not found for domain {domain_name}, skipping DKIM signing")
             return msg
         
         # Подписываем письмо
@@ -266,10 +280,12 @@ def sign_email_with_dkim(msg, domain_name):
         if isinstance(signature_value, bytes):
             signature_value = signature_value.decode('ascii')
         msg['DKIM-Signature'] = signature_value
-        print(f"DKIM signature added for domain {domain_name}")
+        if getattr(settings, 'EMAIL_DEBUG', False):
+            print(f"DKIM signature added for domain {domain_name}")
         
     except Exception as e:
-        print(f"Error signing email with DKIM for domain {domain_name}: {e}")
+        if getattr(settings, 'EMAIL_DEBUG', False):
+            print(f"Error signing email with DKIM for domain {domain_name}: {e}")
     
     return msg
 
@@ -277,7 +293,8 @@ def sign_email_with_dkim(msg, domain_name):
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns')
 def test_celery():
     """Простая тестовая задача для проверки работы Celery"""
-    print("Test Celery task is running!")
+    if getattr(settings, 'EMAIL_DEBUG', False):
+        print("Test Celery task is running!")
     return "Test task completed successfully"
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns', 
