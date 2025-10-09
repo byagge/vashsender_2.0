@@ -4,7 +4,7 @@ from decouple import config
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
-SECRET_KEY = config('SECRET_KEY', default='your-secret-key-here')
+SECRET_KEY = config('SECRET_KEY', default='n)&^%qxrkd18ohk_x6ml=o!^2v3!pqta)uclz)*(f))n(6g)9')
 
 ALLOWED_HOSTS = [
     'vashsender.ru',
