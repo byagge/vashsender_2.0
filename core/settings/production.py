@@ -42,11 +42,19 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 X_FRAME_OPTIONS = 'DENY'
 
-# Database
+# Database (PostgreSQL in production)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',  # Используем SQLite для простоты
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('POSTGRES_DB', default='vashsender'),
+        'USER': config('POSTGRES_USER', default='vashsender'),
+        'PASSWORD': config('POSTGRES_PASSWORD', default=''),
+        'HOST': config('POSTGRES_HOST', default='127.0.0.1'),
+        'PORT': config('POSTGRES_PORT', default=5432, cast=int),
+        'CONN_MAX_AGE': config('POSTGRES_CONN_MAX_AGE', default=600, cast=int),
+        'OPTIONS': {
+            'sslmode': config('POSTGRES_SSLMODE', default='prefer'),
+        },
     }
 }
 
@@ -127,12 +135,19 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Увеличиваем лимит по�
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB для файлов
 FILE_UPLOAD_TEMP_DIR = '/tmp'
 
-# Database connection settings
+# Database connection settings (override to ensure persistent connections)
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-        'CONN_MAX_AGE': 600,
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('POSTGRES_DB', default='vashsender'),
+        'USER': config('POSTGRES_USER', default='vashsender'),
+        'PASSWORD': config('POSTGRES_PASSWORD', default=''),
+        'HOST': config('POSTGRES_HOST', default='127.0.0.1'),
+        'PORT': config('POSTGRES_PORT', default=5432, cast=int),
+        'CONN_MAX_AGE': config('POSTGRES_CONN_MAX_AGE', default=600, cast=int),
+        'OPTIONS': {
+            'sslmode': config('POSTGRES_SSLMODE', default='prefer'),
+        },
     }
 }
 
