@@ -30,7 +30,7 @@ class Domain(models.Model):
     private_key_path = models.CharField(max_length=500, blank=True)
     
     # DMARC field
-    dmarc_policy = models.CharField(max_length=20, default='quarantine', choices=[
+    dmarc_policy = models.CharField(max_length=20, default='none', choices=[
         ('none', 'None'),
         ('quarantine', 'Quarantine'),
         ('reject', 'Reject')
@@ -87,14 +87,8 @@ class Domain(models.Model):
     @property
     def dmarc_dns_record(self):
         """Возвращает DNS TXT запись для DMARC"""
-        policy_map = {
-            'none': '0',
-            'quarantine': '25',
-            'reject': '100'
-        }
-        pct = policy_map.get(self.dmarc_policy, '25')
-        
-        dmarc_record = f'v=DMARC1; p={self.dmarc_policy}; pct={pct}; rua=mailto:dmarc@{self.domain_name}; ruf=mailto:dmarc@{self.domain_name}; sp={self.dmarc_policy}; adkim=r; aspf=r;'
+        # Минимальная рекомендуемая запись по умолчанию: v=DMARC1; p=none
+        dmarc_record = f'v=DMARC1; p={self.dmarc_policy}'
         return f'_dmarc.{self.domain_name} IN TXT "{dmarc_record}"'
 
 
