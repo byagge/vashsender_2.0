@@ -76,12 +76,19 @@ class RegisterView(View):
             messages.error(request, 'Не удалось создать аккаунт. Попробуйте позже.')
             return redirect('accounts:signup')
 
-        # Генерируем токен и отправляем письмо
+        # Входим сразу (чтобы поле last_login обновилось ДО генерации токена)
+        # Иначе стандартный генератор токенов может признать ссылку недействительной
+        login(request, user, backend='apps.accounts.backends.EmailBackend')
+
+        # Генерируем токен и отправляем письмо (после login, чтобы токен был валиден)
         uid   = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         link  = request.build_absolute_uri(
             reverse('accounts:activate', args=[uid, token])
         )
+        # В режиме отладки выводим ссылку подтверждения в терминал
+        if getattr(settings, 'DEBUG', False) or getattr(settings, 'EMAIL_DEBUG', False):
+            print(f"[DEBUG] Activation link for {user.email}: {link}")
         # Рендерим красивый HTML шаблон
         from django.template.loader import render_to_string
         html_message = render_to_string('email_verification.html', {
@@ -124,8 +131,6 @@ class RegisterView(View):
         if email_sent:
             messages.success(request, 'Письмо с подтверждением отправлено. Проверьте вашу почту.')
 
-        # Входим сразу (активируем после подтверждения почты)
-        login(request, user, backend='apps.accounts.backends.EmailBackend')
         return redirect('accounts:email_sent')
 
 
@@ -168,6 +173,9 @@ class ResendEmailView(LoginRequiredMixin, View):
         link  = request.build_absolute_uri(
             reverse('accounts:activate', args=[uid, token])
         )
+        # В режиме отладки выводим ссылку подтверждения в терминал
+        if getattr(settings, 'DEBUG', False) or getattr(settings, 'EMAIL_DEBUG', False):
+            print(f"[DEBUG] Activation link (resend) for {user.email}: {link}")
         
         try:
             # Рендерим красивый HTML шаблон
