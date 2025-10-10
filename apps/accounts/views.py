@@ -86,9 +86,6 @@ class RegisterView(View):
         link  = request.build_absolute_uri(
             reverse('accounts:activate', args=[uid, token])
         )
-        # В режиме отладки выводим ссылку подтверждения в терминал
-        if getattr(settings, 'DEBUG', False) or getattr(settings, 'EMAIL_DEBUG', False):
-            print(f"[DEBUG] Activation link for {user.email}: {link}")
         # Рендерим красивый HTML шаблон
         from django.template.loader import render_to_string
         html_message = render_to_string('email_verification.html', {
@@ -173,9 +170,6 @@ class ResendEmailView(LoginRequiredMixin, View):
         link  = request.build_absolute_uri(
             reverse('accounts:activate', args=[uid, token])
         )
-        # В режиме отладки выводим ссылку подтверждения в терминал
-        if getattr(settings, 'DEBUG', False) or getattr(settings, 'EMAIL_DEBUG', False):
-            print(f"[DEBUG] Activation link (resend) for {user.email}: {link}")
         
         try:
             # Рендерим красивый HTML шаблон
