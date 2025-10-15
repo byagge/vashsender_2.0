@@ -196,6 +196,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 or recipients_count <= 50
             )
 
+            # Сразу переводим кампанию в статус "sending" и сохраняем task_id,
+            # чтобы UI не зависал в "draft" при задержках в Celery/БД
             task = send_campaign.apply_async(
                 args=[campaign.id],
                 kwargs={'skip_moderation': skip_moderation},
@@ -229,9 +231,15 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 else:
                     print("No active tasks found")
             
-            # Сохраняем task_id в кампании
-            campaign.celery_task_id = task.id
-            campaign.save(update_fields=['celery_task_id'])
+            # Обновляем кампанию немедленно: статус -> sending, сохраняем task_id
+            try:
+                from django.db import transaction
+                with transaction.atomic():
+                    campaign.status = Campaign.STATUS_SENDING
+                    campaign.celery_task_id = task.id
+                    campaign.save(update_fields=['status', 'celery_task_id', 'updated_at'])
+            except Exception as e:
+                print(f"Warning: failed to update campaign status to sending: {e}")
             
             print(f"Task status: {task.status}")
             
