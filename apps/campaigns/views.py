@@ -13,6 +13,7 @@ import csv
 from django.views.decorators.http import require_GET
 from django.http import Http404
 import uuid
+from django.db import transaction
 
 from .models import Campaign, CampaignStats, EmailTracking, CampaignRecipient
 from .serializers import CampaignSerializer, CampaignListSerializer
@@ -196,57 +197,50 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 or recipients_count <= 50
             )
 
-            # Сразу переводим кампанию в статус "sending" и сохраняем task_id,
-            # чтобы UI не зависал в "draft" при задержках в Celery/БД
-            task = send_campaign.apply_async(
-                args=[campaign.id],
-                kwargs={'skip_moderation': skip_moderation},
-                queue='campaigns',
-                countdown=1,  # Запуск через 1 секунду
-                expires=1800,  # Истекает через 30 минут
-                retry=True,
-                retry_policy={
-                    'max_retries': 3,
-                    'interval_start': 0,
-                    'interval_step': 0.2,
-                    'interval_max': 0.2,
-                }
-            )
-            print(f"Celery task started: {task.id}")
+            # Сразу переводим кампанию в статус "sending"
+            # и откладываем постановку задачи Celery до коммита транзакции
+            def _enqueue_after_commit():
+                try:
+                    print("Starting Celery task...")
+                    task = send_campaign.apply_async(
+                        args=[campaign.id],
+                        kwargs={'skip_moderation': skip_moderation},
+                        queue='campaigns',
+                        countdown=1,
+                        expires=1800,
+                        retry=True,
+                        retry_policy={
+                            'max_retries': 3,
+                            'interval_start': 0,
+                            'interval_step': 0.2,
+                            'interval_max': 0.2,
+                        }
+                    )
+                    print(f"Celery task started: {task.id}")
+                    # Сохраняем task_id уже после коммита
+                    try:
+                        Campaign.objects.filter(id=campaign.id).update(celery_task_id=task.id)
+                    except Exception as e:
+                        print(f"Warning: failed to persist celery_task_id after commit: {e}")
+                except Exception as e:
+                    print(f"Error scheduling Celery task after commit: {e}")
+
+            transaction.on_commit(_enqueue_after_commit)
             
-            # Ждем немного и проверяем, что задача действительно запустилась
-            import time
-            time.sleep(2)
-            
-            # Проверяем статус задачи
-            task_result = task.result
-            print(f"Task status after 2 seconds: {task.status}")
-            
-            if task.status == 'PENDING':
-                print("Task is still pending - this might indicate a problem")
-                # Проверяем, есть ли активные задачи
-                active_tasks = inspect.active()
-                if active_tasks:
-                    print(f"Active tasks: {active_tasks}")
-                else:
-                    print("No active tasks found")
-            
-            # Обновляем кампанию немедленно: статус -> sending, сохраняем task_id
+            # Обновляем кампанию немедленно: статус -> sending
             try:
                 from django.db import transaction
                 with transaction.atomic():
                     campaign.status = Campaign.STATUS_SENDING
-                    campaign.celery_task_id = task.id
-                    campaign.save(update_fields=['status', 'celery_task_id', 'updated_at'])
+                    campaign.save(update_fields=['status', 'updated_at'])
             except Exception as e:
                 print(f"Warning: failed to update campaign status to sending: {e}")
             
-            print(f"Task status: {task.status}")
-            
             return Response({
                 'message': 'Кампания запущена на отправку.',
-                'task_id': task.id,
-                'task_status': task.status,
+                # task_id и task_status будут записаны после коммита транзакции
+                'task_id': None,
+                'task_status': 'QUEUED',
                 'recipients_count': recipients_count,
                 'workers_count': len(stats)
             }, status=status.HTTP_200_OK)
