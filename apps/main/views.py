@@ -49,7 +49,7 @@ def landing_page(request):
 
 def pricing_page(request):
     """Страница тарифов с динамической загрузкой данных"""
-    return redirect('main:landing')
+    return render(request, 'pricing.html')
 
 
 def get_plans_api(request):
@@ -64,6 +64,34 @@ def get_plans_api(request):
             'subscribers': [],
             'letters': []
         }
+
+        for plan in plans:
+            plan_type_name = (plan.plan_type.name or '').strip().lower()
+            # Приводим цену к целому числу рублей для фронтенда
+            price_rub = int(plan.get_final_price()) if plan.get_final_price() is not None else 0
+
+            if plan_type_name == 'subscribers' and plan.subscribers:
+                plans_data['subscribers'].append({
+                    'id': plan.id,
+                    'subscribers': int(plan.subscribers),
+                    'price': price_rub,
+                    'name': f"{plan.subscribers} подписчиков"
+                })
+            elif plan_type_name == 'letters' and plan.emails_per_month:
+                plans_data['letters'].append({
+                    'id': plan.id,
+                    'emails_per_month': int(plan.emails_per_month),
+                    'price': price_rub,
+                    'name': f"{plan.emails_per_month} писем"
+                })
+            elif plan_type_name == 'free':
+                plans_data['free'].append({
+                    'id': plan.id,
+                    'subscribers': int(plan.subscribers),
+                    'emails_per_month': int(plan.emails_per_month),
+                    'price': price_rub,
+                    'name': plan.title,
+                })
         
         response = JsonResponse({
             'success': True,

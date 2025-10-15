@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Тарифы — vashsender</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>vashsender — Российский сервис email рассылки</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <style>
@@ -22,532 +22,697 @@
     .feature-check {
       background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
     }
+    /* Modern slider */
+    .slider {
+      --val-percent: 0%;
+      appearance: none;
+      height: 10px;
+      border-radius: 9999px;
+      background: linear-gradient(to right, #1877ff 0%, #1877ff var(--val-percent), #e5e7eb var(--val-percent), #e5e7eb 100%);
+      outline: none;
+    }
+    .slider:focus { outline: none; }
+    .slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 3px solid #1877ff;
+      box-shadow: 0 4px 10px rgba(24, 119, 255, 0.25);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .slider::-webkit-slider-thumb:hover { transform: scale(1.05); }
+    .slider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      background: #fff;
+      border: 3px solid #1877ff;
+      box-shadow: 0 4px 10px rgba(24, 119, 255, 0.25);
+      cursor: pointer;
+    }
+    .value-bubble {
+      position: absolute;
+      top: -34px;
+      transform: translateX(-50%);
+      padding: 4px 8px;
+      font-size: 12px;
+      background: #111827;
+      color: #fff;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .value-bubble::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -6px;
+      transform: translateX(-50%);
+      border-width: 6px 6px 0 6px;
+      border-style: solid;
+      border-color: #111827 transparent transparent transparent;
+    }
   </style>
+  <!-- Yandex.Metrika counter -->
+
+  <script type="text/javascript">
+
+      (function(m,e,t,r,i,k,a){
+
+          m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+
+          m[i].l=1*new Date();
+
+          for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+
+          k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+
+      })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=104177169', 'ym');
+
+      ym(104177169, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true});
+
+  </script>
+
+  <noscript><div><img src="https://mc.yandex.ru/watch/104177169" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+
+  <!-- /Yandex.Metrika counter -->
+
 </head>
 <body class="bg-[#f5f6fa] text-[#222] min-h-screen">
   <!-- Header -->
   <header class="flex items-center justify-between px-6 md:px-20 pt-8">
     <a href="/" class="flex items-center text-2xl font-bold text-[#222] no-underline">
-      <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg">
-        <rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/>
-        <path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/>
-      </svg>
+      <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/><path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/></svg>
       vashsender
     </a>
-    <nav class="flex gap-8 items-center">
-      <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
-      <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+    <!-- Desktop nav -->
+    <nav class="hidden md:flex gap-8 items-center">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
+        <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
     </nav>
+    <!-- Mobile hamburger -->
+    <button id="mobile-nav-toggle" class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 text-[#222] hover:bg-gray-50" aria-label="Открыть меню">
+      <svg id="icon-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2z" clip-rule="evenodd"/></svg>
+      <svg id="icon-close" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </button>
   </header>
+  <!-- Mobile menu -->
+  <div id="mobile-menu" class="md:hidden px-6 pt-2 pb-4 hidden">
+    <div class="flex flex-col gap-2 bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="w-full text-center text-[#222] font-medium text-base hover:text-[#1877ff] transition py-2">Вход</a>
+        <a href="/accounts/signup/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
+    </div>
+  </div>
+  
 
-  <!-- Hero Section -->
-  <section class="text-center py-16 px-6 md:px-20">
-    <h1 class="text-4xl md:text-6xl font-extrabold text-[#222a38] mb-6">
-      Выберите подходящий тариф
-    </h1>
-    <p class="text-xl text-[#6b7a99] max-w-3xl mx-auto mb-12">
-      Гибкие тарифы для любого бизнеса. Начните бесплатно и масштабируйтесь по мере роста
-    </p>
-  </section>
-
-  <!-- Pricing Cards -->
+  <!-- Tariffs Section -->
   <section class="px-6 md:px-20 pb-20">
-    <div class="max-w-7xl mx-auto grid md:grid-cols-3 gap-8">
+    <div class="max-w-7xl mx-auto">
+      <h2 class="text-3xl md:text-5xl font-extrabold text-[#222a38] text-center mb-4">Тарифы</h2>
+      <p class="text-xl text-[#6b7a99] max-w-3xl mx-auto mb-12 text-center">
+        Гибкие тарифы для любого бизнеса. Начните бесплатно и масштабируйтесь по мере роста
+      </p>
       
-      <!-- Free Plan -->
-      <div class="bg-white rounded-2xl shadow-lg p-8 card-hover relative">
-        <div class="text-center mb-8">
-          <h3 class="text-2xl font-bold text-[#222a38] mb-2">Бесплатный</h3>
-          <div class="flex items-baseline justify-center mb-4">
-            <span class="text-4xl font-extrabold text-[#222a38]">₽0</span>
-            <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
+      <!-- Pricing Cards -->
+      <div class="grid md:grid-cols-3 gap-8 mb-20">
+        <!-- Free Plan -->
+        <div id="card-free" data-plan-type="free" class="bg-white rounded-2xl shadow-lg p-8 card-hover relative plan-card cursor-pointer">
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-[#222a38] mb-2">Бесплатный</h3>
+            <div class="flex items-baseline justify-center mb-4">
+              <span class="text-4xl font-extrabold text-[#222a38]">₽0</span>
+              <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
+            </div>
+            <p class="text-[#6b7a99] mb-6">Идеально для начала работы с небольшими базами</p>
+            <button onclick="handleChoosePlan('free', true)" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
+              Начать бесплатно
+            </button>
           </div>
-          <p class="text-[#6b7a99] mb-6">Идеально для начала работы с небольшими базами</p>
-          <button onclick="handleChoosePlan('free', true)" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
-            Начать бесплатно
-          </button>
-        </div>
-        
-        <div class="space-y-4">
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">До 200 подписчиков</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Неограниченные письма</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Базовые шаблоны</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Email поддержка</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Базовая аналитика</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Subscribers Plan -->
-      <div class="bg-white rounded-2xl shadow-xl p-8 card-hover relative border-2 border-[#1877ff] transform scale-105">
-        <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
-          <span class="bg-[#1877ff] text-white px-4 py-1 rounded-full text-sm font-medium">Популярный</span>
-        </div>
-        
-        <div class="text-center mb-8">
-          <h3 class="text-2xl font-bold text-[#222a38] mb-2">Подписчики</h3>
-          <div class="flex items-baseline justify-center mb-4">
-            <span class="text-4xl font-extrabold text-[#222a38]">
-              <span id="subscribers-price">₽590</span>
-            </span>
-            <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
-          </div>
-          <p class="text-[#6b7a99] mb-6">Для растущего бизнеса с активными рассылками</p>
-          <button onclick="handleChoosePlan('subscribers', false)" class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg py-3 px-6 transition-colors block text-center">
-            Выбрать тариф
-          </button>
-        </div>
-        
-        <div class="space-y-4">
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">До <span id="subscribers-limit">1,000</span> подписчиков</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Неограниченные письма</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Продвинутые шаблоны</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Приоритетная поддержка</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Детальная аналитика</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">A/B тестирование</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">API доступ</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Letters Plan -->
-      <div class="bg-white rounded-2xl shadow-lg p-8 card-hover relative">
-        <div class="text-center mb-8">
-          <h3 class="text-2xl font-bold text-[#222a38] mb-2">Письма</h3>
-          <div class="flex items-baseline justify-center mb-4">
-            <span class="text-4xl font-extrabold text-[#222a38]">
-              <span id="letters-price">₽380</span>
-            </span>
-            <span class="text-lg text-[#6b7a99] ml-2">/пакет</span>
-          </div>
-          <p class="text-[#6b7a99] mb-6">Для нерегулярных рассылок без ограничений по подписчикам</p>
-          <button onclick="handleChoosePlan('letters', false)" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
-            Выбрать тариф
-          </button>
-        </div>
-        
-        <div class="space-y-4">
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Неограниченные подписчики</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]"><span id="letters-limit">1,000</span> писем в пакете</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Продвинутые шаблоны</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Email поддержка</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Детальная аналитика</span>
-          </div>
-          <div class="flex items-center">
-            <i class="fa-solid fa-check text-green-500 mr-3"></i>
-            <span class="text-[#222a38]">Без срока действия</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Subscribers Slider -->
-  <section class="px-6 md:px-20 pb-20">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8">
-      <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество подписчиков</h3>
-      
-      <div class="mb-8">
-        <label for="subscribers-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
-          Количество подписчиков: <span id="slider-value">1,000</span>
-        </label>
-        <input 
-          type="range" 
-          id="subscribers-slider" 
-          min="1000" 
-          max="1000000" 
-          step="1000" 
-          value="1000"
-          class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-        >
-        <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
-          <span>1,000</span>
-          <span>25,000</span>
-          <span>100,000</span>
-          <span>500,000</span>
-          <span>1,000,000</span>
-        </div>
-      </div>
-
-      <div class="text-center p-6 bg-gray-50 rounded-lg">
-        <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Подписчики"</h4>
-        <div class="text-3xl font-bold text-[#1877ff] mb-2">
-          <span id="subscribers-price-slider">₽590</span>
-        </div>
-        <p class="text-[#6b7a99]">в месяц</p>
-        <button onclick="handleChoosePlan('subscribers', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
-          Выбрать этот тариф
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Letters Slider -->
-  <section class="px-6 md:px-20 pb-20">
-    <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8">
-      <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество писем</h3>
-      
-      <div class="mb-8">
-        <label for="letters-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
-          Количество писем: <span id="letters-slider-value">1,000</span>
-        </label>
-        <input 
-          type="range" 
-          id="letters-slider" 
-          min="1000" 
-          max="1000000" 
-          step="1000" 
-          value="1000"
-          class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-        >
-        <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
-          <span>1,000</span>
-          <span>25,000</span>
-          <span>100,000</span>
-          <span>500,000</span>
-          <span>1,000,000</span>
-        </div>
-      </div>
-
-      <div class="text-center p-6 bg-gray-50 rounded-lg">
-        <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Письма"</h4>
-        <div class="text-3xl font-bold text-[#1877ff] mb-2">
-          <span id="letters-price-slider">₽380</span>
-        </div>
-        <p class="text-[#6b7a99]">за пакет</p>
-        <button onclick="handleChoosePlan('letters', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
-          Выбрать этот тариф
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- FAQ Section -->
-  <section class="px-6 md:px-20 pb-20">
-    <div class="max-w-4xl mx-auto">
-      <h2 class="text-3xl font-bold text-[#222a38] text-center mb-12">Часто задаваемые вопросы</h2>
-      
-      <div class="space-y-6">
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
-            <span class="font-medium text-[#222a38]">Могу ли я изменить тариф в любое время?</span>
-            <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
-          </button>
-          <div class="px-6 pb-4 hidden">
-            <p class="text-[#6b7a99]">Да, вы можете изменить тариф в любое время. При переходе на более дорогой план изменения вступят в силу немедленно, при переходе на более дешевый — в следующем месяце.</p>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
-            <span class="font-medium text-[#222a38]">Что происходит при превышении лимита подписчиков?</span>
-            <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
-          </button>
-          <div class="px-6 pb-4 hidden">
-            <p class="text-[#6b7a99]">При превышении лимита мы уведомим вас и предложим перейти на следующий тариф. Рассылки будут приостановлены до обновления тарифа.</p>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
-            <span class="font-medium text-[#222a38]">Есть ли ограничения на количество писем в тарифе "Подписчики"?</span>
-            <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
-          </button>
-          <div class="px-6 pb-4 hidden">
-            <p class="text-[#6b7a99]">В тарифе "Подписчики" количество писем неограниченно. Ограничения касаются только количества подписчиков в базе.</p>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
-            <span class="font-medium text-[#222a38]">Как работает тариф "Письма"?</span>
-            <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
-          </button>
-          <div class="px-6 pb-4 hidden">
-            <p class="text-[#6b7a99]">Тариф "Письма" подходит для нерегулярных рассылок. Вы покупаете пакет писем без ограничений по количеству подписчиков. Пакет не имеет срока действия.</p>
-          </div>
-        </div>
-        
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-          <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
-            <span class="font-medium text-[#222a38]">Можно ли отменить подписку?</span>
-            <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
-          </button>
-          <div class="px-6 pb-4 hidden">
-            <p class="text-[#6b7a99]">Да, вы можете отменить подписку в любое время. После отмены вы сможете пользоваться сервисом до конца оплаченного периода.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA Section -->
-  <section class="gradient-bg text-white py-20 px-6 md:px-20">
-    <div class="max-w-4xl mx-auto text-center">
-      <h2 class="text-4xl font-bold mb-6">Готовы начать?</h2>
-      <p class="text-xl mb-8 opacity-90">Присоединяйтесь к тысячам компаний, которые уже используют vashsender для своих email-рассылок</p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/accounts/signup/" class="bg-white text-[#1877ff] font-bold py-4 px-8 rounded-lg hover:bg-gray-100 transition-colors">
-          Начать бесплатно
-        </a>
-        <a href="/contact/" class="border-2 border-white text-white font-bold py-4 px-8 rounded-lg hover:bg-white hover:text-[#1877ff] transition-colors">
-          Связаться с нами
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="bg-white pt-12 pb-6 border-t border-gray-100">
-    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row md:justify-between md:items-start gap-10">
-      <!-- Логотип и контакты -->
-      <div class="flex flex-col items-center md:items-start mb-8 md:mb-0 min-w-[220px]">
-        <div class="flex items-center mb-4">
-          <i class="fa-regular fa-envelope text-[#1877ff] text-3xl mr-2"></i>
-          <span class="text-2xl font-bold text-[#222a38]">vashsender</span>
-        </div>
-        <div class="text-[#222a38] font-bold text-lg mb-1">8 (800) 000-00-00</div>
-        <div class="text-[#6b7a99] text-base mb-1">support@vashsender</div>
-      </div>
-      <!-- Юр. информация -->
-      <div class="flex flex-col items-center md:items-start">
-        <div class="font-bold text-[#222a38] mb-2">Юридическая информация</div>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">АнтиСпам соглашение</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Политика конфиденциальности</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Политика возвратов</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff]">Лицензионное соглашение</a>
-      </div>
-      <!-- Дополнительно -->
-      <div class="flex flex-col items-center md:items-start">
-        <div class="font-bold text-[#222a38] mb-2">Дополнительно</div>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Партнерская программа</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Блог</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Интеграция</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff]">Тарифы</a>
-      </div>
-      <!-- Другие сервисы -->
-      <div class="flex flex-col items-center md:items-start">
-        <div class="font-bold text-[#222a38] mb-2">Другие наши сервисы</div>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">СМС рассылки</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff] mb-1">Автообзвон</a>
-        <a href="#" class="text-[#6b7a99] hover:text-[#1877ff]">Идентификация посетителей</a>
-      </div>
-    </div>
-    <div class="max-w-7xl mx-auto mt-8 mb-4 border-t border-gray-100"></div>
-    <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row md:justify-between items-center text-sm text-[#6b7a99]">
-      <div class="flex items-center gap-4 mb-2 md:mb-0">
-        <span>© 2025 ООО "vashsender" ИНН 0000 ОГРН 0000 </span>
-        <div class="flex items-center gap-2">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/Visa_Logo.png" alt="Visa" class="h-6" />
-        <img src="https://upload.wikimedia.org/wikipedia/commons/0/04/Mastercard-logo.png" alt="Mastercard" class="h-6" />
-        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Mir-logo.SVG.svg/768px-Mir-logo.SVG.svg.png?20230821190132" alt="МИР" class="h-6" />
-        <img src="https://upload.wikimedia.org/wikipedia/ru/thumb/c/c7/%D0%A1%D0%91%D0%9F_%D0%BB%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF.svg/359px-%D0%A1%D0%91%D0%9F_%D0%BB%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF.svg.png?20211108071206" alt="СБП" class="h-6" />
-        </div>
-      </div>
-      <div class="flex items-center gap-1">
-        <span>Сделано с</span>
-        <i class="fa-solid fa-heart text-red-500"></i>
-        <span>любовью и страстью</span>
-      </div>
-    </div>
-  </footer>
-
-  <script>
-    // Глобальные переменные
-    let isAuthenticated = false;
-    let plansData = {
-      free: [],
-      subscribers: [],
-      letters: []
-    };
-
-    // Проверка статуса авторизации при загрузке страницы
-    async function checkAuthStatus() {
-      try {
-        const response = await fetch('/billing/check-auth/');
-        const data = await response.json();
-        isAuthenticated = data.authenticated;
-        console.log('Auth status:', isAuthenticated);
-      } catch (error) {
-        console.error('Error checking auth status:', error);
-        isAuthenticated = false;
-      }
-    }
-
-    // Загрузка тарифов с сервера
-    async function loadPlans() {
-      try {
-        console.log('Loading plans from /api/plans/');
-        const response = await fetch('/api/plans/');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await response.text();
-          console.error('Response is not JSON:', text);
-          throw new Error('Response is not JSON');
-        }
-        
-        const data = await response.json();
-        console.log('Raw API response:', data);
-        
-        if (data.success) {
-          plansData = data.plans;
-          console.log('Plans loaded:', plansData);
           
-          // Обновляем слайдеры и цены
-          updateSliders();
-        } else {
-          console.error('Failed to load plans:', data.error);
-        }
-      } catch (error) {
-        console.error('Error loading plans:', error);
-        console.error('Error details:', error.message);
-      }
-    }
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">До 200 подписчиков</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Неограниченные письма</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Детальная аналитика</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Поддержка 24/7</span>
+            </div>
+          </div>
+        </div>
 
-    // Функция выбора тарифа
-    function handleChoosePlan(planType, isFree) {
-      if (!isAuthenticated) {
-        // Если не авторизован - редирект на страницу входа
-        window.location.href = `/accounts/login?next=/pricing/`;
-        return;
-      }
+        <!-- Subscribers Plan -->
+        <div id="card-subscribers" data-plan-type="subscribers" class="bg-white rounded-2xl shadow-xl p-8 card-hover relative plan-card cursor-pointer">
+          <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+            <span class="bg-[#1877ff] text-white px-4 py-1 rounded-full text-sm font-medium">Популярный</span>
+          </div>
+          
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-[#222a38] mb-2">Подписчики</h3>
+            <div class="flex items-baseline justify-center mb-4">
+              <span class="text-4xl font-extrabold text-[#222a38]">
+                <span id="subscribers-price">₽590</span>
+              </span>
+              <span class="text-lg text-[#6b7a99] ml-2">/месяц</span>
+            </div>
+            <p class="text-[#6b7a99] mb-6">Для растущего бизнеса с активными рассылками</p>
+            <button onclick="selectPlan('subscribers')" class="w-full bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg py-3 px-6 transition-colors block text-center">
+              Выбрать тариф
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">До <span id="subscribers-limit">1,000</span> подписчиков</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Неограниченные письма</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Детальная аналитика</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Поддержка 24/7</span>
+            </div>
+          </div>
+        </div>
 
-      if (isFree) {
-        // Бесплатный тариф - активируем сразу
-        window.location.href = '/billing/activate-free/';
-        return;
-      }
+        <!-- Letters Plan -->
+        <div id="card-letters" data-plan-type="letters" class="bg-white rounded-2xl shadow-lg p-8 card-hover relative plan-card cursor-pointer">
+          <div class="text-center mb-8">
+            <h3 class="text-2xl font-bold text-[#222a38] mb-2">Письма</h3>
+            <div class="flex items-baseline justify-center mb-4">
+              <span class="text-4xl font-extrabold text-[#222a38]">
+                <span id="letters-price">₽380</span>
+              </span>
+              <span class="text-lg text-[#6b7a99] ml-2">/пакет</span>
+            </div>
+            <p class="text-[#6b7a99] mb-6">Для нерегулярных рассылок без ограничений по подписчикам</p>
+            <button onclick="selectPlan('letters')" class="w-full bg-gray-100 hover:bg-gray-200 text-[#222a38] font-bold rounded-lg py-3 px-6 transition-colors block text-center">
+              Выбрать тариф
+            </button>
+          </div>
+          
+          <div class="space-y-4">
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]"><span id="letters-limit">1,000</span> писем в пакете</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Неограниченные подписчики</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Без срока действия</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Детальная аналитика</span>
+            </div>
+            <div class="flex items-center">
+              <i class="fa-solid fa-check text-green-500 mr-3"></i>
+              <span class="text-[#222a38]">Поддержка 24/7</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      // Платный тариф - находим подходящий тариф по значениям слайдеров
-      let selectedPlan = null;
-      
-      if (planType === 'subscribers') {
-        const subscribersCount = parseInt(document.getElementById('subscribers-slider').value);
-        selectedPlan = findPlanBySubscribers(subscribersCount);
-      } else if (planType === 'letters') {
-        const lettersCount = parseInt(document.getElementById('letters-slider').value);
-        selectedPlan = findPlanByEmails(lettersCount);
-      }
-
-      if (selectedPlan) {
-        window.location.href = `/billing/confirm/?plan_id=${selectedPlan.id}`;
-      } else {
-        alert('Ошибка: не удалось найти подходящий тариф');
-      }
-    }
-
-    // Поиск тарифа по количеству подписчиков
-    function findPlanBySubscribers(count) {
-      const plans = plansData.subscribers;
-      
-      // Сначала ищем точное совпадение
-      let exactMatch = plans.find(plan => plan.subscribers === count);
-      if (exactMatch) return exactMatch;
-      
-      // Ищем ближайший подходящий тариф
-      let bestPlan = null;
-      let minDifference = Infinity;
-      
-      for (let plan of plans) {
-        if (plan.subscribers >= count) {
-          const difference = plan.subscribers - count;
-          if (difference < minDifference) {
-            minDifference = difference;
-            bestPlan = plan;
-          }
-        }
-      }
-      
-      return bestPlan || plans[0]; // Возвращаем первый тариф если ничего не найдено
-    }
-
-    // Поиск тарифа по количеству писем
-    function findPlanByEmails(count) {
-      const plans = plansData.letters;
-      
-      // Сначала ищем точное совпадение
-      let exactMatch = plans.find(plan => plan.emails_per_month === count);
-      if (exactMatch) return exactMatch;
-      
-      // Ищем ближайший подходящий тариф
-      let bestPlan = null;
-      let minDifference = Infinity;
-      
-      for (let plan of plans) {
-        if (plan.emails_per_month >= count) {
-          const difference = plan.emails_per_month - count;
-          if (difference < minDifference) {
-            minDifference = difference;
-            bestPlan = plan;
-          }
-        }
-      }
-      
-      return bestPlan || plans[0]; // Возвращаем первый тариф если ничего не найдено
-    }
-
-    // Обновление слайдеров на основе загруженных тарифов
-    function updateSliders() {
-      // Обновляем слайдер подписчиков
-      if (plansData.subscribers.length > 0) {
-        const subscribersPlans = plansData.subscribers;
-        const minSubscribers = Math.min(...subscribersPlans.map(p => p.subscribers));
-        const maxSubscribers = Math.max(...subscribersPlans.map(p => p.subscribers));
+      <!-- Subscribers Slider -->
+      <div id="subscribers-section" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20 hidden">
+        <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество подписчиков</h3>
         
-        const subscribersSlider = document.getElementById('subscribers-slider');
+        <div class="mb-8">
+          <label for="subscribers-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
+            Количество подписчиков: <span id="slider-value">1,000</span>
+          </label>
+          <div class="relative">
+            <input 
+              type="range" 
+              id="subscribers-slider" 
+              min="1000" 
+              max="1000000" 
+              step="1000" 
+              value="1000"
+              class="w-full slider cursor-pointer"
+            >
+            <span id="subscribers-bubble" class="value-bubble">1,000</span>
+          </div>
+          <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
+            <span>1,000</span>
+            <span>1,000,000</span>
+          </div>
+        </div>
+
+        <div class="text-center p-6 bg-gray-50 rounded-lg">
+          <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Подписчики"</h4>
+          <div class="text-3xl font-bold text-[#1877ff] mb-2">
+            <span id="subscribers-price-slider">₽590</span>
+          </div>
+          <p class="text-[#6b7a99]">в месяц</p>
+          <button onclick="handleChoosePlan('subscribers', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            Выбрать этот тариф
+          </button>
+        </div>
+      </div>
+
+      <!-- Letters Slider -->
+      <div id="letters-section" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 mb-20 hidden">
+        <h3 class="text-2xl font-bold text-[#222a38] text-center mb-8">Настройте количество писем</h3>
+        
+        <div class="mb-8">
+          <label for="letters-slider" class="block text-sm font-medium text-[#6b7a99] mb-4">
+            Количество писем: <span id="letters-slider-value">1,000</span>
+          </label>
+          <div class="relative">
+            <input 
+              type="range" 
+              id="letters-slider" 
+              min="1000" 
+              max="1000000" 
+              step="1000" 
+              value="1000"
+              class="w-full slider cursor-pointer"
+            >
+            <span id="letters-bubble" class="value-bubble">1,000</span>
+          </div>
+          <div class="flex justify-between text-xs text-[#6b7a99] mt-2">
+            <span>1,000</span>
+            <span>1,000,000</span>
+          </div>
+        </div>
+
+        <div class="text-center p-6 bg-gray-50 rounded-lg">
+          <h4 class="text-lg font-semibold text-[#222a38] mb-2">Тариф "Письма"</h4>
+          <div class="text-3xl font-bold text-[#1877ff] mb-2">
+            <span id="letters-price-slider">₽380</span>
+          </div>
+          <p class="text-[#6b7a99]">за пакет</p>
+          <button onclick="handleChoosePlan('letters', false)" class="mt-4 bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold py-2 px-6 rounded-lg transition-colors">
+            Выбрать этот тариф
+          </button>
+        </div>
+      </div>
+
+      <!-- FAQ Section -->
+      <div class="max-w-4xl mx-auto">
+        <h2 class="text-3xl font-bold text-[#222a38] text-center mb-12">Часто задаваемые вопросы</h2>
+        
+        <div class="space-y-6">
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
+              <span class="font-medium text-[#222a38]">Могу ли я изменить тариф в любое время?</span>
+              <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
+            </button>
+            <div class="px-6 pb-4 hidden">
+              <p class="text-[#6b7a99]">Да, вы можете изменить тариф в любое время.</p>
+            </div>
+          </div>
+          
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
+              <span class="font-medium text-[#222a38]">Что происходит при превышении лимита подписчиков?</span>
+              <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
+            </button>
+            <div class="px-6 pb-4 hidden">
+              <p class="text-[#6b7a99]">При превышении лимита мы уведомим вас и предложим перейти на следующий тариф.</p>
+            </div>
+          </div>
+          
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
+              <span class="font-medium text-[#222a38]">Есть ли ограничения на количество писем в тарифе "Подписчики"?</span>
+              <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
+            </button>
+            <div class="px-6 pb-4 hidden">
+              <p class="text-[#6b7a99]">В тарифе "Подписчики" количество писем неограниченно. Ограничения касаются только количества подписчиков в базе.</p>
+            </div>
+          </div>
+          
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <button class="w-full px-6 py-4 text-left flex justify-between items-center" onclick="toggleFAQ(this)">
+              <span class="font-medium text-[#222a38]">Как работает тариф "Письма"?</span>
+              <i class="fa-solid fa-chevron-down text-[#6b7a99] transition-transform"></i>
+            </button>
+            <div class="px-6 pb-4 hidden">
+              <p class="text-[#6b7a99]">Тариф "Письма" подходит для нерегулярных рассылок. Вы покупаете пакет писем без ограничений по количеству подписчиков. Пакет не имеет срока действия.</p>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  </section>
+
+ 
+
+<!-- Скрипт для системы pricing -->
+<script>
+  // Глобальные переменные
+  let isAuthenticated = false;
+  let selectedPlanType = null;
+  let plansData = {
+    free: [],
+    subscribers: [],
+    letters: []
+  };
+
+  // Fallback цены на случай недоступности API
+  const fallbackPrices = {
+    subscribers: {
+      1000: 590,
+      5000: 1990,
+      10000: 2940,
+      20000: 4680,
+      25000: 5490,
+      50000: 9900,
+      100000: 18000,
+      250000: 45000,
+      500000: 75000,
+      750000: 100000,
+      1000000: 140000
+    },
+    letters: {
+      1000: 380,
+      5000: 1190,
+      10000: 1760,
+      20000: 2900,
+      25000: 3400,
+      50000: 6500,
+      100000: 12000,
+      250000: 30000,
+      500000: 55000,
+      750000: 75000,
+      1000000: 100000
+    }
+  };
+
+  // Проверка статуса авторизации при загрузке страницы
+  async function checkAuthStatus() {
+    try {
+      const response = await fetch('/billing/check-auth/');
+      const data = await response.json();
+      isAuthenticated = data.authenticated;
+      console.log('Auth status:', isAuthenticated);
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      isAuthenticated = false;
+    }
+  }
+
+  // Загрузка тарифов с сервера
+  async function loadPlans() {
+    try {
+      console.log('=== DEBUG loadPlans ===');
+      console.log('Loading plans from /api/plans/');
+      const response = await fetch('/api/plans/');
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      console.log('Content-Type:', contentType);
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Response is not JSON:', text);
+        throw new Error('Response is not JSON');
+      }
+      
+      const data = await response.json();
+      console.log('Raw API response:', data);
+      console.log('Response success:', data.success);
+      console.log('Response plans:', data.plans);
+      
+      if (data.success) {
+        plansData = data.plans;
+        console.log('Plans loaded successfully:', plansData);
+        console.log('Subscribers plans count:', plansData.subscribers ? plansData.subscribers.length : 0);
+        console.log('Letters plans count:', plansData.letters ? plansData.letters.length : 0);
+        
+        // Проверяем, есть ли тарифы в ответе
+        const hasSubscribersPlans = plansData.subscribers && plansData.subscribers.length > 0;
+        const hasLettersPlans = plansData.letters && plansData.letters.length > 0;
+        
+        if (!hasSubscribersPlans || !hasLettersPlans) {
+          console.warn('API returned empty plans, using fallback data');
+          const fallbackPlans = createFallbackPlans();
+          
+          // Дополняем пустые массивы fallback данными
+          if (!hasSubscribersPlans) {
+            plansData.subscribers = fallbackPlans.subscribers;
+            console.log('Added fallback subscribers plans:', plansData.subscribers.length);
+          }
+          if (!hasLettersPlans) {
+            plansData.letters = fallbackPlans.letters;
+            console.log('Added fallback letters plans:', plansData.letters.length);
+          }
+        }
+      } else {
+        console.error('Failed to load plans:', data.error);
+        // Используем fallback данные
+        plansData = createFallbackPlans();
+        console.log('Using fallback plans:', plansData);
+      }
+      
+      // Обновляем слайдеры и цены
+      updateSliders();
+    } catch (error) {
+      console.error('Error loading plans:', error);
+      console.error('Error details:', error.message);
+      // Используем fallback данные при ошибке
+      plansData = createFallbackPlans();
+      console.log('Using fallback plans due to error:', plansData);
+      updateSliders();
+    }
+  }
+
+  // Создание fallback планов из статических цен
+  function createFallbackPlans() {
+    console.log('=== DEBUG createFallbackPlans ===');
+    console.log('fallbackPrices:', fallbackPrices);
+    
+    const subscribers = Object.entries(fallbackPrices.subscribers).map(([count, price], index) => ({
+      id: 1000 + index, // Числовые ID начиная с 1000
+      subscribers: parseInt(count),
+      price: price,
+      name: `${count} подписчиков`
+    }));
+
+    const letters = Object.entries(fallbackPrices.letters).map(([count, price], index) => ({
+      id: 2000 + index, // Числовые ID начиная с 2000
+      emails_per_month: parseInt(count),
+      price: price,
+      name: `${count} писем`
+    }));
+
+    const result = {
+      free: [],
+      subscribers: subscribers,
+      letters: letters
+    };
+    
+    console.log('Created fallback plans:', result);
+    console.log('Subscribers fallback count:', subscribers.length);
+    console.log('Letters fallback count:', letters.length);
+    console.log('Sample subscribers plan IDs:', subscribers.slice(0, 3).map(p => ({ id: p.id, subscribers: p.subscribers, price: p.price })));
+    console.log('Sample letters plan IDs:', letters.slice(0, 3).map(p => ({ id: p.id, emails_per_month: p.emails_per_month, price: p.price })));
+    
+    return result;
+  }
+
+  // Функция выбора тарифа
+  function handleChoosePlan(planType, isFree) {
+    console.log('=== DEBUG handleChoosePlan ===');
+    console.log('planType:', planType);
+    console.log('isFree:', isFree);
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('plansData:', plansData);
+    
+    if (isFree) {
+      // Бесплатный тариф - активируем сразу
+      window.location.href = '/billing/activate-free/';
+      return;
+    }
+
+    // Для платных тарифов проверяем авторизацию
+    if (!isAuthenticated) {
+      // Если не авторизован - редирект на страницу входа
+      window.location.href = `/accounts/login?next=/pricing/`;
+      return;
+    }
+
+    // Платный тариф - находим подходящий тариф по значениям слайдеров
+    let selectedPlan = null;
+    
+    if (planType === 'subscribers') {
+      const subscribersCount = parseInt(document.getElementById('subscribers-slider').value);
+      console.log('subscribersCount:', subscribersCount);
+      console.log('Available subscribers plans:', plansData.subscribers);
+      selectedPlan = findPlanBySubscribers(subscribersCount);
+      console.log('Selected subscribers plan:', selectedPlan);
+    } else if (planType === 'letters') {
+      const lettersCount = parseInt(document.getElementById('letters-slider').value);
+      console.log('lettersCount:', lettersCount);
+      console.log('Available letters plans:', plansData.letters);
+      selectedPlan = findPlanByEmails(lettersCount);
+      console.log('Selected letters plan:', selectedPlan);
+    }
+
+    if (selectedPlan) {
+      // Проверяем, является ли это fallback планом (ID >= 1000)
+      if (selectedPlan.id >= 1000) {
+        // Для fallback планов передаем параметры напрямую
+        const params = new URLSearchParams({
+          plan_type: planType,
+          subscribers: planType === 'subscribers' ? selectedPlan.subscribers : '',
+          emails_per_month: planType === 'letters' ? selectedPlan.emails_per_month : '',
+          price: selectedPlan.price,
+          name: selectedPlan.name
+        });
+        console.log('Redirecting to fallback plan:', `/billing/confirm/?${params.toString()}`);
+        window.location.href = `/billing/confirm/?${params.toString()}`;
+      } else {
+        // Для реальных планов из базы данных используем ID
+        console.log('Redirecting to real plan:', `/billing/confirm/?plan_id=${selectedPlan.id}`);
+        window.location.href = `/billing/confirm/?plan_id=${selectedPlan.id}`;
+      }
+    } else {
+      console.error('No plan found!');
+      console.log('Final plansData state:', plansData);
+      alert('Ошибка: не удалось найти подходящий тариф');
+    }
+  }
+
+  // UI-выбор тарифа: подсветка карточки и показ нужного слайдера
+  function selectPlan(planType) {
+    selectedPlanType = planType;
+    const cards = document.querySelectorAll('.plan-card');
+    cards.forEach(card => {
+      card.classList.remove('ring-2', 'ring-[#1877ff]', 'scale-105', 'border-2', 'border-[#1877ff]');
+    });
+    const activeCard = document.querySelector(`[data-plan-type="${planType}"]`);
+    if (activeCard) {
+      activeCard.classList.add('ring-2', 'ring-[#1877ff]');
+    }
+    // Toggle sections
+    const subsSection = document.getElementById('subscribers-section');
+    const lettSection = document.getElementById('letters-section');
+    if (planType === 'subscribers') {
+      subsSection.classList.remove('hidden');
+      lettSection.classList.add('hidden');
+      // Ensure visuals are up-to-date
+      updateSubscribers();
+      document.getElementById('subscribers-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (planType === 'letters') {
+      lettSection.classList.remove('hidden');
+      subsSection.classList.add('hidden');
+      updateLetters();
+      document.getElementById('letters-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // Поиск тарифа по количеству подписчиков
+  function findPlanBySubscribers(count) {
+    console.log('=== DEBUG findPlanBySubscribers (exact) ===');
+    console.log('Looking for exact count:', count);
+
+    const plans = plansData.subscribers;
+
+    // Если есть точный план из БД — используем его
+    if (plans && plans.length > 0) {
+      const exact = plans.find(p => p.subscribers === count);
+      if (exact) return exact;
+    }
+
+    // Иначе формируем fallback-план с ТОЧНЫМ значением и вычисленной ценой
+    let price;
+    if (plans && plans.length > 0) {
+      price = interpolatePrice(count, plans);
+    } else {
+      price = interpolateFallbackPrice(count, fallbackPrices.subscribers);
+    }
+
+    return {
+      id: 1000000 + count, // гарантированно >= 1000, распознается как fallback
+      subscribers: count,
+      price: price,
+      name: `${count.toLocaleString()} подписчиков`
+    };
+  }
+
+  // Поиск тарифа по количеству писем
+  function findPlanByEmails(count) {
+    console.log('=== DEBUG findPlanByEmails (exact) ===');
+    console.log('Looking for exact count:', count);
+
+    const plans = plansData.letters;
+
+    // Если есть точный план из БД — используем его
+    if (plans && plans.length > 0) {
+      const exact = plans.find(p => p.emails_per_month === count);
+      if (exact) return exact;
+    }
+
+    // Иначе формируем fallback-план с ТОЧНЫМ значением и вычисленной ценой
+    let price;
+    if (plans && plans.length > 0) {
+      price = interpolatePrice(count, plans);
+    } else {
+      price = interpolateFallbackPrice(count, fallbackPrices.letters);
+    }
+
+    return {
+      id: 2000000 + count, // гарантированно >= 1000, распознается как fallback
+      emails_per_month: count,
+      price: price,
+      name: `${count.toLocaleString()} писем`
+    };
+  }
+
+  // Обновление слайдеров на основе загруженных тарифов
+  function updateSliders() {
+    console.log('=== DEBUG updateSliders ===');
+    console.log('plansData.subscribers.length:', plansData.subscribers ? plansData.subscribers.length : 'undefined');
+    console.log('plansData.letters.length:', plansData.letters ? plansData.letters.length : 'undefined');
+    
+    // Обновляем слайдер подписчиков
+    if (plansData.subscribers && plansData.subscribers.length > 0) {
+      const subscribersPlans = plansData.subscribers;
+      const minSubscribers = Math.min(...subscribersPlans.map(p => p.subscribers));
+      const maxSubscribers = Math.max(...subscribersPlans.map(p => p.subscribers));
+      
+      console.log('Subscribers range:', minSubscribers, 'to', maxSubscribers);
+      
+      const subscribersSlider = document.getElementById('subscribers-slider');
+      if (subscribersSlider) {
         subscribersSlider.min = minSubscribers;
         subscribersSlider.max = maxSubscribers;
         // Используем более точный шаг для больших диапазонов
@@ -561,16 +726,31 @@
         }
         subscribersSlider.value = minSubscribers;
         
-        updateSubscribers();
-      }
-      
-      // Обновляем слайдер писем
-      if (plansData.letters.length > 0) {
-        const lettersPlans = plansData.letters;
-        const minEmails = Math.min(...lettersPlans.map(p => p.emails_per_month));
-        const maxEmails = Math.max(...lettersPlans.map(p => p.emails_per_month));
+        console.log('Updated subscribers slider:', {
+          min: subscribersSlider.min,
+          max: subscribersSlider.max,
+          step: subscribersSlider.step,
+          value: subscribersSlider.value
+        });
         
-        const lettersSlider = document.getElementById('letters-slider');
+        updateSubscribers();
+      } else {
+        console.error('Subscribers slider element not found');
+      }
+    } else {
+      console.warn('No subscribers plans available for slider update');
+    }
+    
+    // Обновляем слайдер писем
+    if (plansData.letters && plansData.letters.length > 0) {
+      const lettersPlans = plansData.letters;
+      const minEmails = Math.min(...lettersPlans.map(p => p.emails_per_month));
+      const maxEmails = Math.max(...lettersPlans.map(p => p.emails_per_month));
+      
+      console.log('Letters range:', minEmails, 'to', maxEmails);
+      
+      const lettersSlider = document.getElementById('letters-slider');
+      if (lettersSlider) {
         lettersSlider.min = minEmails;
         lettersSlider.max = maxEmails;
         // Используем более точный шаг для больших диапазонов
@@ -584,118 +764,287 @@
         }
         lettersSlider.value = minEmails;
         
-        updateLetters();
-      }
-    }
-
-    // Функция интерполяции цены между известными значениями
-    function interpolatePrice(value, plans) {
-      // Сортируем планы по значению (подписчики или письма)
-      const sortedPlans = plans.sort((a, b) => {
-        const aValue = a.subscribers || a.emails_per_month;
-        const bValue = b.subscribers || b.emails_per_month;
-        return aValue - bValue;
-      });
-      
-      // Если точное совпадение, возвращаем эту цену
-      const exactMatch = sortedPlans.find(plan => {
-        const planValue = plan.subscribers || plan.emails_per_month;
-        return planValue === value;
-      });
-      if (exactMatch) return exactMatch.price;
-      
-      // Если значение меньше минимального, возвращаем минимальную цену
-      const minPlan = sortedPlans[0];
-      const minValue = minPlan.subscribers || minPlan.emails_per_month;
-      if (value <= minValue) return minPlan.price;
-      
-      // Если значение больше максимального, возвращаем максимальную цену
-      const maxPlan = sortedPlans[sortedPlans.length - 1];
-      const maxValue = maxPlan.subscribers || maxPlan.emails_per_month;
-      if (value >= maxValue) return maxPlan.price;
-      
-      // Находим два ближайших значения
-      let lower = sortedPlans[0];
-      let upper = sortedPlans[sortedPlans.length - 1];
-      
-      for (let i = 0; i < sortedPlans.length - 1; i++) {
-        const currentValue = sortedPlans[i].subscribers || sortedPlans[i].emails_per_month;
-        const nextValue = sortedPlans[i + 1].subscribers || sortedPlans[i + 1].emails_per_month;
+        console.log('Updated letters slider:', {
+          min: lettersSlider.min,
+          max: lettersSlider.max,
+          step: lettersSlider.step,
+          value: lettersSlider.value
+        });
         
-        if (value >= currentValue && value <= nextValue) {
-          lower = sortedPlans[i];
-          upper = sortedPlans[i + 1];
-          break;
+        updateLetters();
+      } else {
+        console.error('Letters slider element not found');
+      }
+    } else {
+      console.warn('No letters plans available for slider update');
+    }
+  }
+
+  // Функция интерполяции fallback цен
+  function interpolateFallbackPrice(value, prices) {
+    const sortedPrices = Object.entries(prices).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    
+    // Если точное совпадение, возвращаем эту цену
+    const exactMatch = sortedPrices.find(([count]) => parseInt(count) === value);
+    if (exactMatch) return exactMatch[1];
+    
+    // Если значение меньше минимального, возвращаем минимальную цену
+    const minPrice = sortedPrices[0];
+    const minValue = parseInt(minPrice[0]);
+    if (value <= minValue) return minPrice[1];
+    
+    // Если значение больше максимального, возвращаем максимальную цену
+    const maxPrice = sortedPrices[sortedPrices.length - 1];
+    const maxValue = parseInt(maxPrice[0]);
+    if (value >= maxValue) return maxPrice[1];
+    
+    // Находим два ближайших значения
+    let lower = sortedPrices[0];
+    let upper = sortedPrices[sortedPrices.length - 1];
+    
+    for (let i = 0; i < sortedPrices.length - 1; i++) {
+      const currentValue = parseInt(sortedPrices[i][0]);
+      const nextValue = parseInt(sortedPrices[i + 1][0]);
+      
+      if (value >= currentValue && value <= nextValue) {
+        lower = sortedPrices[i];
+        upper = sortedPrices[i + 1];
+        break;
+      }
+    }
+    
+    // Интерполируем между двумя значениями
+    const lowerValue = parseInt(lower[0]);
+    const upperValue = parseInt(upper[0]);
+    const lowerPrice = lower[1];
+    const upperPrice = upper[1];
+    const ratio = (value - lowerValue) / (upperValue - lowerValue);
+    
+    // Округляем до ближайших 10 рублей для более читаемых цен
+    return Math.round((lowerPrice + (upperPrice - lowerPrice) * ratio) / 10) * 10;
+  }
+
+  // Функция интерполяции цены между известными значениями
+  function interpolatePrice(value, plans) {
+    // Сортируем планы по значению (подписчики или письма)
+    const sortedPlans = plans.sort((a, b) => {
+      const aValue = a.subscribers || a.emails_per_month;
+      const bValue = b.subscribers || b.emails_per_month;
+      return aValue - bValue;
+    });
+    
+    // Если точное совпадение, возвращаем эту цену
+    const exactMatch = sortedPlans.find(plan => {
+      const planValue = plan.subscribers || plan.emails_per_month;
+      return planValue === value;
+    });
+    if (exactMatch) return exactMatch.price;
+    
+    // Если значение меньше минимального, возвращаем минимальную цену
+    const minPlan = sortedPlans[0];
+    const minValue = minPlan.subscribers || minPlan.emails_per_month;
+    if (value <= minValue) return minPlan.price;
+    
+    // Если значение больше максимального, возвращаем максимальную цену
+    const maxPlan = sortedPlans[sortedPlans.length - 1];
+    const maxValue = maxPlan.subscribers || maxPlan.emails_per_month;
+    if (value >= maxValue) return maxPlan.price;
+    
+    // Находим два ближайших значения
+    let lower = sortedPlans[0];
+    let upper = sortedPlans[sortedPlans.length - 1];
+    
+    for (let i = 0; i < sortedPlans.length - 1; i++) {
+      const currentValue = sortedPlans[i].subscribers || sortedPlans[i].emails_per_month;
+      const nextValue = sortedPlans[i + 1].subscribers || sortedPlans[i + 1].emails_per_month;
+      
+      if (value >= currentValue && value <= nextValue) {
+        lower = sortedPlans[i];
+        upper = sortedPlans[i + 1];
+        break;
+      }
+    }
+    
+    // Интерполируем между двумя значениями
+    const lowerValue = lower.subscribers || lower.emails_per_month;
+    const upperValue = upper.subscribers || upper.emails_per_month;
+    const lowerPrice = lower.price;
+    const upperPrice = upper.price;
+    const ratio = (value - lowerValue) / (upperValue - lowerValue);
+    
+    // Округляем до ближайших 10 рублей для более читаемых цен
+    return Math.round((lowerPrice + (upperPrice - lowerPrice) * ratio) / 10) * 10;
+  }
+
+  // Subscribers slider functionality
+  const subscribersSlider = document.getElementById('subscribers-slider');
+  const subscribersSliderValue = document.getElementById('slider-value');
+  const subscribersPrice = document.getElementById('subscribers-price');
+  const subscribersPriceSlider = document.getElementById('subscribers-price-slider');
+  const subscribersLimit = document.getElementById('subscribers-limit');
+  const subscribersBubble = document.getElementById('subscribers-bubble');
+
+  function updateSubscribers() {
+    const value = parseInt(subscribersSlider.value);
+    subscribersSliderValue.textContent = value.toLocaleString();
+    subscribersLimit.textContent = value.toLocaleString();
+    subscribersBubble.textContent = value.toLocaleString();
+    
+    let price = 590; // Базовая цена по умолчанию
+    
+    if (plansData.subscribers.length > 0) {
+      price = interpolatePrice(value, plansData.subscribers);
+    } else {
+      // Используем fallback цены
+      price = interpolateFallbackPrice(value, fallbackPrices.subscribers);
+    }
+    
+    subscribersPrice.textContent = `₽${price}`;
+    subscribersPriceSlider.textContent = `₽${price}`;
+
+    // Update slider fill and bubble position
+    updateSliderVisual(subscribersSlider, subscribersBubble);
+  }
+
+  // Letters slider functionality
+  const lettersSlider = document.getElementById('letters-slider');
+  const lettersSliderValue = document.getElementById('letters-slider-value');
+  const lettersPrice = document.getElementById('letters-price');
+  const lettersPriceSlider = document.getElementById('letters-price-slider');
+  const lettersLimit = document.getElementById('letters-limit');
+  const lettersBubble = document.getElementById('letters-bubble');
+
+  function updateLetters() {
+    const value = parseInt(lettersSlider.value);
+    lettersSliderValue.textContent = value.toLocaleString();
+    lettersLimit.textContent = value.toLocaleString();
+    lettersBubble.textContent = value.toLocaleString();
+    
+    let price = 380; // Базовая цена по умолчанию
+    
+    if (plansData.letters.length > 0) {
+      price = interpolatePrice(value, plansData.letters);
+    } else {
+      // Используем fallback цены
+      price = interpolateFallbackPrice(value, fallbackPrices.letters);
+    }
+    
+    lettersPrice.textContent = `₽${price}`;
+    lettersPriceSlider.textContent = `₽${price}`;
+
+    // Update slider fill and bubble position
+    updateSliderVisual(lettersSlider, lettersBubble);
+  }
+
+  // Обновление визуала слайдера: градиент и позиция пузыря
+  function updateSliderVisual(sliderEl, bubbleEl) {
+    const min = parseInt(sliderEl.min);
+    const max = parseInt(sliderEl.max);
+    const val = parseInt(sliderEl.value);
+    const percent = ((val - min) * 100) / (max - min);
+    sliderEl.style.setProperty('--val-percent', `${percent}%`);
+    // position bubble
+    const sliderRect = sliderEl.getBoundingClientRect();
+    const offsetLeft = sliderEl.offsetLeft;
+    const width = sliderEl.clientWidth;
+    const x = (percent / 100) * width;
+    bubbleEl.style.left = `${x + offsetLeft}px`;
+  }
+
+  // FAQ functionality
+  function toggleFAQ(button) {
+    const content = button.nextElementSibling;
+    const icon = button.querySelector('i');
+    
+    content.classList.toggle('hidden');
+    icon.style.transform = content.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+  }
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', async function() {
+    // Сначала обновляем цены с fallback данными
+    updateSubscribers();
+    updateLetters();
+    
+    // Карточки выбора тарифа (клик по карточке)
+    document.querySelectorAll('.plan-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const type = card.getAttribute('data-plan-type');
+        if (type === 'free') {
+          handleChoosePlan('free', true);
+        } else {
+          selectPlan(type);
         }
-      }
-      
-      // Интерполируем между двумя значениями
-      const lowerValue = lower.subscribers || lower.emails_per_month;
-      const upperValue = upper.subscribers || upper.emails_per_month;
-      const lowerPrice = lower.price;
-      const upperPrice = upper.price;
-      const ratio = (value - lowerValue) / (upperValue - lowerValue);
-      
-      // Округляем до ближайших 10 рублей для более читаемых цен
-      return Math.round((lowerPrice + (upperPrice - lowerPrice) * ratio) / 10) * 10;
-    }
-
-    // Subscribers slider functionality
-    const subscribersSlider = document.getElementById('subscribers-slider');
-    const subscribersSliderValue = document.getElementById('slider-value');
-    const subscribersPrice = document.getElementById('subscribers-price');
-    const subscribersPriceSlider = document.getElementById('subscribers-price-slider');
-    const subscribersLimit = document.getElementById('subscribers-limit');
-
-    function updateSubscribers() {
-      const value = parseInt(subscribersSlider.value);
-      subscribersSliderValue.textContent = value.toLocaleString();
-      subscribersLimit.textContent = value.toLocaleString();
-      
-      if (plansData.subscribers.length > 0) {
-        const price = interpolatePrice(value, plansData.subscribers);
-        subscribersPrice.textContent = `₽${price}`;
-        subscribersPriceSlider.textContent = `₽${price}`;
-      }
-    }
-
-    // Letters slider functionality
-    const lettersSlider = document.getElementById('letters-slider');
-    const lettersSliderValue = document.getElementById('letters-slider-value');
-    const lettersPrice = document.getElementById('letters-price');
-    const lettersPriceSlider = document.getElementById('letters-price-slider');
-    const lettersLimit = document.getElementById('letters-limit');
-
-    function updateLetters() {
-      const value = parseInt(lettersSlider.value);
-      lettersSliderValue.textContent = value.toLocaleString();
-      lettersLimit.textContent = value.toLocaleString();
-      
-      if (plansData.letters.length > 0) {
-        const price = interpolatePrice(value, plansData.letters);
-        lettersPrice.textContent = `₽${price}`;
-        lettersPriceSlider.textContent = `₽${price}`;
-      }
-    }
-
-    // FAQ functionality
-    function toggleFAQ(button) {
-      const content = button.nextElementSibling;
-      const icon = button.querySelector('i');
-      
-      content.classList.toggle('hidden');
-      icon.style.transform = content.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-    }
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', async function() {
-      await checkAuthStatus();
-      await loadPlans();
+      });
     });
 
-    // Event listeners
-    subscribersSlider.addEventListener('input', updateSubscribers);
-    lettersSlider.addEventListener('input', updateLetters);
-  </script>
+    // Тоггл мобильного меню
+    const mobileToggle = document.getElementById('mobile-nav-toggle');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileToggle && mobileMenu) {
+      const iconOpen = document.getElementById('icon-open');
+      const iconClose = document.getElementById('icon-close');
+      mobileToggle.addEventListener('click', () => {
+        const isHidden = mobileMenu.classList.contains('hidden');
+        if (isHidden) {
+          mobileMenu.classList.remove('hidden');
+          iconOpen.classList.add('hidden');
+          iconClose.classList.remove('hidden');
+          mobileToggle.setAttribute('aria-label', 'Закрыть меню');
+        } else {
+          mobileMenu.classList.add('hidden');
+          iconOpen.classList.remove('hidden');
+          iconClose.classList.add('hidden');
+          mobileToggle.setAttribute('aria-label', 'Открыть меню');
+        }
+      });
+    }
+
+    // Затем загружаем данные с сервера
+    await checkAuthStatus();
+    await loadPlans();
+  });
+
+  // Event listeners
+  subscribersSlider.addEventListener('input', updateSubscribers);
+  lettersSlider.addEventListener('input', updateLetters);
+</script>
+
+<!-- Footer -->
+<footer class="bg-white pt-12 pb-6 mt-12 border-t border-gray-100">
+  <div class="max-w-7xl mx-auto px-4">
+    <!-- Top row -->
+    <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
+      <!-- Left side - Logo -->
+      <div class="flex items-center mb-4 md:mb-0">
+        <svg width="24" height="24" fill="none" class="mr-2" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="6" width="20" height="12" rx="3" stroke="#1877ff" stroke-width="2"/>
+          <path d="M2 6l10 8L22 6" stroke="#1877ff" stroke-width="2"/>
+        </svg>
+        <span class="text-xl font-bold text-[#222a38]">vashsender</span>
+      </div>
+      <!-- Right side - Links -->
+      <div class="flex flex-wrap gap-6 text-[#6b7a99] text-sm">
+        <a href="/legal/license/" class="hover:text-[#1877ff] transition">Лицензионное соглашение</a>
+        <a href="/legal/privacy/" class="hover:text-[#1877ff] transition">Политика конфиденциальности</a>
+        <a href="/legal/antispam/" class="hover:text-[#1877ff] transition">АнтиСпам соглашение</a>
+      </div>
+    </div>
+    
+    <!-- Bottom row -->
+    <div class="flex flex-col md:flex-row md:justify-between md:items-center text-sm text-[#6b7a99]">
+      <!-- Left side - Email -->
+      <div class="mb-2 md:mb-0">
+        <a href="mailto:support@vashsender.ru" class="text-[#6b7a99] hover:text-[#1877ff] transition">support@vashsender.ru</a>
+      </div>
+      <!-- Right side - Made with love -->
+      <div class="flex items-center gap-1">
+        <span>Сделано с</span>
+        <i class="fa-solid fa-heart text-red-500"></i>
+        <span>в <a href="https://monocode.app/" target="_blank" class="text-[#6b7a99] hover:text-[#1877ff] transition">monocode</a></span>
+      </div>
+    </div>
+  </div>
+</footer>
 </body>
-</html> 
+</html>

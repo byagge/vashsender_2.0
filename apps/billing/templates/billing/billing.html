@@ -96,18 +96,18 @@
                         <div class="bg-white border rounded-lg p-4">
                             <div class="text-sm text-gray-500">Использовано</div>
                             <div class="text-2xl font-semibold">
-                                <span x-text="currentPlan?.emails_sent || 0"></span>
-                                <span class="text-gray-500 text-base ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
-                                <template x-if="currentPlan?.plan_type === 'Letters' && (currentPlan?.emails_per_month || currentPlan?.emails_per_month === 0)">
-                                    <span class="text-gray-500 text-base"> из <span x-text="currentPlan?.emails_per_month || 0"></span></span>
+                                <span x-text="formatNumber(getUsed())"></span>
+                                <span class="text-gray-500 text-base ml-1" x-text="getLabel()"></span>
+                                <template x-if="currentPlan?.plan_type === 'Letters'">
+                                    <span class="text-gray-500 text-base"> из <span x-text="formatNumber(getTotal())"></span></span>
                                 </template>
                             </div>
                         </div>
-                        <div class="bg-white border rounded-lg p-4" x-show="currentPlan?.emails_remaining !== null && currentPlan?.emails_remaining !== undefined">
+                        <div class="bg-white border rounded-lg p-4">
                             <div class="text-sm text-gray-500">Осталось</div>
                             <div class="text-2xl font-semibold">
-                                <span x-text="currentPlan?.emails_remaining || 0"></span>
-                                <span class="text-gray-500 text-base ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                <span x-text="formatNumber(getRemaining())"></span>
+                                <span class="text-gray-500 text-base ml-1" x-text="getLabel()"></span>
                             </div>
                         </div>
                     </div>
@@ -118,45 +118,40 @@
                             <div>
                                 <div class="text-sm text-gray-500">Всего по тарифу</div>
                                 <div class="text-xl font-semibold">
-                                    <span x-text="currentPlan?.plan_type === 'Letters' 
-                                        ? (currentPlan?.emails_per_month || 0) 
-                                        : ((currentPlan?.emails_sent || 0) + (currentPlan?.emails_remaining || 0))"></span>
-                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                    <span x-text="formatNumber(getTotal())"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="getLabel()"></span>
                                 </div>
                             </div>
                             <div>
                                 <div class="text-sm text-gray-500">Использовано</div>
                                 <div class="text-xl font-semibold">
-                                    <span x-text="currentPlan?.emails_sent || 0"></span>
-                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                    <span x-text="formatNumber(getUsed())"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="getLabel()"></span>
                                 </div>
                             </div>
                             <div>
                                 <div class="text-sm text-gray-500">Сегодня</div>
                                 <div class="text-xl font-semibold">
-                                    <span x-text="currentPlan?.emails_sent_today || 0"></span>
+                                    <span x-text="formatNumber(currentPlan?.emails_sent_today || 0)"></span>
                                 </div>
                             </div>
                             <div>
                                 <div class="text-sm text-gray-500">Осталось</div>
                                 <div class="text-xl font-semibold">
-                                    <span x-text="currentPlan?.emails_remaining || 0"></span>
-                                    <span class="text-gray-500 text-sm ml-1" x-text="currentPlan?.plan_type === 'Letters' ? 'писем' : 'подписчиков'"></span>
+                                    <span x-text="formatNumber(getRemaining())"></span>
+                                    <span class="text-gray-500 text-sm ml-1" x-text="getLabel()"></span>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Прогресс использования (если известен общий лимит) -->
-                        <div class="mt-4" x-data="{ total: (currentPlan?.plan_type === 'Letters' 
-                                                              ? (currentPlan?.emails_per_month || 0) 
-                                                              : ((currentPlan?.emails_sent || 0) + (currentPlan?.emails_remaining || 0))) }" 
-                             x-show="total > 0">
+                        <div class="mt-4" x-show="getTotal() > 0">
                             <div class="w-full bg-gray-200 rounded-full h-2">
                                 <div class="bg-blue-600 h-2 rounded-full" 
-                                     :style="`width: ${Math.min(100, ((currentPlan?.emails_sent || 0) / total) * 100)}%`"></div>
+                                     :style="`width: ${getUsedPercent()}%`"></div>
                             </div>
                             <div class="text-xs text-gray-500 mt-1">
-                                <span x-text="Math.min(100, Math.round(((currentPlan?.emails_sent || 0) / total) * 100))"></span>% использовано
+                                <span x-text="getUsedPercent()"></span>% использовано
                             </div>
                             <template x-if="currentPlan?.has_exceeded_daily_limit">
                                 <div class="mt-2 text-sm text-red-600">Превышен дневной лимит отправок</div>
@@ -165,26 +160,26 @@
                     </div>
                     
                     <!-- Email Limits (for Letters plans) -->
-                    <div x-show="currentPlan?.plan_type === 'Letters'" class="bg-gray-50 p-4 rounded-lg">
+                    <div x-show="isLettersPlan()" class="bg-gray-50 p-4 rounded-lg">
                         <div class="text-sm text-gray-500 mb-2">Лимит писем</div>
                         <div class="flex items-center justify-between">
                             <span class="text-lg font-semibold">
-                                Использовано писем: <span x-text="currentPlan?.emails_sent || 0"></span>
+                                Использовано писем: <span x-text="formatNumber(getUsed())"></span>
                                 <span class="text-gray-500"> из </span>
-                                <span x-text="currentPlan?.emails_per_month || 0"></span>
+                                <span x-text="formatNumber(getTotal())"></span>
                             </span>
                             <div class="w-32 bg-gray-200 rounded-full h-2">
                                 <div class="bg-blue-600 h-2 rounded-full" 
-                                     :style="`width: ${((currentPlan?.emails_sent || 0) / (currentPlan?.emails_per_month || 1) * 100)}%`"></div>
+                                     :style="`width: ${getUsedPercent()}%`"></div>
                             </div>
                         </div>
                         <div class="text-sm text-gray-500 mt-1">
-                            Осталось: <span x-text="currentPlan?.emails_remaining || 0"></span> писем
+                            Осталось: <span x-text="formatNumber(getRemaining())"></span> писем
                         </div>
                     </div>
                     
                     <!-- Subscribers Info (for Subscribers plans) -->
-                    <div x-show="currentPlan?.plan_type === 'Subscribers'" class="bg-gray-50 p-4 rounded-lg">
+                    <div x-show="isSubscribersPlan()" class="bg-gray-50 p-4 rounded-lg">
                         <div class="text-sm text-gray-500 mb-2">Информация о тарифе</div>
                         <div class="space-y-2">
                             <div class="flex justify-between">
@@ -194,17 +189,15 @@
                             <!-- Счетчик использования для тарифов 'Подписчики' -->
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Использовано подписчиков:</span>
-                                <span class="font-semibold" x-text="currentPlan?.emails_sent || 0"></span>
+                                <span class="font-semibold" x-text="formatNumber(getUsed())"></span>
                             </div>
-                            <template x-if="currentPlan?.emails_remaining !== null && currentPlan?.emails_remaining !== undefined">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Осталось по лимиту:</span>
-                                    <span class="font-semibold" x-text="currentPlan?.emails_remaining || 0"></span>
-                                </div>
-                            </template>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Осталось по лимиту:</span>
+                                <span class="font-semibold" x-text="formatNumber(getRemaining())"></span>
+                            </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Сегодня использовано:</span>
-                                <span class="font-semibold" x-text="currentPlan?.emails_sent_today || 0"></span>
+                                <span class="font-semibold" x-text="formatNumber(currentPlan?.emails_sent_today || 0)"></span>
                             </div>
                         </div>
                     </div>
@@ -313,6 +306,7 @@
               plan_type: currentData.plan_type,
               emails_sent: currentData.emails_sent,
               emails_per_month: currentData.emails_limit,
+              subscribers_limit: currentData.subscribers_limit,
               emails_remaining: currentData.emails_remaining,
               emails_sent_today: currentData.emails_sent_today,
               has_exceeded_daily_limit: currentData.has_exceeded_daily_limit
@@ -349,6 +343,56 @@
         } catch (error) {
           return 'Ошибка даты';
         }
+      },
+      
+      // Вычисляемые помощники по тарифу
+      formatNumber(value) {
+        const numeric = Number(value || 0);
+        return numeric.toLocaleString('ru-RU');
+      },
+      isLettersPlan() {
+        const t = (this.currentPlan?.plan_type || '').toString().toLowerCase();
+        // поддержка разных названий: Letters / Emails / Письма
+        const byName = ['letters', 'emails', 'письма'].includes(t);
+        const byFields = typeof this.currentPlan?.emails_per_month === 'number' && (this.currentPlan.emails_per_month || 0) > 0;
+        return byName || byFields;
+      },
+      isSubscribersPlan() {
+        const t = (this.currentPlan?.plan_type || '').toString().toLowerCase();
+        // поддержка: Subscribers / Подписчики
+        const byName = ['subscribers', 'подписчики'].includes(t);
+        const byFields = typeof this.currentPlan?.subscribers_limit === 'number' && (this.currentPlan.subscribers_limit || 0) > 0;
+        return byName || byFields;
+      },
+      getLabel() {
+        return this.isLettersPlan() ? 'писем' : 'подписчиков';
+      },
+      getTotal() {
+        if (!this.currentPlan) return 0;
+        if (this.isLettersPlan()) {
+          return this.currentPlan.emails_per_month || 0;
+        }
+        const limit = (this.currentPlan.subscribers_limit ?? this.currentPlan.emails_per_month ?? this.currentPlan.emails_limit);
+        if (typeof limit === 'number' && !isNaN(limit)) return limit;
+        const sent = this.currentPlan.emails_sent || 0;
+        const remaining = this.currentPlan.emails_remaining || 0;
+        return sent + remaining;
+      },
+      getUsed() {
+        return (this.currentPlan?.emails_sent || 0);
+      },
+      getRemaining() {
+        const total = this.getTotal();
+        const used = this.getUsed();
+        const apiRemaining = this.currentPlan?.emails_remaining;
+        const computed = total - used;
+        const remaining = (apiRemaining === null || apiRemaining === undefined) ? computed : apiRemaining;
+        return Math.max(0, remaining || 0);
+      },
+      getUsedPercent() {
+        const total = this.getTotal();
+        if (!total) return 0;
+        return Math.min(100, Math.round((this.getUsed() / total) * 100));
       },
       
               async cancelSubscription() {

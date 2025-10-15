@@ -294,12 +294,34 @@ def confirm_plan(request):
     billing_settings = BillingSettings.get_settings()
     
     # Для платных тарифов показываем страницу подтверждения
+    # Определяем тип плана (объект или строка) и подготовим флаги для шаблона
+    plan_type_name = None
+    try:
+        plan_type_name = (plan.plan_type.name or '').strip()
+    except Exception:
+        plan_type_name = str(getattr(plan, 'plan_type', '') or '').strip()
+
+    # Робастное определение тарифа "Подписчики"
+    plan_type_lower = (plan_type_name or '').lower()
+    is_subscribers_plan = (
+        plan_type_lower in ['subscribers', 'подписчики']
+        or getattr(plan, 'subscribers', 0) not in [None, 0]
+        or (
+            getattr(plan, 'emails_per_month', None) in [None, 0]
+            and getattr(plan, 'subscribers', None) is not None
+        )
+    )
+
     context = {
         'plan': plan,
         'final_price': plan.get_final_price(),
         'duration_days': 30,  # Можно сделать настраиваемым
         'cloudpayments_public_id': billing_settings.cloudpayments_public_id,
         'cloudpayments_test_mode': billing_settings.cloudpayments_test_mode,
+        # Дата окончания через месяц для отображения на странице подтверждения
+        'end_date': timezone.now() + timedelta(days=30),
+        # Удобный флаг для шаблона, работает и для fallback-планов
+        'is_subscribers_plan': is_subscribers_plan,
     }
     
     if request.method == 'POST':
