@@ -229,7 +229,6 @@ class CampaignViewSet(viewsets.ModelViewSet):
             
             # Обновляем кампанию немедленно: статус -> sending
             try:
-                from django.db import transaction
                 with transaction.atomic():
                     campaign.status = Campaign.STATUS_SENDING
                     campaign.save(update_fields=['status', 'updated_at'])
