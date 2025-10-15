@@ -4,6 +4,15 @@ from django.utils import timezone
 import uuid
 
 
+def short_uuid(value):
+    """Return first 8 hex chars for a UUID-like value, handling str/UUID."""
+    try:
+        return uuid.UUID(str(value)).hex[:8]
+    except Exception:
+        s = str(value)
+        return s.replace('-', '')[:8]
+
+
 class SupportCategory(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -72,7 +81,7 @@ class SupportTicket(models.Model):
     ticket_ip_address = models.GenericIPAddressField(null=True, blank=True)
     
     def __str__(self):
-        return f"#{self.ticket_id.hex[:8]} - {self.ticket_subject}"
+        return f"#{short_uuid(self.ticket_id)} - {self.ticket_subject}"
     
     class Meta:
         ordering = ['-ticket_created_at']
@@ -91,7 +100,7 @@ class SupportMessage(models.Model):
     message_updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"Сообщение в тикете {self.message_ticket.ticket_id.hex[:8]} от {self.message_author.email}"
+        return f"Сообщение в тикете {short_uuid(self.message_ticket.ticket_id)} от {self.message_author.email}"
     
     def save(self, *args, **kwargs):
         if not self.message_staff_reply:
@@ -125,7 +134,7 @@ class SupportAttachment(models.Model):
     attachment_uploaded_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"{self.attachment_filename} ({self.attachment_ticket.ticket_id.hex[:8]})"
+        return f"{self.attachment_filename} ({short_uuid(self.attachment_ticket.ticket_id)})"
     
     class Meta:
         pass 
@@ -146,7 +155,7 @@ class SupportChat(models.Model):
     )
     
     def __str__(self):
-        return f"Чат {self.chat_id.hex[:8]} - {self.chat_user.email}"
+        return f"Чат {short_uuid(self.chat_id)} - {self.chat_user.email}"
     
     class Meta:
         ordering = ['-chat_updated_at']
@@ -162,7 +171,7 @@ class SupportChatMessage(models.Model):
     message_created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"Сообщение в чате {self.chat_message.chat_id.hex[:8]} от {self.message_author.email}"
+        return f"Сообщение в чате {short_uuid(self.chat_message.chat_id)} от {self.message_author.email}"
     
     def save(self, *args, **kwargs):
         if not self.message_staff_reply:
