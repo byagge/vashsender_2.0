@@ -330,8 +330,13 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             campaign = Campaign.objects.get(id=campaign_id)
             print(f"Found campaign: {campaign.name}, status: {campaign.status}")
         except Campaign.DoesNotExist:
-            print(f"Campaign {campaign_id} not found in database")
-            raise self.retry(countdown=60, max_retries=2)
+            print(f"Campaign {campaign_id} not found in database - likely deleted by user")
+            # Не ретраим если кампания удалена - это нормальная ситуация
+            return {
+                'success': False,
+                'error': 'Campaign was deleted',
+                'campaign_id': str(campaign_id)
+            }
         except Exception as e:
             print(f"Error getting campaign {campaign_id}: {e}")
             raise self.retry(countdown=120, max_retries=3)
@@ -386,15 +391,17 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         
         # Получаем все контакты с обработкой ошибок
         try:
-            contacts = set()
+            # Дедупликация контактов по ID (устойчиво к разным queryset/инстансам)
+            contact_ids_set = set()
             from apps.mailer.models import Contact as MailerContact
             for contact_list in campaign.contact_lists.all():
-                list_contacts = contact_list.contacts.filter(status=MailerContact.VALID)
-                print(f"Found {list_contacts.count()} contacts in list {contact_list.name}")
-                contacts.update(list_contacts)
+                list_contacts = contact_list.contacts.filter(status=MailerContact.VALID).values_list('id', flat=True)
+                count = list_contacts.count()
+                print(f"Found {count} contacts in list {contact_list.name}")
+                contact_ids_set.update(list(list_contacts))
             
-            total_contacts = len(contacts)
-            contacts_list = list(contacts)
+            total_contacts = len(contact_ids_set)
+            contacts_list = list(contact_ids_set)
             print(f"Total unique contacts: {total_contacts}")
             
             if total_contacts == 0:
@@ -469,14 +476,18 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         if total_contacts <= 50:
             print(f"Small campaign optimization: sending {total_contacts} emails synchronously")
             sent_ok = 0
-            for idx, contact in enumerate(contacts_list, start=1):
+            for idx, contact_id in enumerate(contacts_list, start=1):
                 try:
+                    # Пропускаем, если уже отправляли успешно
+                    already_sent = CampaignRecipient.objects.filter(campaign_id=campaign_id, contact_id=int(contact_id), is_sent=True).exists()
+                    if already_sent:
+                        continue
                     # Выполняем задачу локально, без постановки в очередь
-                    res = send_single_email.apply(args=[str(campaign_id), int(contact.id)])
+                    res = send_single_email.apply(args=[str(campaign_id), int(contact_id)])
                     if res and isinstance(res.result, dict) and res.result.get('success'):
                         sent_ok += 1
                 except Exception as e:
-                    print(f"Error sending to contact {contact.id}: {e}")
+                    print(f"Error sending to contact {contact_id}: {e}")
                 # Обновление прогресса
                 self.update_state(
                     state='PROGRESS',
@@ -529,7 +540,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Без искусственных задержек между батчами
                 
                 result = send_email_batch.apply_async(
-                    args=[campaign_id, [c.id for c in batch], i + 1, len(batches)],
+                    args=[campaign_id, [int(c_id) for c_id in batch], i + 1, len(batches)],
                     queue='email',
                     countdown=0,
                     expires=1800,  # 30 минут
@@ -1105,8 +1116,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"Email sent successfully to {contact.email}")
         
         # Создаем запись получателя и tracking с транзакцией
-        # transaction already imported at module level
-        # transaction already imported at module level
         with transaction.atomic():
             # Создаем CampaignRecipient
             recipient, created = CampaignRecipient.objects.get_or_create(
@@ -1116,9 +1125,10 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             )
             
             if not created:
-                recipient.is_sent = True
-                recipient.sent_at = timezone.now()
-                recipient.save(update_fields=['is_sent', 'sent_at'])
+                if not recipient.is_sent:
+                    recipient.is_sent = True
+                    recipient.sent_at = timezone.now()
+                    recipient.save(update_fields=['is_sent', 'sent_at'])
             
             # Создаем EmailTracking для статистики
             tracking, tracking_created = EmailTracking.objects.get_or_create(

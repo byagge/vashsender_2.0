@@ -90,6 +90,60 @@ class CampaignViewSet(viewsets.ModelViewSet):
         self.perform_update(serializer)
         return Response(serializer.data)
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Защита от удаления активных кампаний.
+        """
+        instance = self.get_object()
+        
+        # Запрещаем удаление кампаний в процессе отправки
+        if instance.status in [Campaign.STATUS_SENDING, Campaign.STATUS_PENDING]:
+            return Response({
+                'detail': f'Нельзя удалить кампанию со статусом "{instance.get_status_display()}". '
+                         f'Дождитесь завершения отправки или отмените кампанию.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Если есть активная Celery задача, проверяем её статус
+        if instance.celery_task_id:
+            from celery.result import AsyncResult
+            task_result = AsyncResult(instance.celery_task_id)
+            
+            if task_result.state in ['PENDING', 'STARTED']:
+                return Response({
+                    'detail': 'Нельзя удалить кампанию, которая сейчас отправляется. '
+                             f'Статус задачи: {task_result.state}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel(self, request, pk=None):
+        """
+        Отмена кампании (только для отправляющихся кампаний).
+        """
+        campaign = self.get_object()
+        
+        if campaign.status not in [Campaign.STATUS_SENDING, Campaign.STATUS_PENDING]:
+            return Response({
+                'detail': 'Можно отменить только отправляющиеся кампании.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Отменяем Celery задачу если она есть
+        if campaign.celery_task_id:
+            from celery.result import AsyncResult
+            task_result = AsyncResult(campaign.celery_task_id)
+            task_result.revoke(terminate=True)
+        
+        # Обновляем статус кампании
+        campaign.status = Campaign.STATUS_FAILED
+        campaign.celery_task_id = None
+        campaign.save(update_fields=['status', 'celery_task_id', 'updated_at'])
+        
+        return Response({
+            'detail': 'Кампания отменена.',
+            'status': campaign.status
+        })
+
     @action(detail=True, methods=['post'], url_path='send')
     def send(self, request, pk=None):
         campaign = self.get_object()

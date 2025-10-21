@@ -1,0 +1,26 @@
+[Unit]
+Description=VashSender Celery Worker
+After=network.target redis.service postgresql.service
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/vashsender
+Environment=DJANGO_SETTINGS_MODULE=core.settings.production
+Environment=POSTGRES_DB=vashsender
+Environment=POSTGRES_USER=vashsender
+Environment=POSTGRES_PASSWORD='34t89O7i@'
+Environment=POSTGRES_HOST=127.0.0.1
+Environment=POSTGRES_PORT=5432
+Environment=POSTGRES_CONN_MAX_AGE=600
+Environment=POSTGRES_SSLMODE=prefer
+Environment=REDIS_URL=redis://localhost:6379/0
+ExecStart=/var/www/vashsender/venv/bin/celery -A core.celery.app worker -l info -Q campaigns,email,default --concurrency=4 --detach --pidfile=/var/run/celery/vashsender-worker.pid --logfile=/var/log/celery/vashsender-worker.log
+ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
