@@ -9,7 +9,7 @@
     <!-- Include Alpine.js via CDN -->
     <script src="https://unpkg.com/alpinejs" defer></script>
     <!-- Include Lucide icons via CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@0.276.0/dist/umd/lucide.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
     </style>
@@ -882,14 +882,27 @@
         });
       
         // создаём иконки после каждого рендера
-        document.addEventListener('alpine:initialized', () => lucide.createIcons());
-        document.addEventListener('alpine:updated',     () => lucide.createIcons());
+        document.addEventListener('alpine:initialized', () => {
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+          }
+        });
+        document.addEventListener('alpine:updated', () => {
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+          }
+        });
       </script>
       
 
     <!-- Initialize Lucide Icons -->
     <script>
-        lucide.createIcons();
+        // Инициализируем иконки после загрузки страницы
+        window.addEventListener('load', () => {
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+          }
+        });
     </script>
 </body>
 </html>

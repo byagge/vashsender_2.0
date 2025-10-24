@@ -11,7 +11,7 @@
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <!-- Lucide Icons CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.1/dist/umd/lucide.js" onerror="this.onerror=null; this.src='https://unpkg.com/lucide@0.263.1/dist/umd/lucide.js'"></script>
+  <script defer src="https://unpkg.com/lucide@0.276.0/dist/umd/lucide.min.js"></script>
   <style>
     [x-cloak] { display: none; }
     .chart-container { height: 256px; }
@@ -663,55 +663,14 @@
 
         // Безопасная функция для создания иконок
         createIcons() {
-          console.log('createIcons called, lucide type:', typeof lucide);
-          if (typeof lucide !== 'undefined') {
-            console.log('lucide object:', lucide);
-            console.log('lucide.createIcons:', lucide.createIcons);
-            console.log('lucide.icons:', lucide.icons);
-            
-            // Проверяем разные возможные структуры lucide
-            if (lucide.createIcons) {
-              try {
-                lucide.createIcons();
-                console.log('Icons created successfully with lucide.createIcons()');
-                return;
-              } catch (error) {
-                console.warn('Failed to create Lucide icons with createIcons():', error);
-              }
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try {
+              lucide.createIcons();
+            } catch (error) {
+              console.warn('Failed to create Lucide icons:', error);
+              // Fallback: создаем простые SVG иконки
+              this.createFallbackIcons();
             }
-            
-            // Альтернативные способы создания иконок
-            if (lucide.icons && typeof lucide.icons === 'object') {
-              try {
-                // Попробуем создать иконки вручную
-                const iconElements = document.querySelectorAll('[data-lucide]');
-                iconElements.forEach(element => {
-                  const iconName = element.getAttribute('data-lucide');
-                  if (lucide.icons[iconName]) {
-                    element.innerHTML = lucide.icons[iconName];
-                  }
-                });
-                console.log('Icons created manually');
-                return;
-              } catch (error) {
-                console.warn('Failed to create icons manually:', error);
-              }
-            }
-            
-            // Если ничего не сработало, попробуем через window.lucide
-            if (window.lucide && window.lucide.createIcons) {
-              try {
-                window.lucide.createIcons();
-                console.log('Icons created with window.lucide.createIcons()');
-                return;
-              } catch (error) {
-                console.warn('Failed to create icons with window.lucide:', error);
-              }
-            }
-            
-            // Fallback: создаем простые SVG иконки
-            console.log('Using fallback SVG icons');
-            this.createFallbackIcons();
           } else {
             console.warn('Lucide library not loaded yet, retrying...');
             // Повторяем попытку через 500мс
@@ -764,17 +723,10 @@
         },
 
         init() {
-          // Ждем загрузки всех скриптов
-          window.addEventListener('load', () => {
-            setTimeout(() => {
-              this.createIcons();
-            }, 200);
-          });
-          
-          // Также пробуем сразу с задержкой
+          // Инициализируем иконки с небольшой задержкой
           setTimeout(() => {
             this.createIcons();
-          }, 500);
+          }, 100);
           
           this.loadCampaigns();
           this.$watch('searchTerm', () => this.debouncedReload());

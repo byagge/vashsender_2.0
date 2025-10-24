@@ -11,7 +11,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@0.276.0/dist/umd/lucide.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
@@ -712,10 +712,14 @@
 
     <script>
         // Инициализация иконок Lucide
-        lucide.createIcons();
+        window.addEventListener('load', () => {
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            lucide.createIcons();
+          }
+        });
 
         // Получаем данные из Django
-        const isAdmin = {{ is_admin|yesno:"true,false" }};
+        const isAdmin = {% if is_admin %}true{% else %}false{% endif %};
 
         function dashboardApp() {
             return {
@@ -765,7 +769,9 @@
                     
                     // Инициализируем иконки после загрузки данных
                     this.$nextTick(() => {
-                        lucide.createIcons();
+                        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                            lucide.createIcons();
+                        }
                     });
                 },
 
@@ -802,7 +808,9 @@
                         
                         // Обновляем иконки после загрузки статистики
                         this.$nextTick(() => {
-                            lucide.createIcons();
+                            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                                lucide.createIcons();
+                            }
                         });
                     } catch (error) {
                         console.error('Error loading stats:', error);
@@ -860,7 +868,9 @@
                         
                         // Обновляем иконки после загрузки кампаний
                         this.$nextTick(() => {
-                            lucide.createIcons();
+                            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                                lucide.createIcons();
+                            }
                         });
                     } catch (error) {
                         console.error('Error loading campaigns:', error);
