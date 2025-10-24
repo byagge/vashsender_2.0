@@ -11,7 +11,7 @@
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" onerror="this.onerror=null; this.src='https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js'"></script>
   <style>
     [x-cloak] { display: none; }
     .chart-container { height: 256px; }
@@ -41,6 +41,7 @@
 <body x-data="sentCampaigns()" x-init="init()">
   {% include "dashboard/common/sidebar.html" %}
   <div class="main-content md:ml-64">
+    {% csrf_token %}
     <!-- Main Container -->
     <div class="flex h-screen bg-gray-50" x-show="filteredCampaigns().length > 0 || searchTerm !== '' || statusFilter !== 'All'">
       <!-- Main Content -->
@@ -621,6 +622,12 @@
   </div>
 
   <script>
+    // Получаем CSRF токен из мета-тега
+    function getCSRFToken() {
+      const token = document.querySelector('[name=csrfmiddlewaretoken]');
+      return token ? token.value : '';
+    }
+
     function sentCampaigns() {
       return {
         searchTerm: '',
@@ -654,8 +661,35 @@
           { name: 'Настройки', active: false }
         ],
 
+        // Безопасная функция для создания иконок
+        createIcons() {
+          if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try {
+              lucide.createIcons();
+            } catch (error) {
+              console.warn('Failed to create Lucide icons:', error);
+            }
+          } else {
+            console.warn('Lucide library not loaded yet, retrying...');
+            // Повторяем попытку через 500мс
+            setTimeout(() => {
+              if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                try {
+                  lucide.createIcons();
+                } catch (error) {
+                  console.warn('Failed to create Lucide icons on retry:', error);
+                }
+              }
+            }, 500);
+          }
+        },
+
         init() {
-          lucide.createIcons();
+          // Загружаем иконки с небольшой задержкой для полной загрузки библиотеки
+          setTimeout(() => {
+            this.createIcons();
+          }, 100);
+          
           this.loadCampaigns();
           this.$watch('searchTerm', () => this.debouncedReload());
           this.$watch('statusFilter', () => this.debouncedReload());
@@ -699,29 +733,39 @@
             if (this.statusFilter !== 'All') params.set('status', this.statusFilter);
             if (this.senderFilter !== 'All') params.set('sender', this.senderFilter);
 
-            const response = await fetch(`/campaigns/api/campaigns/?${params.toString()}`, {
+            const url = `/campaigns/api/campaigns/?${params.toString()}`;
+            console.log('Loading campaigns from:', url);
+
+            const response = await fetch(url, {
               credentials: 'same-origin',
               headers: {
                 'Accept': 'application/json',
-                'X-CSRFToken': document.cookie.split(';').map(c => c.trim())
-                  .find(c => c.startsWith('csrftoken='))
-                  ?.split('=')[1] || ''
+                'X-CSRFToken': getCSRFToken()
               }
             });
+            
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
-              console.error('Failed to load campaigns:', response.status, response.statusText);
-              throw new Error('Failed to load campaigns');
+              const errorText = await response.text();
+              console.error('Failed to load campaigns:', response.status, response.statusText, errorText);
+              throw new Error(`Failed to load campaigns: ${response.status} ${response.statusText}`);
             }
+            
             const data = await response.json();
+            console.log('Campaigns data:', data);
+            
             this.campaigns = data.results || [];
             this.count = data.count || 0;
             this.currentPage = data.page || 1;
             this.num_pages = data.num_pages || 1;
             this.$nextTick(() => {
-              lucide.createIcons();
+              this.createIcons();
             });
           } catch (error) {
             console.error('Error loading campaigns:', error);
+            // Показываем уведомление пользователю
+            alert('Ошибка загрузки рассылок: ' + error.message);
           }
         },
 
@@ -764,7 +808,7 @@
 
           // Пересоздаем иконки после фильтрации
           this.$nextTick(() => {
-            lucide.createIcons();
+            this.createIcons();
           });
 
           return filtered;
@@ -825,7 +869,7 @@
           
           // Пересоздаем иконки после раскрытия/сворачивания
           this.$nextTick(() => {
-            lucide.createIcons();
+            this.createIcons();
           });
         },
 
@@ -865,9 +909,7 @@
               method: 'DELETE',
               credentials: 'same-origin',
               headers: {
-                'X-CSRFToken': document.cookie.split(';').map(c => c.trim())
-                  .find(c => c.startsWith('csrftoken='))
-                  ?.split('=')[1] || ''
+                'X-CSRFToken': getCSRFToken()
               }
             });
 
@@ -883,7 +925,7 @@
             
             // Пересоздаем иконки
             this.$nextTick(() => {
-              lucide.createIcons();
+              this.createIcons();
             });
           } catch (error) {
             console.error('Error deleting campaign:', error);
@@ -895,7 +937,7 @@
           this.selectedCampaign = campaign;
           this.showStatsModal = true;
           this.$nextTick(() => {
-            lucide.createIcons();
+            this.createIcons();
           });
         },
 
@@ -903,7 +945,7 @@
           this.selectedCampaign = campaign;
           this.showPreviewModal = true;
           this.$nextTick(() => {
-            lucide.createIcons();
+            this.createIcons();
           });
         },
 
@@ -975,7 +1017,7 @@
               headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-CSRFToken': document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
+                'X-CSRFToken': getCSRFToken()
               },
               body: JSON.stringify(payload)
             });
