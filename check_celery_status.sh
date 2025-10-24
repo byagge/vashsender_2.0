@@ -40,7 +40,8 @@ echo ""
 echo "Все процессы celery:"
 CELERY_PIDS=$(pgrep -f "celery.*worker")
 if [ -n "$CELERY_PIDS" ]; then
-    ps -p $CELERY_PIDS -o pid,ppid,cmd,etime,pcpu,pmem
+    # Исправляем синтаксис ps для нескольких PID
+    ps -p $CELERY_PIDS -o pid,ppid,cmd,etime,pcpu,pmem 2>/dev/null || ps aux | grep celery | grep -v grep
 else
     echo "Процессы celery не найдены"
 fi
