@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.db.models.functions import Cast
+from django.db.models import CharField
 import uuid
 from django.utils import timezone
 from django.views.generic import TemplateView
@@ -329,7 +331,11 @@ class SupportChatViewSet(viewsets.ModelViewSet):
             uuid.UUID(str(pk))
         except (ValueError, TypeError):
             return Response({'detail': 'Invalid chat id'}, status=status.HTTP_404_NOT_FOUND)
-        chat = get_object_or_404(SupportChat, chat_id=str(pk))
+        # Сервер: колонка chat_id может быть text. Кастуем колонку к text и сравниваем со строкой UUID
+        chat = get_object_or_404(
+            SupportChat.objects.annotate(chat_id_text=Cast('chat_id', CharField())),
+            chat_id_text=str(pk)
+        )
         messages = SupportChatMessage.objects.filter(chat_message=chat).order_by('message_created_at')
         serializer = SupportChatMessageSerializer(messages, many=True)
         return Response(serializer.data)
@@ -342,7 +348,10 @@ class SupportChatViewSet(viewsets.ModelViewSet):
             uuid.UUID(str(pk))
         except (ValueError, TypeError):
             return Response({'detail': 'Invalid chat id'}, status=status.HTTP_404_NOT_FOUND)
-        chat = get_object_or_404(SupportChat, chat_id=str(pk))
+        chat = get_object_or_404(
+            SupportChat.objects.annotate(chat_id_text=Cast('chat_id', CharField())),
+            chat_id_text=str(pk)
+        )
         
         if chat.chat_status == SupportTicket.STATUS_CLOSED:
             return Response(
