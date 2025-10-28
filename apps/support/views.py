@@ -324,12 +324,12 @@ class SupportChatViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
         """Получить сообщения чата"""
-        # Явно приводим pk к UUID, чтобы избежать ошибок сравнения text = uuid в Postgres
+        # Валидируем UUID, но ищем по строке (на сервере колонка может быть text)
         try:
-            chat_uuid = uuid.UUID(str(pk))
+            uuid.UUID(str(pk))
         except (ValueError, TypeError):
             return Response({'detail': 'Invalid chat id'}, status=status.HTTP_404_NOT_FOUND)
-        chat = get_object_or_404(SupportChat, chat_id=chat_uuid)
+        chat = get_object_or_404(SupportChat, chat_id=str(pk))
         messages = SupportChatMessage.objects.filter(chat_message=chat).order_by('message_created_at')
         serializer = SupportChatMessageSerializer(messages, many=True)
         return Response(serializer.data)
@@ -337,12 +337,12 @@ class SupportChatViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
         """Отправить сообщение в чат"""
-        # Явно приводим pk к UUID, чтобы избежать ошибок сравнения text = uuid в Postgres
+        # Валидируем UUID, но ищем по строке (на сервере колонка может быть text)
         try:
-            chat_uuid = uuid.UUID(str(pk))
+            uuid.UUID(str(pk))
         except (ValueError, TypeError):
             return Response({'detail': 'Invalid chat id'}, status=status.HTTP_404_NOT_FOUND)
-        chat = get_object_or_404(SupportChat, chat_id=chat_uuid)
+        chat = get_object_or_404(SupportChat, chat_id=str(pk))
         
         if chat.chat_status == SupportTicket.STATUS_CLOSED:
             return Response(
