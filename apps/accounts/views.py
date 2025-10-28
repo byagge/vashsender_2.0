@@ -389,4 +389,4 @@ class DeleteAccountAPIView(APIView):
 def account_settings_page(request):
     # Просто отдаём шаблон — всё остальное (данные пользователя, планы и т.п.)
     # берётся прямо в JS через REST API
-    return render(request, 'settings.html')
+    return render(request, 'settings.html', {'is_admin': request.user.is_staff})

@@ -652,7 +652,7 @@
         category: 'all',
         saveTimeout: null,
         editorReady: false,
-        isAdmin: true,
+        isAdmin: {% if is_admin %}true{% else %}false{% endif %},
         showImageGallery: false,
         userImages: [],
         loadingImages: false,

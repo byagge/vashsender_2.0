@@ -807,6 +807,11 @@ class CampaignListView(LoginRequiredMixin, TemplateView):
     SPA на Alpine.js сама подгрузит их через API.
     """
     template_name = 'campaigns_list.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context
 
 
 class CampaignFormView(LoginRequiredMixin, TemplateView):
@@ -817,6 +822,7 @@ class CampaignFormView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
         pk = kwargs.get('pk')
         
         if pk:

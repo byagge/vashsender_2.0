@@ -5,25 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Чат поддержки - vashsender</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/alpinejs" defer></script>
+    <script src="https://unpkg.com/alpinejs@3.13.10/dist/cdn.min.js" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
     <style>
         .chat-container {
-            height: calc(100vh - 120px);
+            height: calc(100vh - 80px);
         }
         .messages-container {
-            height: calc(100vh - 280px);
+            height: calc(100vh - 160px);
         }
         .message-bubble {
             max-width: 70%;
+            word-wrap: break-word;
         }
         .message-bubble.staff {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #007bff;
             color: white;
+            border-radius: 18px 18px 4px 18px;
         }
         .message-bubble.user {
-            background: #f3f4f6;
-            color: #1f2937;
+            background: #e9ecef;
+            color: #212529;
+            border-radius: 18px 18px 18px 4px;
         }
         .scrollbar-hide {
             -ms-overflow-style: none;
@@ -32,40 +35,60 @@
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: #6c757d;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        .message-input {
+            resize: none;
+            min-height: 40px;
+            max-height: 100px;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
     {% csrf_token %}
-    <div class="min-h-screen flex" x-data="userChat">
+    <div class="min-h-screen flex" x-data="userChat()">
         <!-- Sidebar -->
         {% include "dashboard/common/sidebar.html" %}
 
         <!-- Main Content -->
         <div class="flex-1 flex md:ml-64">
-            <div class="flex-1 p-8">
-                <!-- Header -->
-                <div class="mb-8">
-                    <h1 class="text-3xl font-bold text-gray-900">Чат поддержки</h1>
-                    <p class="text-gray-600 mt-2">Получите помощь от нашей команды поддержки</p>
-                </div>
-
+            <div class="flex-1 flex flex-col">
                 <!-- Chat Container -->
-                <div class="bg-white rounded-lg shadow-sm border chat-container flex flex-col">
+                <div class="bg-white chat-container flex flex-col">
                     <!-- Chat Header -->
-                    <div class="p-4 border-b border-gray-200 bg-gray-50">
+                    <div class="p-4 border-b border-gray-200 bg-white">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                    <i data-lucide="headphones" class="w-6 h-6"></i>
+                                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                    П
                                 </div>
                                 <div>
-                                    <h3 class="text-lg font-semibold text-gray-900">Поддержка vashsender</h3>
-                                    <p class="text-sm text-gray-500">Мы ответим вам в ближайшее время</p>
+                                    <h3 class="font-semibold text-gray-900">Поддержка</h3>
+                                    <p class="text-xs text-gray-500">Онлайн</p>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span 
-                                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                    class="text-xs px-2 py-1 rounded-full"
                                     :class="getStatusClass(chatStatus)"
                                     x-text="getStatusText(chatStatus)"
                                 ></span>
@@ -74,48 +97,63 @@
                     </div>
 
                     <!-- Messages Container -->
-                    <div class="flex-1 overflow-y-auto p-4 messages-container scrollbar-hide" x-ref="messagesContainer">
+                    <div class="flex-1 overflow-y-auto p-4 messages-container scrollbar-hide bg-gray-50" x-ref="messagesContainer">
                         <template x-for="message in messages" :key="message.message_id">
-                            <div class="mb-4" :class="{ 'text-right': !message.message_staff_reply }">
-                                <div 
-                                    class="message-bubble inline-block px-4 py-2 rounded-2xl"
-                                    :class="message.message_staff_reply ? 'staff' : 'user'"
-                                >
+                            <div class="mb-3" :class="{ 'flex justify-end': !message.message_staff_reply, 'flex justify-start': message.message_staff_reply }">
+                                <div class="message-bubble px-3 py-2" :class="message.message_staff_reply ? 'staff' : 'user'">
                                     <p class="text-sm" x-text="message.message_text"></p>
-                                    <div class="text-xs mt-1 opacity-70" x-text="formatTime(message.message_created_at)"></div>
+                                    <div class="text-xs mt-1 opacity-60" x-text="formatTime(message.message_created_at)"></div>
                                 </div>
                             </div>
                         </template>
                         
+                        <!-- Typing indicator -->
+                        <div x-show="isTyping" class="mb-3 flex justify-start">
+                            <div class="bg-white px-3 py-2 rounded-2xl border">
+                                <div class="typing-indicator">
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Welcome message -->
-                        <div x-show="messages.length === 0" class="text-center text-gray-500 py-8">
-                            <i data-lucide="message-circle" class="w-16 h-16 mx-auto text-gray-300 mb-4"></i>
-                            <p class="text-lg font-medium">Добро пожаловать в чат поддержки!</p>
-                            <p class="text-sm mt-2">Опишите вашу проблему, и мы поможем вам её решить</p>
+                        <div x-show="messages.length === 0 && !isTyping" class="text-center py-8">
+                            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i data-lucide="message-circle" class="w-6 h-6 text-blue-600"></i>
+                            </div>
+                            <h3 class="font-semibold text-gray-900 mb-2">Чат поддержки</h3>
+                            <p class="text-sm text-gray-600">Опишите вашу проблему, и мы поможем вам</p>
                         </div>
                     </div>
 
                     <!-- Message Input -->
-                    <div class="p-4 border-t border-gray-200 bg-gray-50">
-                        <form @submit.prevent="sendMessage" class="flex space-x-3">
+                    <div class="p-4 border-t border-gray-200 bg-white">
+                        <form @submit.prevent="sendMessage" class="flex items-center space-x-2">
                             <div class="flex-1 relative">
                                 <textarea 
                                     x-model="newMessage"
-                                    @keydown.enter.prevent="sendMessage"
-                                    placeholder="Опишите вашу проблему..."
-                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    @keydown.enter.prevent="handleEnterKey"
+                                    @input="adjustTextareaHeight"
+                                    placeholder="Напишите сообщение..."
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none message-input"
                                     rows="1"
                                     x-ref="messageInput"
-                                    :disabled="!chatId"
+                                    :disabled="!chatId || sending"
                                 ></textarea>
                             </div>
                             <button 
                                 type="submit"
-                                :disabled="!newMessage.trim() || !chatId"
-                                class="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                :disabled="!newMessage.trim() || !chatId || sending"
+                                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
-                                <i data-lucide="send" class="w-5 h-5"></i>
-                                Отправить
+                                <i data-lucide="send" class="w-4 h-4" x-show="!sending"></i>
+                                <div class="typing-indicator" x-show="sending">
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                    <div class="typing-dot"></div>
+                                </div>
                             </button>
                         </form>
                     </div>
@@ -125,14 +163,17 @@
     </div>
 
     <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('userChat', () => ({
+        // Define the Alpine component globally so it's available immediately
+        window.userChat = () => ({
                 messages: [],
                 newMessage: '',
                 chatId: null,
                 chatStatus: 'open',
                 refreshInterval: null,
-
+                sending: false,
+                isTyping: false,
+                lastMessageTime: null,
+ 
                 init() {
                     this.initializeChat();
                     this.startAutoRefresh();
@@ -141,143 +182,177 @@
                         lucide.createIcons();
                     }
                 },
-
+ 
                 async initializeChat() {
                     // Проверяем, есть ли активный чат
-                    {% if active_chat %}
-                        this.chatId = '{{ active_chat.chat_id }}';
-                        this.chatStatus = '{{ active_chat.chat_status }}';
-                        await this.loadMessages();
-                    {% else %}
-                        // Создаем новый чат
-                        await this.createChat();
-                    {% endif %}
-                },
-
-                async createChat() {
-                    try {
-                        const response = await fetch('/support/api/chats/start_chat/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCsrfToken(),
-                            },
-                            body: JSON.stringify({ message: '' })
-                        });
-
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.chatId = data.chat_id;
-                            this.chatStatus = 'open';
-                        }
-                    } catch (error) {
-                        console.error('Ошибка создания чата:', error);
-                    }
-                },
-
-                async loadMessages() {
-                    if (!this.chatId) return;
-
-                    try {
-                        const response = await fetch(`/support/api/chats/${this.chatId}/messages/`);
-                        if (response.ok) {
-                            this.messages = await response.json();
-                            this.scrollToBottom();
-                        }
-                    } catch (error) {
-                        console.error('Ошибка загрузки сообщений:', error);
-                    }
-                },
-
-                async sendMessage() {
-                    if (!this.newMessage.trim() || !this.chatId) return;
-
-                    const message = this.newMessage.trim();
-                    this.newMessage = '';
-
-                    try {
-                        const response = await fetch(`/support/api/chats/${this.chatId}/send_message/`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.getCsrfToken(),
-                            },
-                            body: JSON.stringify({ message_text: message })
-                        });
-
-                        if (response.ok) {
-                            await this.loadMessages();
-                            this.scrollToBottom();
-                        }
-                    } catch (error) {
-                        console.error('Ошибка отправки сообщения:', error);
-                    }
-                },
-
-                scrollToBottom() {
-                    this.$nextTick(() => {
-                        if (this.$refs.messagesContainer) {
-                            this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
-                        }
-                    });
-                },
-
-                startAutoRefresh() {
-                    this.refreshInterval = setInterval(() => {
-                        if (this.chatId) {
-                            this.loadMessages();
-                        }
-                    }, 10000); // Обновляем каждые 10 секунд
-                },
-
-                formatTime(timestamp) {
-                    if (!timestamp) return '';
-                    const date = new Date(timestamp);
-                    const now = new Date();
-                    const diffMs = now - date;
-                    const diffMins = Math.floor(diffMs / 60000);
-                    const diffHours = Math.floor(diffMs / 3600000);
-                    const diffDays = Math.floor(diffMs / 86400000);
-
-                    if (diffMins < 1) return 'сейчас';
-                    if (diffMins < 60) return `${diffMins}м`;
-                    if (diffHours < 24) return `${diffHours}ч`;
-                    if (diffDays < 7) return `${diffDays}д`;
-                    
-                    return date.toLocaleDateString('ru-RU', { 
-                        day: '2-digit', 
-                        month: '2-digit' 
-                    });
-                },
-
-                getStatusClass(status) {
-                    const classes = {
-                        'open': 'bg-green-100 text-green-800',
-                        'in_progress': 'bg-blue-100 text-blue-800',
-                        'waiting': 'bg-yellow-100 text-yellow-800',
-                        'resolved': 'bg-gray-100 text-gray-800',
-                        'closed': 'bg-red-100 text-red-800'
-                    };
-                    return classes[status] || 'bg-gray-100 text-gray-800';
-                },
-
-                getStatusText(status) {
-                    const texts = {
-                        'open': 'Открыт',
-                        'in_progress': 'В работе',
-                        'waiting': 'Ожидает',
-                        'resolved': 'Решён',
-                        'closed': 'Закрыт'
-                    };
-                    return texts[status] || 'Неизвестно';
-                },
-
-                getCsrfToken() {
-                    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
-                           document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
-                }
-            }));
-        });
+                    const activeChatId = '{% if active_chat %}{{ active_chat.chat_id }}{% endif %}';
+                    const activeChatStatus = '{% if active_chat %}{{ active_chat.chat_status }}{% endif %}';
+                     
+                     if (activeChatId) {
+                         this.chatId = activeChatId;
+                         this.chatStatus = activeChatStatus;
+                         await this.loadMessages();
+                     } else {
+                         // Создаем новый чат
+                         await this.createChat();
+                     }
+                 },
+ 
+                 async createChat() {
+                     try {
+                         const response = await fetch('/support/api/chats/start_chat/', {
+                             method: 'POST',
+                             headers: {
+                                 'Content-Type': 'application/json',
+                                 'X-CSRFToken': this.getCsrfToken(),
+                             },
+                             body: JSON.stringify({ message: '' })
+                         });
+ 
+                         if (response.ok) {
+                             const data = await response.json();
+                             this.chatId = data.chat_id;
+                             this.chatStatus = 'open';
+                         }
+                     } catch (error) {
+                         console.error('Ошибка создания чата:', error);
+                     }
+                 },
+ 
+                 async loadMessages() {
+                     if (!this.chatId) return;
+ 
+                     try {
+                         const response = await fetch(`/support/api/chats/${this.chatId}/messages/`);
+                         if (response.ok) {
+                             this.messages = await response.json();
+                             this.scrollToBottom();
+                         }
+                     } catch (error) {
+                         console.error('Ошибка загрузки сообщений:', error);
+                     }
+                 },
+ 
+                 async sendMessage() {
+                     if (!this.newMessage.trim() || !this.chatId || this.sending) return;
+ 
+                     const message = this.newMessage.trim();
+                     this.newMessage = '';
+                     this.sending = true;
+                     this.isTyping = false;
+ 
+                     try {
+                         const response = await fetch(`/support/api/chats/${this.chatId}/send_message/`, {
+                             method: 'POST',
+                             headers: {
+                                 'Content-Type': 'application/json',
+                                 'X-CSRFToken': this.getCsrfToken(),
+                             },
+                             body: JSON.stringify({ message_text: message })
+                         });
+ 
+                         if (response.ok) {
+                             await this.loadMessages();
+                             this.scrollToBottom();
+                             this.lastMessageTime = new Date();
+                         } else {
+                             // Показываем ошибку пользователю
+                             const errorData = await response.json();
+                             alert('Ошибка отправки сообщения: ' + (errorData.error || 'Неизвестная ошибка'));
+                         }
+                     } catch (error) {
+                         console.error('Ошибка отправки сообщения:', error);
+                         alert('Ошибка соединения. Проверьте интернет-соединение.');
+                     } finally {
+                         this.sending = false;
+                     }
+                 },
+ 
+                 handleEnterKey(event) {
+                     if (event.shiftKey) {
+                         // Shift+Enter - новая строка
+                         return;
+                     } else {
+                         // Enter - отправить сообщение
+                         event.preventDefault();
+                         this.sendMessage();
+                     }
+                 },
+ 
+                 adjustTextareaHeight() {
+                     const textarea = this.$refs.messageInput;
+                     if (textarea) {
+                         textarea.style.height = 'auto';
+                         textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+                     }
+                 },
+ 
+ 
+                 scrollToBottom() {
+                     this.$nextTick(() => {
+                         if (this.$refs.messagesContainer) {
+                             this.$refs.messagesContainer.scrollTop = this.$refs.messagesContainer.scrollHeight;
+                         }
+                     });
+                 },
+ 
+                 startAutoRefresh() {
+                     this.refreshInterval = setInterval(() => {
+                         if (this.chatId && !this.sending) {
+                             this.loadMessages();
+                         }
+                     }, 5000); // Обновляем каждые 5 секунд
+                 },
+ 
+                 formatTime(timestamp) {
+                     if (!timestamp) return '';
+                     const date = new Date(timestamp);
+                     const now = new Date();
+                     const diffMs = now - date;
+                     const diffMins = Math.floor(diffMs / 60000);
+                     const diffHours = Math.floor(diffMs / 3600000);
+                     const diffDays = Math.floor(diffMs / 86400000);
+ 
+                     if (diffMins < 1) return 'только что';
+                     if (diffMins < 60) return `${diffMins} мин назад`;
+                     if (diffHours < 24) return `${diffHours} ч назад`;
+                     if (diffDays < 7) return `${diffDays} дн назад`;
+                     
+                     return date.toLocaleDateString('ru-RU', { 
+                         day: '2-digit', 
+                         month: '2-digit',
+                         hour: '2-digit',
+                         minute: '2-digit'
+                     });
+                 },
+ 
+                 getStatusClass(status) {
+                     const classes = {
+                         'open': 'bg-green-100 text-green-800',
+                         'in_progress': 'bg-blue-100 text-blue-800',
+                         'waiting': 'bg-yellow-100 text-yellow-800',
+                         'resolved': 'bg-gray-100 text-gray-800',
+                         'closed': 'bg-red-100 text-red-800'
+                     };
+                     return classes[status] || 'bg-gray-100 text-gray-800';
+                 },
+ 
+                 getStatusText(status) {
+                     const texts = {
+                         'open': 'Открыт',
+                         'in_progress': 'В работе',
+                         'waiting': 'Ожидает',
+                         'resolved': 'Решён',
+                         'closed': 'Закрыт'
+                     };
+                     return texts[status] || 'Неизвестно';
+                 },
+ 
+                 getCsrfToken() {
+                     return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                            document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+                 }
+            });
     </script>
 </body>
 </html> 

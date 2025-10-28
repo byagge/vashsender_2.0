@@ -211,7 +211,12 @@ class SupportMessageViewSet(viewsets.ModelViewSet):
 
 
 class SupportTicketListView(LoginRequiredMixin, TemplateView):
-    template_name = 'support/tickets.html' 
+    template_name = 'support/tickets.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context 
 
 
 class SupportAdminPanelView(LoginRequiredMixin, TemplateView):
@@ -219,7 +224,12 @@ class SupportAdminPanelView(LoginRequiredMixin, TemplateView):
 
     @method_decorator(staff_member_required)
     def dispatch(self, *args, **kwargs):
-        return super().dispatch(*args, **kwargs) 
+        return super().dispatch(*args, **kwargs)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context 
 
 
 class SupportChatViewSet(viewsets.ModelViewSet):
@@ -480,6 +490,7 @@ class SupportChatView(LoginRequiredMixin, TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
         # Получаем активный чат пользователя
         user = self.request.user
         active_chat = SupportChat.objects.filter(

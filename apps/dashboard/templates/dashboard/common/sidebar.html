@@ -1,4 +1,4 @@
-<aside class="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 shadow-sm hidden md:flex flex-col z-50">
+<aside class="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 shadow-sm hidden md:flex flex-col z-50" x-data="{ isAdmin: {% if is_admin %}true{% else %}false{% endif %} }">
     <!-- Фоновые паттерны -->
     <div class="sidebar-pattern"></div>
     <div class="relative z-10 flex flex-col h-full">

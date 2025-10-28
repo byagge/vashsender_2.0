@@ -552,10 +552,20 @@ class ContactListViewSet(viewsets.ModelViewSet):
 
 class ListSpaView(LoginRequiredMixin, TemplateView):
     template_name = 'list.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context
 
 
 class ImportTasksView(LoginRequiredMixin, TemplateView):
     template_name = 'import_tasks.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context
 
 
 class DomainProxyViewSet(viewsets.ModelViewSet):

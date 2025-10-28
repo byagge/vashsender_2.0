@@ -614,6 +614,7 @@
         importProgress: '',
         importResult: null,
         importType: 'normal', // 'normal' или 'fast'
+        importSuccess: false,
         showAddModal: false,
         newManualEmail: '',
         addError: '',
@@ -633,6 +634,8 @@
           blacklist: false
         },
         isExporting: false,
+        // Admin flag used in included templates; ensure it's defined as a boolean
+        isAdmin: {{ user.is_staff|yesno:"true,false" }},
         count: 0,
         num_pages: 1,
         contactSearchTerm: '',

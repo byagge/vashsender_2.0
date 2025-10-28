@@ -351,3 +351,8 @@ class EmailPlatformSpaView(LoginRequiredMixin, TemplateView):
     табы Emails ↔ Domains
     """
     template_name = 'domains.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context

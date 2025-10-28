@@ -156,13 +156,16 @@ class SupportChatSerializer(serializers.ModelSerializer):
         return None
     
     def get_unread_count(self, obj):
-        user = self.context['request'].user
-        if user.is_staff:
-            # Для сотрудников считаем сообщения от пользователей
-            return obj.chat_messages.filter(message_staff_reply=False).count()
-        else:
-            # Для пользователей считаем сообщения от сотрудников
-            return obj.chat_messages.filter(message_staff_reply=True).count()
+        try:
+            user = self.context['request'].user
+            if user.is_staff:
+                # Для сотрудников считаем сообщения от пользователей
+                return obj.chat_messages.filter(message_staff_reply=False).count()
+            else:
+                # Для пользователей считаем сообщения от сотрудников
+                return obj.chat_messages.filter(message_staff_reply=True).count()
+        except:
+            return 0
 
 
 class SupportChatMessageSerializer(serializers.ModelSerializer):
@@ -172,7 +175,7 @@ class SupportChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupportChatMessage
         fields = [
-            'message_id', 'chat_message', 'message_author', 'message_author_name',
+            'message_id', 'message_author', 'message_author_name',
             'message_text', 'message_staff_reply', 'message_created_at'
         ]
     

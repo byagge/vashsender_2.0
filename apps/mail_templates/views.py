@@ -142,3 +142,8 @@ class TemplateSpaView(LoginRequiredMixin, TemplateView):
     Отдаёт SPA-шаблон (index.html с Alpine.js и <script>).
     """
     template_name = "templates.html"
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['is_admin'] = self.request.user.is_staff
+        return context
