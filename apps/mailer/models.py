@@ -79,7 +79,8 @@ class ImportTask(models.Model):
         (FAILED, 'Ошибка'),
     )
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Use CharField PK to align with existing DB where id is text
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4, editable=False)
     contact_list = models.ForeignKey(ContactList, on_delete=models.CASCADE, related_name='import_tasks')
     filename = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
