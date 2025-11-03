@@ -403,54 +403,65 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """Получение статистики по кампаниям"""
-        # Получаем все кампании пользователя
-        campaigns = self.get_queryset()
-        
-        # Считаем общую статистику
-        total_sent = sum(c.emails_sent for c in campaigns)
-        total_delivered = sum(c.delivered_emails for c in campaigns)
-        total_opened = sum(c.emails_sent * (c.open_rate / 100) for c in campaigns)
-        total_clicked = sum(c.emails_sent * (c.click_rate / 100) for c in campaigns)
-        
-        # Считаем статистику за последние 7 дней для тренда
-        week_ago = timezone.now() - timezone.timedelta(days=7)
-        week_campaigns = campaigns.filter(created_at__gte=week_ago)
-        
-        week_sent = sum(c.emails_sent for c in week_campaigns)
-        week_delivered = sum(c.delivered_emails for c in week_campaigns)
-        week_opened = sum(c.emails_sent * (c.open_rate / 100) for c in week_campaigns)
-        week_clicked = sum(c.emails_sent * (c.click_rate / 100) for c in week_campaigns)
-        
-        # Считаем тренды (процент изменения)
-        prev_week = week_ago - timezone.timedelta(days=7)
-        prev_week_campaigns = campaigns.filter(
-            created_at__gte=prev_week,
-            created_at__lt=week_ago
-        )
-        
-        prev_week_sent = sum(c.emails_sent for c in prev_week_campaigns)
-        prev_week_delivered = sum(c.delivered_emails for c in prev_week_campaigns)
-        prev_week_opened = sum(c.emails_sent * (c.open_rate / 100) for c in prev_week_campaigns)
-        prev_week_clicked = sum(c.emails_sent * (c.click_rate / 100) for c in prev_week_campaigns)
-        
-        # Вычисляем процент изменения
+        """Получение статистики по кампаниям (корректные подсчёты по EmailTracking).
+
+        Возвращаем агрегаты за последние 30 дней, чтобы согласовать с billing/dashboard.
+        """
+        from .models import EmailTracking
+        from apps.mailer.models import Contact
+
+        user = request.user
+        now = timezone.now()
+        last_30_days = now - timezone.timedelta(days=30)
+        last_7_days = now - timezone.timedelta(days=7)
+        prev_7_days = last_7_days - timezone.timedelta(days=7)
+
+        # Базовый queryset трекинга по пользователю
+        tracking_qs = EmailTracking.objects.filter(campaign__user=user)
+
+        # Агрегаты за 30 дней
+        sent_30 = tracking_qs.filter(sent_at__gte=last_30_days).count()
+        opened_30 = tracking_qs.filter(sent_at__gte=last_30_days, opened_at__isnull=False).count()
+        clicked_30 = tracking_qs.filter(sent_at__gte=last_30_days, clicked_at__isnull=False).count()
+
+        # Тренды: сравниваем последние 7 дней и предыдущие 7 дней
+        sent_7 = tracking_qs.filter(sent_at__gte=last_7_days).count()
+        sent_prev_7 = tracking_qs.filter(sent_at__gte=prev_7_days, sent_at__lt=last_7_days).count()
+        opened_7 = tracking_qs.filter(sent_at__gte=last_7_days, opened_at__isnull=False).count()
+        opened_prev_7 = tracking_qs.filter(sent_at__gte=prev_7_days, sent_at__lt=last_7_days, opened_at__isnull=False).count()
+        clicked_7 = tracking_qs.filter(sent_at__gte=last_7_days, clicked_at__isnull=False).count()
+        clicked_prev_7 = tracking_qs.filter(sent_at__gte=prev_7_days, sent_at__lt=last_7_days, clicked_at__isnull=False).count()
+
         def calculate_trend(current, previous):
             if previous == 0:
                 return 0
             return round(((current - previous) / previous) * 100, 1)
-        
+
+        # Новые подписчики (контакты) за 30 дней
+        new_subscribers_30 = Contact.objects.filter(
+            contact_list__owner=user,
+            added_date__gte=last_30_days
+        ).count()
+
+        new_subscribers_7 = Contact.objects.filter(
+            contact_list__owner=user,
+            added_date__gte=last_7_days
+        ).count()
+        new_subscribers_prev_7 = Contact.objects.filter(
+            contact_list__owner=user,
+            added_date__gte=prev_7_days,
+            added_date__lt=last_7_days
+        ).count()
+
         return Response({
-            'sent': total_sent,
-            'delivered': total_delivered,
-            'opened': total_opened,
-            'clicked': total_clicked,
-            'sentTrend': calculate_trend(week_sent, prev_week_sent),
-            'deliveredTrend': calculate_trend(week_delivered, prev_week_delivered),
-            'openedTrend': calculate_trend(week_opened, prev_week_opened),
-            'clickedTrend': calculate_trend(week_clicked, prev_week_clicked),
-            'newSubscribers': 0,  # Пока не реализовано
-            'subscribersTrend': 0  # Пока не реализовано
+            'sent': sent_30,
+            'opened': opened_30,
+            'clicked': clicked_30,
+            'sentTrend': calculate_trend(sent_7, sent_prev_7),
+            'openedTrend': calculate_trend(opened_7, opened_prev_7),
+            'clickedTrend': calculate_trend(clicked_7, clicked_prev_7),
+            'newSubscribers': new_subscribers_30,
+            'subscribersTrend': calculate_trend(new_subscribers_7, new_subscribers_prev_7),
         })
 
     @action(detail=True, methods=['post'])
