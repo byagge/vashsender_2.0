@@ -90,11 +90,19 @@ def _get_letters_pool(user):
         sent_at__gte=period_start,
     ).count()
 
+    # Отправлено за последние 30 дней (для отображения в billing)
+    last_30_days_start = timezone.now() - timezone.timedelta(days=30)
+    sent_last_30_days = EmailTracking.objects.filter(
+        campaign__user=user,
+        sent_at__gte=last_30_days_start,
+    ).count()
+
     remaining = max(0, int(total_purchased) - int(sent_in_period))
     return {
         'total_purchased': int(total_purchased),
         'period_start': period_start,
         'sent_in_period': int(sent_in_period),
+        'sent_last_30_days': int(sent_last_30_days),
         'remaining': remaining,
     }
 
@@ -229,7 +237,8 @@ def get_user_plan_info(user):
             'plan_price': None,
             'emails_limit': letters_pool['total_purchased'],
             'subscribers_limit': None,
-            'emails_sent': letters_pool['sent_in_period'],
+            # Показ в billing только за последний месяц
+            'emails_sent': letters_pool['sent_last_30_days'],
             'emails_remaining': letters_pool['remaining'],
             'days_remaining': 0,
             'is_expired': False,
