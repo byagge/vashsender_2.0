@@ -170,6 +170,17 @@
                     </div>
                   </div>
 
+                  <!-- Failure reason (visible only if status is failed and reason present) -->
+                  <div x-show="campaign.status === 'failed' && campaign.failure_reason" class="mb-4">
+                    <div class="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5"></i>
+                      <div>
+                        <span class="font-medium">Причина ошибки:</span>
+                        <span x-text="campaign.failure_reason"></span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div x-show="campaign.status === 'sent' || campaign.status === 'failed'" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                     <div class="bg-gray-50 rounded-lg p-3">
                       <p class="text-xs text-gray-500 mb-1">Отправлено писем</p>

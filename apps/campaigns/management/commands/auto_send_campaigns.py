@@ -46,8 +46,15 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.ERROR(f'Ошибка при отправке кампании {campaign.name}: {e}')
                 )
-                # Меняем статус на failed
-                campaign.status = 'failed'
+                # На ошибке: если что-то отправилось — статус sent, иначе failed
+                try:
+                    sent_any = campaign.campaign_recipients.filter(is_sent=True).exists()
+                except Exception:
+                    sent_any = False
+                if sent_any:
+                    campaign.status = 'sent'
+                else:
+                    campaign.status = 'failed'
                 campaign.save()
         
         self.stdout.write(

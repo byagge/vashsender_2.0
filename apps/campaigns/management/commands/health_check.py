@@ -67,13 +67,13 @@ class Command(BaseCommand):
                         self.style.SUCCESS(f"  Исправлено: статус обновлен на 'sent' ({sent_recipients}/{total_recipients} писем)")
                     )
                 elif sent_recipients > 0:
-                    # Часть писем отправлена, обновляем статус на "failed"
-                    campaign.status = Campaign.STATUS_FAILED
+                    # Если хотя бы часть отправлена — считаем отправленной
+                    campaign.status = Campaign.STATUS_SENT
                     campaign.celery_task_id = None
                     campaign.save(update_fields=['status', 'celery_task_id'])
                     
                     self.stdout.write(
-                        self.style.WARNING(f"  Исправлено: статус обновлен на 'failed' ({sent_recipients}/{total_recipients} писем)")
+                        self.style.SUCCESS(f"  Исправлено: статус обновлен на 'sent' ({sent_recipients}/{total_recipients} писем)")
                     )
                 else:
                     # Ни одно письмо не отправлено, перезапускаем кампанию

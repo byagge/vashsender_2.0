@@ -106,7 +106,7 @@ def update_plan_emails_sent(user):
     - Для Letters: считаем от начала периода накопления (после последнего Subscribers)
     """
     active_plan = get_user_active_plan(user)
-    if active_plan and active_plan.plan.plan_type.name == 'Subscribers':
+    if active_plan and active_plan.plan.plan_type.name in ('Subscribers', 'Free'):
         actual_sent = EmailTracking.objects.filter(
             campaign__user=user,
             sent_at__gte=active_plan.start_date,
@@ -164,8 +164,9 @@ def _ensure_monthly_free_if_needed(user):
 def can_user_send_emails(user, count=1):
     """Проверить, может ли пользователь отправить указанное количество писем по правилам тарифов."""
     active_plan = get_user_active_plan(user)
-    if active_plan and active_plan.plan.plan_type.name == 'Subscribers':
-        remaining = max(0, (active_plan.plan.subscribers or 0) - (update_plan_emails_sent(user) or 0))
+    if active_plan and active_plan.plan.plan_type.name in ('Subscribers', 'Free'):
+        limit = active_plan.plan.subscribers or BillingSettings.get_settings().free_plan_subscribers or 0
+        remaining = max(0, limit - (update_plan_emails_sent(user) or 0))
         return remaining >= count and not active_plan.is_expired()
 
     # Letters-пул: суммируем покупки после последнего Subscribers
@@ -196,10 +197,10 @@ def get_user_plan_info(user):
     """Получить полную информацию о тарифе пользователя с учетом описанных правил."""
     # 1) Активный Subscribers-план (месячный лимит и дата окончания)
     active_plan = get_user_active_plan(user)
-    if active_plan and active_plan.plan.plan_type.name == 'Subscribers':
+    if active_plan and active_plan.plan.plan_type.name in ('Subscribers', 'Free'):
         actual_sent = update_plan_emails_sent(user)
         emails_sent_today = get_user_emails_sent_today(user)
-        limit = active_plan.plan.subscribers or 0
+        limit = active_plan.plan.subscribers or (BillingSettings.get_settings().free_plan_subscribers or 0)
         remaining = max(0, limit - (actual_sent or 0))
         return {
             'has_plan': True,

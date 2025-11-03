@@ -43,6 +43,7 @@ class Campaign(models.Model):
     sender_name = models.CharField(max_length=100, blank=True, default='')  # Имя отправителя для рассылки
     auto_send_at = models.DateTimeField(null=True, blank=True)  # Время автоматической отправки, если не одобрено
     celery_task_id = models.CharField(max_length=255, blank=True, null=True, help_text='ID задачи Celery для отслеживания')
+    failure_reason = models.TextField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.pk:  # Новый объект

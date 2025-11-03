@@ -407,15 +407,17 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             if total_contacts == 0:
                 print(f"Нет контактов для кампании {campaign.name}")
                 campaign.status = Campaign.STATUS_FAILED
+                campaign.failure_reason = campaign.failure_reason or 'no contacts in selected lists'
                 campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'celery_task_id'])
+                campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
                 return {'error': 'No contacts found'}
                 
         except Exception as e:
             print(f"Error getting contacts for campaign {campaign_id}: {e}")
             campaign.status = Campaign.STATUS_FAILED
+            campaign.failure_reason = campaign.failure_reason or f'error retrieving contacts: {e}'
             campaign.celery_task_id = None
-            campaign.save(update_fields=['status', 'celery_task_id'])
+            campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
             raise self.retry(countdown=60, max_retries=2)
         
         # Проверяем лимиты тарифа перед отправкой
@@ -427,8 +429,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Для тарифов с письмами проверяем остаток
                 if not can_user_send_emails(user, total_contacts):
                     campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'recipients exceed plan limits'
                     campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'celery_task_id'])
+                    campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
                     return {
                         'error': 'Количество получателей больше, чем предусмотрено тарифом'
                     }
@@ -436,8 +439,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Для тарифов с подписчиками проверяем только срок действия
                 if plan_info['is_expired']:
                     campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'plan expired'
                     campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'celery_task_id'])
+                    campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
                     return {
                         'error': 'Тариф истёк. Пожалуйста, продлите тариф для отправки кампаний.'
                     }
@@ -508,8 +512,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                     campaign.sent_at = timezone.now()
                 else:
                     campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'no emails sent'
                 campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
+                campaign.save(update_fields=['status', 'failure_reason', 'sent_at', 'celery_task_id'])
             except Exception:
                 pass
             execution_time = time.time() - start_time
@@ -632,8 +637,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 elif total_sent == 0:
                     print(f"No emails sent, marking as FAILED")
                     campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'no emails sent'
                     campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'celery_task_id'])
+                    campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
             
             # Очищаем кэш для этой кампании
             cache_key = f"campaign_{campaign_id}"
@@ -660,8 +666,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             campaign.status = Campaign.STATUS_FAILED
+            campaign.failure_reason = campaign.failure_reason or 'send_campaign timeout'
             campaign.celery_task_id = None
-            campaign.save(update_fields=['status', 'celery_task_id'])
+            campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
         except:
             pass
         raise self.retry(countdown=300, max_retries=1)  # Повторяем через 5 минут
@@ -679,8 +686,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             campaign.status = Campaign.STATUS_FAILED
+            campaign.failure_reason = campaign.failure_reason or f'send_campaign exception: {exc}'
             campaign.celery_task_id = None
-            campaign.save(update_fields=['status', 'celery_task_id'])
+            campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
         except:
             pass
         
@@ -1407,11 +1415,21 @@ def monitor_campaign_progress(self):
         try:
             monitored_count += 1
             
-            # Проверяем task_id
+            # Проверяем task_id. Не помечаем как failed, если есть отправленные письма
             if not campaign.celery_task_id:
-                print(f"Campaign {campaign.id} has no task_id, marking as failed")
-                campaign.status = Campaign.STATUS_FAILED
-                campaign.save(update_fields=['status'])
+                print(f"Campaign {campaign.id} has no task_id, evaluating delivery stats before marking status")
+                sent_count = CampaignRecipient.objects.filter(
+                    campaign=campaign,
+                    is_sent=True
+                ).count()
+                total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+                if sent_count > 0:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.save(update_fields=['status'])
+                else:
+                    campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'celery_task_id missing and no emails sent'
+                    campaign.save(update_fields=['status', 'failure_reason'])
                 continue
             
             # Проверяем статус задачи Celery
@@ -1430,17 +1448,15 @@ def monitor_campaign_progress(self):
                 total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
                 
                 if sent_count > 0:
-                    if sent_count == total_count:
-                        campaign.status = Campaign.STATUS_SENT
-                        print(f"  Campaign marked as SENT ({sent_count}/{total_count})")
-                    else:
-                        campaign.status = Campaign.STATUS_FAILED
-                        print(f"  Campaign marked as FAILED ({sent_count}/{total_count})")
+                    # Если хоть что-то доставлено/отправлено — это SENT, не FAILED
+                    campaign.status = Campaign.STATUS_SENT
+                    print(f"  Campaign marked as SENT ({sent_count}/{total_count})")
                 else:
                     campaign.status = Campaign.STATUS_FAILED
+                    campaign.failure_reason = campaign.failure_reason or 'no emails sent'
                     print(f"  Campaign marked as FAILED (no emails sent)")
                 
-                campaign.save(update_fields=['status'])
+                campaign.save(update_fields=['status', 'failure_reason'])
             
             elif task_result.state == 'PENDING':
                 # Задача в очереди слишком долго

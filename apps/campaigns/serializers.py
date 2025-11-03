@@ -72,7 +72,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'updated_at', 'scheduled_at', 'sent_at',
             'template', 'template_detail', 'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail', 'recipients',
-            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name',
+            'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'celery_task_id', 'sender_name', 'failure_reason',
             'opens_count', 'clicks_count', 'unsubscribed_count'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'sent_at']
@@ -150,7 +150,7 @@ class CampaignListSerializer(serializers.ModelSerializer):
             'id', 'user', 'name', 'subject', 'content', 'status', 'status_display',
             'created_at', 'sent_at', 'scheduled_at',
             'sender_email', 'sender_email_detail', 'contact_lists', 'contact_lists_detail',
-            'template', 'template_detail', 'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name',
+            'template', 'template_detail', 'emails_sent', 'delivered_emails', 'open_rate', 'click_rate', 'bounce_rate', 'delivery_rate', 'sender_name', 'failure_reason',
             'opens_count', 'clicks_count', 'unsubscribed_count'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'sent_at']
