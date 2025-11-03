@@ -1449,8 +1449,11 @@ def monitor_campaign_progress(self):
                 
                 if sent_count > 0:
                     # Если хоть что-то доставлено/отправлено — это SENT, не FAILED
+                    # Дополнительно проверяем доставку >= 70% от отправленных
+                    delivered_count = EmailTracking.objects.filter(campaign=campaign, delivered_at__isnull=False).count()
+                    delivery_ratio = (delivered_count / sent_count) if sent_count else 0
                     campaign.status = Campaign.STATUS_SENT
-                    print(f"  Campaign marked as SENT ({sent_count}/{total_count})")
+                    print(f"  Campaign marked as SENT ({sent_count}/{total_count}), delivered {delivered_count}/{sent_count} ({delivery_ratio:.0%})")
                 else:
                     campaign.status = Campaign.STATUS_FAILED
                     campaign.failure_reason = campaign.failure_reason or 'no emails sent'
