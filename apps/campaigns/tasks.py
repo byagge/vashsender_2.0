@@ -430,7 +430,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                     campaign.celery_task_id = None
                     campaign.save(update_fields=['status', 'celery_task_id'])
                     return {
-                        'error': f'Недостаточно писем в тарифе. Доступно: {plan_info["emails_remaining"]}, требуется: {total_contacts}'
+                        'error': 'Количество получателей больше, чем предусмотрено тарифом'
                     }
             elif plan_info['has_plan'] and plan_info['plan_type'] == 'Subscribers':
                 # Для тарифов с подписчиками проверяем только срок действия

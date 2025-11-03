@@ -192,7 +192,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
         if plan_info['has_plan'] and plan_info['plan_type'] == 'Letters':
             if not can_user_send_emails(user, recipients_count):
                 return Response({
-                    'error': f'Недостаточно писем в тарифе. Доступно: {plan_info["emails_remaining"]}, требуется: {recipients_count}'
+                    'error': 'Количество получателей больше, чем предусмотрено тарифом'
                 }, status=status.HTTP_400_BAD_REQUEST)
         elif plan_info['has_plan'] and plan_info['plan_type'] == 'Subscribers':
             if plan_info['is_expired']:

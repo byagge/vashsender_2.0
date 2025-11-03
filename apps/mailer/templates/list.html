@@ -874,7 +874,7 @@
           try {
             // Определяем тип импорта (быстрый или с валидацией)
             const importType = this.importType || 'normal';
-            const endpoint = importType === 'fast' ? 'import-fast/' : 'import/';
+            const endpoint = importType === 'fast' ? 'import-optimized/' : 'import/';
             
             this.importProgress = `Загружаем файл ${this.importFileObj.name}...`;
             

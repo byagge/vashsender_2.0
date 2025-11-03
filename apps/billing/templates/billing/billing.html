@@ -369,11 +369,23 @@
       },
       getTotal() {
         if (!this.currentPlan) return 0;
+        // Для тарифов по письмам используем месячный лимит
         if (this.isLettersPlan()) {
           return this.currentPlan.emails_per_month || 0;
         }
-        const limit = (this.currentPlan.subscribers_limit ?? this.currentPlan.emails_per_month ?? this.currentPlan.emails_limit);
-        if (typeof limit === 'number' && !isNaN(limit)) return limit;
+        // Для тарифов по подписчикам сначала берем явный лимит
+        if (this.isSubscribersPlan()) {
+          const subscribersLimit = this.currentPlan.subscribers_limit;
+          if (typeof subscribersLimit === 'number' && subscribersLimit > 0) {
+            return subscribersLimit;
+          }
+          // Фолбэк для бесплатного тарифа, если бэкенд не прислал лимит
+          const title = (this.currentPlan.title || '').toString().toLowerCase();
+          if (title.includes('бесплат')) {
+            return 200;
+          }
+        }
+        // Последний фолбэк: пытаемся восстановить по сумме использовано + осталось
         const sent = this.currentPlan.emails_sent || 0;
         const remaining = this.currentPlan.emails_remaining || 0;
         return sent + remaining;
@@ -384,6 +396,12 @@
       getRemaining() {
         const total = this.getTotal();
         const used = this.getUsed();
+        // Для тарифов по подписчикам считаем остаток строго как total - used,
+        // т.к. API может отдавать emails_remaining = 0
+        if (this.isSubscribersPlan()) {
+          return Math.max(0, (total || 0) - (used || 0));
+        }
+        // Для тарифов по письмам учитываем возможное поле API
         const apiRemaining = this.currentPlan?.emails_remaining;
         const computed = total - used;
         const remaining = (apiRemaining === null || apiRemaining === undefined) ? computed : apiRemaining;
