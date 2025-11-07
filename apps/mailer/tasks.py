@@ -4,6 +4,7 @@ from celery import shared_task
 from django.utils import timezone
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.db import transaction
 
 from .models import ContactList, Contact, ImportTask
 from .utils import parse_emails, validate_email_production
@@ -50,6 +51,7 @@ def import_contacts_async(self, task_id, file_path):
         blacklisted_count = 0
         error_count = 0
         processed = 0
+        skipped_count = 0
         
         # Батчинг для оптимизации
         contacts_to_create = []
@@ -59,6 +61,12 @@ def import_contacts_async(self, task_id, file_path):
         for i, email in enumerate(emails):
             try:
                 processed += 1
+                
+                # Нормализуем email (lower, strip)
+                email = email.lower().strip() if email else ''
+                if not email:
+                    skipped_count += 1
+                    continue
                 
                 # Обновляем прогресс каждые 100 email
                 if processed % 100 == 0:
@@ -77,6 +85,7 @@ def import_contacts_async(self, task_id, file_path):
                 
                 # Быстрая проверка существования
                 if email in existing_emails:
+                    skipped_count += 1
                     continue
                 
                 # Полная валидация email
@@ -92,7 +101,8 @@ def import_contacts_async(self, task_id, file_path):
                         status=status_code
                     )
                     contacts_to_create.append(new_contact)
-                    added += 1
+                    # Добавляем email в existing_emails, чтобы избежать дубликатов в батче
+                    existing_emails.add(email)
                     
                     if status_code == Contact.BLACKLIST:
                         blacklisted_count += 1
@@ -104,27 +114,69 @@ def import_contacts_async(self, task_id, file_path):
                         status=Contact.INVALID
                     )
                     contacts_to_create.append(new_contact)
+                    # Добавляем email в existing_emails, чтобы избежать дубликатов в батче
+                    existing_emails.add(email)
                     invalid_count += 1
                 
                 # Батчинг: сохраняем каждые batch_size контактов
                 if len(contacts_to_create) >= batch_size:
                     try:
-                        Contact.objects.bulk_create(contacts_to_create, ignore_conflicts=True)
+                        with transaction.atomic():
+                            # Получаем email из батча для проверки
+                            batch_emails = [c.email for c in contacts_to_create]
+                            
+                            # Проверяем, какие email уже существуют в базе
+                            existing_in_batch = set(Contact.objects.filter(
+                                contact_list=task.contact_list,
+                                email__in=batch_emails
+                            ).values_list('email', flat=True))
+                            
+                            # Фильтруем контакты, которые еще не существуют
+                            new_contacts = [c for c in contacts_to_create if c.email not in existing_in_batch]
+                            
+                            if new_contacts:
+                                # Используем bulk_create только для новых контактов
+                                Contact.objects.bulk_create(new_contacts, ignore_conflicts=True)
+                                added += len(new_contacts)
+                            
+                            # Обновляем existing_emails с новыми email из батча
+                            for c in contacts_to_create:
+                                existing_emails.add(c.email)
+                        
                         contacts_to_create = []
                     except Exception as e:
                         error_count += len(contacts_to_create)
+                        # Удаляем email из existing_emails, если батч не был создан
+                        for c in contacts_to_create:
+                            existing_emails.discard(c.email)
                         contacts_to_create = []
                         print(f"Error in batch create: {e}")
                         
             except Exception as e:
                 error_count += 1
-                print(f"Error processing email {email}: {e}")
+                print(f"Error processing email {email if 'email' in locals() else 'unknown'}: {e}")
                 continue
         
         # Сохраняем оставшиеся контакты
         if contacts_to_create:
             try:
-                Contact.objects.bulk_create(contacts_to_create, ignore_conflicts=True)
+                with transaction.atomic():
+                    # Получаем email из батча для проверки
+                    batch_emails = [c.email for c in contacts_to_create]
+                    
+                    # Проверяем, какие email уже существуют в базе
+                    existing_in_batch = set(Contact.objects.filter(
+                        contact_list=task.contact_list,
+                        email__in=batch_emails
+                    ).values_list('email', flat=True))
+                    
+                    # Фильтруем контакты, которые еще не существуют
+                    new_contacts = [c for c in contacts_to_create if c.email not in existing_in_batch]
+                    
+                    if new_contacts:
+                        # Используем bulk_create только для новых контактов
+                        Contact.objects.bulk_create(new_contacts, ignore_conflicts=True)
+                        added += len(new_contacts)
             except Exception as e:
                 error_count += len(contacts_to_create)
                 print(f"Error in final batch create: {e}")

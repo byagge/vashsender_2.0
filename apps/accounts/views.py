@@ -316,27 +316,35 @@ class CustomPasswordResetView(PasswordResetView):
         Переопределяем метод отправки для поддержки HTML писем
         """
         from django.template.loader import render_to_string
-        from django.core.mail import EmailMultiAlternatives
         
         subject = render_to_string(subject_template_name, context)
-        # Email subject *must not* contain newlines
         subject = ''.join(subject.splitlines())
         
-        # Рендерим текстовую версию
         text_message = render_to_string(email_template_name, context)
-        
-        # Рендерим HTML версию
         html_message = render_to_string(html_email_template_name, context)
-        
-        # Создаем письмо с альтернативными версиями
-        email = EmailMultiAlternatives(
-            subject=subject,
-            body=text_message,
-            from_email=from_email,
-            to=[to_email]
-        )
-        email.attach_alternative(html_message, "text/html")
-        email.send()
+
+        # Используем единый надёжный путь отправки как для верификаций
+        try:
+            from apps.emails.tasks import send_verification_email_sync
+            send_verification_email_sync(
+                to_email=to_email,
+                subject=subject,
+                plain_text=text_message,
+                html=html_message,
+            )
+        except Exception:
+            # Фолбэк на стандартный Django EmailBackend
+            from django.core.mail import EmailMultiAlternatives, get_connection
+            connection = get_connection(fail_silently=False)
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=text_message,
+                from_email=from_email,
+                to=[to_email],
+                connection=connection,
+            )
+            email.attach_alternative(html_message, "text/html")
+            email.send()
 
 
 class CustomPasswordResetDoneView(PasswordResetDoneView):
