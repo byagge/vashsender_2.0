@@ -11,6 +11,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.db import IntegrityError
 from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
+from .forms import CustomPasswordResetForm
 from django.contrib.auth.views import PasswordResetView, PasswordResetDoneView, PasswordResetConfirmView, PasswordResetCompleteView
 from django.contrib.auth.decorators import login_required
 from rest_framework import status, generics, permissions
@@ -292,6 +293,7 @@ class LogoutView(View):
 # Password Reset Views
 class CustomPasswordResetView(PasswordResetView):
     template_name = 'password_reset.html'
+    form_class = CustomPasswordResetForm
     email_template_name = 'password_reset_email.txt'
     html_email_template_name = 'password_reset_email.html'
     subject_template_name = 'password_reset_subject.txt'
