@@ -14,36 +14,62 @@ from .utils import parse_emails, validate_email_production
 def import_contacts_async(self, task_id, file_path):
     """
     Асинхронная задача для импорта контактов с полной валидацией
+    Может выполняться как через Celery (bind=True), так и синхронно
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Проверяем, выполняется ли задача через Celery
+    is_celery_task = hasattr(self, 'update_state')
+    
     try:
+        logger.info(f"Starting import task {task_id} with file {file_path} (Celery: {is_celery_task})")
+        
         # Получаем задачу импорта
         task = ImportTask.objects.get(id=task_id)
+        logger.info(f"Found import task: {task.filename}, contact_list: {task.contact_list.id}")
         
         # Обновляем статус на "обрабатывается"
         task.status = ImportTask.PROCESSING
         task.started_at = timezone.now()
         task.save()
+        logger.info(f"Task status updated to PROCESSING")
         
         # Проверяем, что файл существует
         if not os.path.exists(file_path):
+            error_msg = f"File not found: {file_path}"
+            logger.error(error_msg)
             task.status = ImportTask.FAILED
-            task.error_message = f"File not found: {file_path}"
+            task.error_message = error_msg
             task.completed_at = timezone.now()
             task.save()
             return False
+        
+        logger.info(f"File exists: {file_path}, size: {os.path.getsize(file_path)} bytes")
         
         # Читаем email адреса из файла
         with open(file_path, 'rb') as f:
             emails = parse_emails(f, task.filename)
         
         total_emails = len(emails)
+        logger.info(f"Parsed {total_emails} emails from file")
         task.total_emails = total_emails
         task.save()
+        
+        if total_emails == 0:
+            logger.warning("No emails found in file")
+            task.status = ImportTask.COMPLETED
+            task.processed_emails = 0
+            task.imported_count = 0
+            task.completed_at = timezone.now()
+            task.save()
+            return True
         
         # Получаем все существующие email для быстрой проверки
         existing_emails = set(Contact.objects.filter(
             contact_list=task.contact_list
         ).values_list('email', flat=True))
+        logger.info(f"Found {len(existing_emails)} existing emails in contact list")
         
         # Счетчики
         added = 0
@@ -56,6 +82,8 @@ def import_contacts_async(self, task_id, file_path):
         # Батчинг для оптимизации
         contacts_to_create = []
         batch_size = 100  # Размер батча для создания контактов
+        
+        logger.info(f"Starting to process {total_emails} emails")
         
         # Обрабатываем email адреса
         for i, email in enumerate(emails):
@@ -73,15 +101,19 @@ def import_contacts_async(self, task_id, file_path):
                     task.processed_emails = processed
                     task.save()
                     
-                    # Обновляем прогресс Celery задачи
-                    self.update_state(
-                        state='PROGRESS',
-                        meta={
-                            'current': processed,
-                            'total': total_emails,
-                            'status': f'Обработано {processed} из {total_emails} email адресов'
-                        }
-                    )
+                    # Обновляем прогресс Celery задачи (если выполняется через Celery)
+                    if is_celery_task:
+                        try:
+                            self.update_state(
+                                state='PROGRESS',
+                                meta={
+                                    'current': processed,
+                                    'total': total_emails,
+                                    'status': f'Обработано {processed} из {total_emails} email адресов'
+                                }
+                            )
+                        except Exception:
+                            pass  # Игнорируем ошибки обновления состояния
                 
                 # Быстрая проверка существования
                 if email in existing_emails:
@@ -138,6 +170,9 @@ def import_contacts_async(self, task_id, file_path):
                                 # Используем bulk_create только для новых контактов
                                 Contact.objects.bulk_create(new_contacts, ignore_conflicts=True)
                                 added += len(new_contacts)
+                                logger.info(f"Created batch of {len(new_contacts)} contacts (total added: {added})")
+                            else:
+                                logger.warning(f"All {len(contacts_to_create)} contacts in batch already exist")
                             
                             # Обновляем existing_emails с новыми email из батча
                             for c in contacts_to_create:
@@ -150,7 +185,7 @@ def import_contacts_async(self, task_id, file_path):
                         for c in contacts_to_create:
                             existing_emails.discard(c.email)
                         contacts_to_create = []
-                        print(f"Error in batch create: {e}")
+                        logger.error(f"Error in batch create: {e}", exc_info=True)
                         
             except Exception as e:
                 error_count += 1
@@ -177,11 +212,15 @@ def import_contacts_async(self, task_id, file_path):
                         # Используем bulk_create только для новых контактов
                         Contact.objects.bulk_create(new_contacts, ignore_conflicts=True)
                         added += len(new_contacts)
+                        logger.info(f"Created final batch of {len(new_contacts)} contacts (total added: {added})")
+                    else:
+                        logger.warning(f"All {len(contacts_to_create)} contacts in final batch already exist")
             except Exception as e:
                 error_count += len(contacts_to_create)
-                print(f"Error in final batch create: {e}")
+                logger.error(f"Error in final batch create: {e}", exc_info=True)
         
         # Завершаем задачу
+        logger.info(f"Import completed: processed={processed}, added={added}, invalid={invalid_count}, blacklisted={blacklisted_count}, errors={error_count}")
         task.status = ImportTask.COMPLETED
         task.processed_emails = processed
         task.imported_count = added
@@ -194,27 +233,35 @@ def import_contacts_async(self, task_id, file_path):
         # Удаляем временный файл
         try:
             os.remove(file_path)
-        except:
-            pass
+            logger.info(f"Temporary file removed: {file_path}")
+        except Exception as e:
+            logger.warning(f"Could not remove temporary file {file_path}: {e}")
         
         return True
         
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Fatal error in import task {task_id}: {e}", exc_info=True)
+        
         # Обновляем задачу с ошибкой
         try:
             task = ImportTask.objects.get(id=task_id)
             task.status = ImportTask.FAILED
-            task.error_message = str(e)
+            task.error_message = f"{str(e)}: {type(e).__name__}"
             task.completed_at = timezone.now()
             task.save()
-        except:
-            pass
+            logger.info(f"Task {task_id} marked as FAILED")
+        except Exception as save_error:
+            logger.error(f"Could not save failed task status: {save_error}", exc_info=True)
         
         # Удаляем временный файл
         try:
-            os.remove(file_path)
-        except:
-            pass
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Temporary file removed after error: {file_path}")
+        except Exception as remove_error:
+            logger.warning(f"Could not remove temporary file {file_path}: {remove_error}")
         
         return False
 

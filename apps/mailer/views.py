@@ -167,18 +167,49 @@ class ContactListViewSet(viewsets.ModelViewSet):
             
             # Запускаем асинхронную задачу
             from .tasks import import_contacts_async
-            celery_task = import_contacts_async.delay(str(import_task.id), file_path)
+            from django.conf import settings
             
-            # Сохраняем ID Celery задачи для отслеживания
-            import_task.celery_task_id = celery_task.id
-            import_task.save()
-
-            return Response({
-                'task_id': str(import_task.id),
-                'celery_task_id': celery_task.id,
-                'status': 'started',
-                'message': 'Импорт начат в фоновом режиме. Отслеживайте прогресс через API.'
-            }, status=status.HTTP_202_ACCEPTED)
+            # Запускаем задачу асинхронно
+            try:
+                celery_task = import_contacts_async.delay(str(import_task.id), file_path)
+                
+                # Сохраняем ID Celery задачи для отслеживания
+                import_task.celery_task_id = celery_task.id
+                import_task.save()
+                
+                return Response({
+                    'task_id': str(import_task.id),
+                    'celery_task_id': celery_task.id,
+                    'status': 'started',
+                    'message': 'Импорт начат в фоновом режиме. Отслеживайте прогресс через API.'
+                }, status=status.HTTP_202_ACCEPTED)
+            except Exception as e:
+                # Если не удалось запустить задачу Celery, выполняем синхронно
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to start Celery task: {e}, executing synchronously", exc_info=True)
+                
+                # Выполняем задачу синхронно через apply
+                try:
+                    result = import_contacts_async.apply(args=[str(import_task.id), file_path])
+                    if result.successful():
+                        import_task.status = ImportTask.COMPLETED
+                    else:
+                        import_task.status = ImportTask.FAILED
+                        import_task.error_message = str(result.result) if result.result else str(e)
+                    import_task.save()
+                except Exception as sync_error:
+                    logger.error(f"Failed to execute task synchronously: {sync_error}", exc_info=True)
+                    import_task.status = ImportTask.FAILED
+                    import_task.error_message = f"Celery error: {e}, Sync error: {sync_error}"
+                    import_task.save()
+                
+                return Response({
+                    'task_id': str(import_task.id),
+                    'status': import_task.status,
+                    'error': import_task.error_message,
+                    'message': 'Импорт выполнен синхронно (Celery недоступен).'
+                }, status=status.HTTP_200_OK)
             
         except Exception as e:
             # Обновляем задачу с ошибкой
