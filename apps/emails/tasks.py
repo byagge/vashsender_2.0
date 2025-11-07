@@ -80,16 +80,28 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     """
     smtp_connection = None
     # Choose a verified/system sender similar to campaigns
-    from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    configured_from = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None)
+    default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    from_email = configured_from or default_from
+
+    reply_to = None
     try:
         from apps.emails.models import SenderEmail
-        sender = SenderEmail.objects.filter(email=from_email, is_verified=True).first()
-        if sender and sender.reply_to:
-            # Prefer configured reply-to
-            reply_to = sender.reply_to
+        # Prefer explicitly configured sender if it is verified
+        preferred_sender = None
+        if configured_from:
+            preferred_sender = SenderEmail.objects.filter(email=configured_from, is_verified=True).first()
+        # Otherwise pick any verified sender in the system
+        if not preferred_sender:
+            preferred_sender = SenderEmail.objects.filter(is_verified=True).order_by('id').first()
+
+        if preferred_sender:
+            from_email = preferred_sender.email
+            reply_to = preferred_sender.reply_to or preferred_sender.email
         else:
             reply_to = from_email
     except Exception:
+        # Fallback to settings values
         reply_to = from_email
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"Sending verification email to={to_email} subject={subject}")

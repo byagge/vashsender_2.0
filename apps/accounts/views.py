@@ -146,9 +146,12 @@ class EmailSentView(LoginRequiredMixin, View):
 
         context = {
             'email': email,
-            # если provider None — ключей name/url не будет
-            'provider': provider
         }
+        if provider:
+            context.update({
+                'provider_name': provider.get('name'),
+                'provider_url': provider.get('url'),
+            })
         return render(request, 'email_sent.html', context)
 
 
