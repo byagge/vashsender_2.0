@@ -88,17 +88,26 @@ class SMTPConnectionPool:
 
                         if use_tls and not use_ssl:
                             try:
-                                connection.starttls()
-                                # Повторяем HELO/EHLO после STARTTLS
+                                # Используем STARTTLS только если сервер его поддерживает
                                 try:
-                                    connection.helo(helo_domain)
-                                    connection.ehlo(helo_domain)
+                                    supports_starttls = connection.has_extn('starttls')
                                 except Exception:
+                                    supports_starttls = False
+                                if supports_starttls:
+                                    connection.starttls()
+                                    # Повторяем HELO/EHLO после STARTTLS
                                     try:
-                                        connection.helo('localhost')
-                                        connection.ehlo('localhost')
+                                        connection.helo(helo_domain)
+                                        connection.ehlo(helo_domain)
                                     except Exception:
-                                        pass
+                                        try:
+                                            connection.helo('localhost')
+                                            connection.ehlo('localhost')
+                                        except Exception:
+                                            pass
+                                else:
+                                    if getattr(settings, 'EMAIL_DEBUG', False):
+                                        print("STARTTLS not supported by server — continuing without TLS")
                             except Exception as e:
                                 last_error = e
                                 try:
@@ -157,24 +166,32 @@ class SMTPConnectionPool:
                     pass
             
             if settings.EMAIL_USE_TLS:
-                connection.starttls()
-                # Повторяем HELO и EHLO после STARTTLS для лучшей доставляемости
                 try:
-                    helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
-                    connection.helo(helo_domain)
-                    connection.ehlo(helo_domain)
-                    if getattr(settings, 'EMAIL_DEBUG', False):
-                        print(f"SMTP HELO/EHLO after STARTTLS set to: {helo_domain}")
-                except Exception as e:
-                    if getattr(settings, 'EMAIL_DEBUG', False):
-                        print(f"Failed to set HELO after STARTTLS: {e}")
+                    supports_starttls = connection.has_extn('starttls')
+                except Exception:
+                    supports_starttls = False
+                if supports_starttls:
+                    connection.starttls()
+                    # Повторяем HELO и EHLO после STARTTLS для лучшей доставляемости
                     try:
-                        connection.helo('localhost')
-                        connection.ehlo('localhost')
+                        helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
+                        connection.helo(helo_domain)
+                        connection.ehlo(helo_domain)
                         if getattr(settings, 'EMAIL_DEBUG', False):
-                            print(f"SMTP HELO/EHLO after STARTTLS set to: localhost")
-                    except:
-                        pass
+                            print(f"SMTP HELO/EHLO after STARTTLS set to: {helo_domain}")
+                    except Exception as e:
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            print(f"Failed to set HELO after STARTTLS: {e}")
+                        try:
+                            connection.helo('localhost')
+                            connection.ehlo('localhost')
+                            if getattr(settings, 'EMAIL_DEBUG', False):
+                                print(f"SMTP HELO/EHLO after STARTTLS set to: localhost")
+                        except:
+                            pass
+                else:
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print("STARTTLS not supported by server — continuing without TLS")
             
             if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
                 connection.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
