@@ -543,11 +543,17 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 'worker': self.request.hostname
             }
 
-        # Разбиваем на батчи (можно отправлять все сразу)
-        batch_size = len(contacts_list)
-        batches = [contacts_list]
-        
-        print(f"Кампания {campaign.name}: {total_contacts} писем, {len(batches)} батчей")
+        # Разбиваем на батчи для больших объемов
+        # Для больших кампаний разбиваем на батчи по 1000 контактов для лучшей обработки
+        if total_contacts > 1000:
+            batch_size = 1000
+            batches = [contacts_list[i:i + batch_size] for i in range(0, len(contacts_list), batch_size)]
+            print(f"Кампания {campaign.name}: {total_contacts} писем разбито на {len(batches)} батчей по {batch_size} контактов")
+        else:
+            # Для небольших кампаний отправляем все сразу
+            batch_size = len(contacts_list)
+            batches = [contacts_list]
+            print(f"Кампания {campaign.name}: {total_contacts} писем, {len(batches)} батчей")
         
         # Отправляем письма напрямую через send_email_batch
         batch_tasks = []
@@ -636,7 +642,47 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 campaign_id=campaign_id
             ).count()
             
-            print(f"Final statistics: total_recipients={total_recipients}, total_sent={total_sent}")
+            # Проверяем, сколько батчей еще выполняется
+            active_batches = 0
+            for batch_task in batch_tasks:
+                try:
+                    if not batch_task.ready():
+                        active_batches += 1
+                except:
+                    pass
+            
+            print(f"Final statistics: total_recipients={total_recipients}, total_sent={total_sent}, active_batches={active_batches}")
+            
+            # Ждем еще немного, если есть активные батчи
+            if active_batches > 0:
+                print(f"Waiting for {active_batches} active batches to complete...")
+                additional_wait = 0
+                max_additional_wait = 1800  # 30 минут дополнительного ожидания
+                while additional_wait < max_additional_wait:
+                    active_count = sum(1 for task in batch_tasks if not task.ready())
+                    if active_count == 0:
+                        print("All batches completed")
+                        break
+                    time.sleep(10)
+                    additional_wait += 10
+                    
+                    # Обновляем статистику
+                    total_sent = CampaignRecipient.objects.filter(
+                        campaign_id=campaign_id, 
+                        is_sent=True
+                    ).count()
+                    print(f"Progress: {total_sent}/{total_recipients} sent, {active_count} batches still active")
+            
+            # Финальная проверка статистики
+            total_sent = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id, 
+                is_sent=True
+            ).count()
+            total_recipients = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id
+            ).count()
+            
+            print(f"Final statistics after waiting: total_recipients={total_recipients}, total_sent={total_sent}")
             
             if total_recipients > 0:
                 if total_sent == total_recipients and campaign.status == Campaign.STATUS_SENDING:
@@ -735,6 +781,16 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         from apps.mailer.models import Contact as MailerContact
         contacts = Contact.objects.filter(id__in=contact_ids, status=MailerContact.VALID)
         
+        # Проверяем, что все контакты найдены
+        found_contact_ids = set(contacts.values_list('id', flat=True))
+        requested_contact_ids = set(contact_ids)
+        missing_contact_ids = requested_contact_ids - found_contact_ids
+        
+        if missing_contact_ids:
+            print(f"Warning: {len(missing_contact_ids)} contacts not found or not valid: {list(missing_contact_ids)[:10]}")
+        
+        print(f"Processing {len(contacts)} contacts out of {len(contact_ids)} requested")
+        
         # Получаем SMTP соединение из пула
         smtp_connection = smtp_pool.get_connection()
         print("Got SMTP connection")
@@ -753,6 +809,9 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         except Exception:
             delay_step_seconds = 0
 
+        # Список задач для отслеживания
+        email_tasks = []
+        
         for i, contact in enumerate(contacts):
             try:
                 # Проверяем таймаут в цикле
@@ -761,10 +820,14 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 
                 # Планируем отправку письма с учётом настраиваемой скорости
                 countdown = int(i * delay_step_seconds) if delay_step_seconds > 0 else 0
-                send_single_email.apply_async(args=[campaign_id, contact.id], countdown=countdown)
-                # Не ждем результат, просто планируем задачу; обработка результата в send_single_email
-                sent_count += 1  # Предполагаем успех, так как не ждем результат
-                # Обновляем прогресс
+                task_result = send_single_email.apply_async(
+                    args=[campaign_id, contact.id], 
+                    countdown=countdown,
+                    queue='email'
+                )
+                email_tasks.append((task_result, contact.id))
+                
+                # Обновляем прогресс планирования
                 self.update_state(
                     state='PROGRESS',
                     meta={
@@ -772,14 +835,78 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                         'total_batches': total_batches,
                         'current': i + 1,
                         'total': len(contacts),
+                        'status': f'Запланировано {i + 1}/{len(contacts)} писем',
                         'sent': sent_count,
                         'failed': failed_count
                     }
                 )
             except Exception as e:
                 failed_count += 1
-                print(f"Ошибка отправки письма {contact.email}: {str(e)}")
+                print(f"Ошибка планирования письма для контакта {contact.id}: {str(e)}")
                 continue
+        
+        # Ждем завершения всех задач с таймаутом
+        print(f"Waiting for {len(email_tasks)} email tasks to complete...")
+        max_wait_time = 5400  # 90 минут максимум ожидания
+        wait_start = time.time()
+        completed_tasks = set()
+        
+        while time.time() - wait_start < max_wait_time:
+            # Проверяем статус всех задач
+            for task_result, contact_id in email_tasks:
+                if contact_id in completed_tasks:
+                    continue
+                    
+                try:
+                    if task_result.ready():
+                        completed_tasks.add(contact_id)
+                        try:
+                            result = task_result.get(timeout=1)
+                            if result and isinstance(result, dict) and result.get('success'):
+                                sent_count += 1
+                            else:
+                                failed_count += 1
+                                print(f"Task for contact {contact_id} failed: {result}")
+                        except Exception as e:
+                            failed_count += 1
+                            print(f"Error getting result for contact {contact_id}: {e}")
+                except Exception as e:
+                    print(f"Error checking task status for contact {contact_id}: {e}")
+            
+            # Обновляем прогресс ожидания
+            completed_count = len(completed_tasks)
+            if completed_count % 100 == 0 or completed_count == len(email_tasks):
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'batch': batch_number,
+                        'total_batches': total_batches,
+                        'current': completed_count,
+                        'total': len(email_tasks),
+                        'status': f'Ожидание завершения: {completed_count}/{len(email_tasks)}',
+                        'sent': sent_count,
+                        'failed': failed_count
+                    }
+                )
+                print(f"Progress: {completed_count}/{len(email_tasks)} tasks completed, {sent_count} sent, {failed_count} failed")
+            
+            # Если все задачи завершены, выходим
+            if len(completed_tasks) >= len(email_tasks):
+                print(f"All {len(email_tasks)} email tasks completed")
+                break
+            
+            # Проверяем таймаут
+            if time.time() - start_time > 4800:
+                print(f"Timeout approaching, {len(completed_tasks)}/{len(email_tasks)} tasks completed")
+                break
+            
+            time.sleep(5)  # Проверяем каждые 5 секунд
+        else:
+            print(f"Timeout waiting for email tasks after {max_wait_time} seconds")
+            # Подсчитываем незавершенные задачи как failed
+            remaining = len(email_tasks) - len(completed_tasks)
+            failed_count += remaining
+            print(f"Marking {remaining} remaining tasks as failed due to timeout")
         
         # Возвращаем соединение в пул
         if smtp_connection:
