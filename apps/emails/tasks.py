@@ -84,25 +84,15 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
     from_email = configured_from or default_from
 
-    reply_to = None
+    # Only derive reply-to if we have a SenderEmail record for the chosen from_email
+    reply_to = from_email
     try:
         from apps.emails.models import SenderEmail
-        # Prefer explicitly configured sender if it is verified
-        preferred_sender = None
-        if configured_from:
-            preferred_sender = SenderEmail.objects.filter(email=configured_from, is_verified=True).first()
-        # Otherwise pick any verified sender in the system
-        if not preferred_sender:
-            preferred_sender = SenderEmail.objects.filter(is_verified=True).order_by('id').first()
-
-        if preferred_sender:
-            from_email = preferred_sender.email
-            reply_to = preferred_sender.reply_to or preferred_sender.email
-        else:
-            reply_to = from_email
+        sender_row = SenderEmail.objects.filter(email=from_email, is_verified=True).first()
+        if sender_row and sender_row.reply_to:
+            reply_to = sender_row.reply_to
     except Exception:
-        # Fallback to settings values
-        reply_to = from_email
+        pass
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"Sending verification email to={to_email} subject={subject}")
     # First try the high-performance SMTP pool (local MTA path)
