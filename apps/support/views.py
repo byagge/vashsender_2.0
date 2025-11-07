@@ -367,7 +367,9 @@ class SupportChatViewSet(viewsets.ModelViewSet):
             )
         
         # Определяем, является ли сообщение ответом сотрудника
-        is_staff_reply = request.user.is_staff
+        # Если это автоматический ответ, помечаем как ответ от поддержки
+        is_auto_reply = request.data.get('is_auto_reply', False)
+        is_staff_reply = request.user.is_staff or is_auto_reply
         
         message = SupportChatMessage.objects.create(
             chat_message=chat,
@@ -380,43 +382,44 @@ class SupportChatViewSet(viewsets.ModelViewSet):
         chat.chat_updated_at = timezone.now()
         chat.save(update_fields=['chat_updated_at'])
         
-        # Уведомление поддержки о новом сообщении в чате
-        try:
-            support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
-            subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
-            text_body = (
-                f"Пользователь: {request.user.email}\n"
-                f"Чат: {chat.chat_id}\n\n"
-                f"Сообщение:\n{message_text}\n"
-            )
-            from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
-            sent_ok = False
+        # Уведомление поддержки о новом сообщении в чате (не отправляем для автоматических ответов)
+        if not is_auto_reply:
             try:
-                send_plain_notification_sync(
-                    to_email=support_email,
-                    subject=subject,
-                    plain_text=text_body,
+                support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+                subject = f"[Support Chat] Новое сообщение в чате {chat.chat_id.hex[:8]} от {request.user.email}"
+                text_body = (
+                    f"Пользователь: {request.user.email}\n"
+                    f"Чат: {chat.chat_id}\n\n"
+                    f"Сообщение:\n{message_text}\n"
                 )
-                sent_ok = True
-            except Exception:
+                from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
+                sent_ok = False
                 try:
-                    msg = EmailMultiAlternatives(
+                    send_plain_notification_sync(
+                        to_email=support_email,
                         subject=subject,
-                        body=text_body,
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
-                        to=[support_email]
+                        plain_text=text_body,
                     )
-                    msg.send(fail_silently=False)
                     sent_ok = True
                 except Exception:
-                    pass
-            if not sent_ok:
-                try:
-                    send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                    try:
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=text_body,
+                            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                            to=[support_email]
+                        )
+                        msg.send(fail_silently=False)
+                        sent_ok = True
+                    except Exception:
+                        pass
+                if not sent_ok:
+                    try:
+                        send_plain_notification.apply_async(args=[support_email, subject, text_body], queue='email')
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
         serializer = SupportChatMessageSerializer(message)
         return Response(serializer.data, status=201)
@@ -519,3 +522,11 @@ class SupportChatView(LoginRequiredMixin, TemplateView):
         ).first()
         context['active_chat'] = active_chat
         return context 
+
+from django.shortcuts import redirect
+
+def support_index_redirect(request):
+    """
+    Редирект со /support/ на /support/chat/
+    """
+    return redirect('support-chat')

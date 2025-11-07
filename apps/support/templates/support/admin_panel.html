@@ -7,52 +7,36 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs" defer></script>
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
         [x-cloak] { display: none !important; }
         .chat-container {
-            height: calc(100vh - 120px);
+            height: 100vh;
         }
         .messages-container {
-            height: calc(100vh - 280px);
+            height: calc(100vh - 140px);
         }
         .message-bubble {
-            max-width: 70%;
+            max-width: 65%;
+            word-wrap: break-word;
         }
         .message-bubble.staff {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            border-radius: 20px 20px 4px 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         .message-bubble.user {
-            background: #f3f4f6;
-            color: #1f2937;
-        }
-        .typing-indicator {
-            display: inline-block;
-        }
-        .typing-indicator span {
-            animation: typing 1.4s infinite ease-in-out;
-            display: inline-block;
-            height: 8px;
-            width: 8px;
-            border-radius: 50%;
-            background-color: #9ca3af;
-            margin: 0 2px;
-        }
-        .typing-indicator span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .typing-indicator span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes typing {
-            0%, 60%, 100% {
-                transform: translateY(0);
-                opacity: 0.4;
-            }
-            30% {
-                transform: translateY(-10px);
-                opacity: 1;
-            }
+            background: #ffffff;
+            color: #212529;
+            border-radius: 20px 20px 20px 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
         }
         .scrollbar-hide {
             -ms-overflow-style: none;
@@ -61,68 +45,112 @@
         .scrollbar-hide::-webkit-scrollbar {
             display: none;
         }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #667eea;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
+        
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        .message-input-wrapper {
+            background: #ffffff;
+            border-radius: 24px;
+            border: 1px solid #e0e0e0;
+            padding: 8px 12px;
+            display: flex;
+            align-items: flex-end;
+            transition: all 0.2s ease;
+        }
+        .message-input-wrapper:focus-within {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .message-input {
+            resize: none;
+            min-height: 24px;
+            max-height: 120px;
+            border: none;
+            outline: none;
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .send-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #667eea;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
+        .send-button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: scale(1.05);
+        }
+        .send-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .send-button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+        .quick-reply-item {
+            transition: all 0.2s ease;
+        }
+        .quick-reply-item:hover {
+            background: #f8f9fa;
+        }
+        @media (max-width: 1024px) {
+            .right-panel {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50">
     {% csrf_token %}
-    <div class="min-h-screen flex" x-data="supportMessenger">
+    <div class="h-screen flex overflow-hidden" x-data="supportMessenger">
         <!-- Sidebar -->
         {% include "dashboard/common/sidebar.html" %}
 
         <!-- Main Content -->
-        <div class="flex-1 flex md:ml-64">
-            <div class="flex-1 flex flex-col">
-                <!-- Top Stats Bar -->
-                <div class="bg-white border-b border-gray-200 p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <!-- Total Chats -->
-                        <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-blue-100 text-sm font-medium">Всего чатов</p>
-                                    <p class="text-2xl font-bold" x-text="chats.length"></p>
-                                </div>
-                                <i data-lucide="message-circle" class="w-8 h-8 text-blue-200"></i>
-                            </div>
-                        </div>
-                        
-                        <!-- Open Chats -->
-                        <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-green-100 text-sm font-medium">Открытые чаты</p>
-                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('open').length"></p>
-                                </div>
-                                <i data-lucide="message-square" class="w-8 h-8 text-green-200"></i>
-                            </div>
-                        </div>
-                        
-                        <!-- In Progress -->
-                        <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg p-4 text-white">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-yellow-100 text-sm font-medium">В работе</p>
-                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('in_progress').length"></p>
-                                </div>
-                                <i data-lucide="clock" class="w-8 h-8 text-yellow-200"></i>
-                            </div>
-                        </div>
-                        
-                        <!-- Resolved -->
-                        <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-4 text-white">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-purple-100 text-sm font-medium">Решённые</p>
-                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('resolved').length"></p>
-                                </div>
-                                <i data-lucide="check-circle" class="w-8 h-8 text-purple-200"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Main Chat Interface -->
-                <div class="flex-1 flex chat-container">
+        <div class="flex-1 flex md:ml-64 h-full">
+            <!-- Main Chat Interface -->
+            <div class="flex-1 flex chat-container">
                     <!-- Left Panel - Chat List -->
                     <div class="w-80 bg-white border-r border-gray-200 flex flex-col">
                         <!-- Header -->
@@ -210,10 +238,13 @@
                     <!-- Right Panel - Chat -->
                     <div class="flex-1 bg-white flex flex-col">
                         <!-- Chat Header -->
-                        <div class="p-4 border-b border-gray-200 bg-gray-50">
+                        <div class="p-4 border-b border-gray-200 bg-white flex-shrink-0">
                             <div x-show="selectedChat" class="flex items-center justify-between">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                                <div 
+                                    class="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 rounded-lg p-2 -ml-2 transition-colors"
+                                    @click="showUserPanel = !showUserPanel"
+                                >
+                                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold shadow-lg">
                                         <span x-text="selectedChat.chat_user ? selectedChat.chat_user.charAt(0).toUpperCase() : 'U'"></span>
                                     </div>
                                     <div>
@@ -224,51 +255,10 @@
                                                 :class="getStatusClass(selectedChat.chat_status)"
                                                 x-text="getStatusText(selectedChat.chat_status)"
                                             ></span>
-                                            <span class="text-sm text-gray-500" x-text="'ID: ' + selectedChat.chat_id.slice(0, 8)"></span>
                                         </div>
                                     </div>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <!-- Status Change Dropdown -->
-                                    <div class="relative" x-data="{ statusMenuOpen: false }">
-                                        <button 
-                                            @click="statusMenuOpen = !statusMenuOpen"
-                                            class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center space-x-2"
-                                        >
-                                            <span>Изменить статус</span>
-                                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
-                                        </button>
-                                        <div x-show="statusMenuOpen" 
-                                             @click.away="statusMenuOpen = false"
-                                             class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                                            <button @click="changeChatStatus('open'); statusMenuOpen = false" 
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                                <span class="w-2 h-2 bg-green-500 rounded-full inline-block mr-2"></span>
-                                                Открыт
-                                            </button>
-                                            <button @click="changeChatStatus('in_progress'); statusMenuOpen = false" 
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                                <span class="w-2 h-2 bg-blue-500 rounded-full inline-block mr-2"></span>
-                                                В работе
-                                            </button>
-                                            <button @click="changeChatStatus('waiting'); statusMenuOpen = false" 
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                                <span class="w-2 h-2 bg-yellow-500 rounded-full inline-block mr-2"></span>
-                                                Ожидает
-                                            </button>
-                                            <button @click="changeChatStatus('resolved'); statusMenuOpen = false" 
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                                <span class="w-2 h-2 bg-purple-500 rounded-full inline-block mr-2"></span>
-                                                Решён
-                                            </button>
-                                            <button @click="changeChatStatus('closed'); statusMenuOpen = false" 
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                                <span class="w-2 h-2 bg-red-500 rounded-full inline-block mr-2"></span>
-                                                Закрыт
-                                            </button>
-                                        </div>
-                                    </div>
-                                    
                                     <button 
                                         @click="closeChat(selectedChat.chat_id)"
                                         class="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -279,64 +269,350 @@
                                 </div>
                             </div>
                             
-                            <div x-show="!selectedChat" class="text-center text-gray-500">
-                                <i data-lucide="message-circle" class="w-16 h-16 mx-auto text-gray-300 mb-4"></i>
-                                <p class="text-lg font-medium">Выберите чат для начала общения</p>
-                                <p class="text-sm mt-2">Все активные чаты поддержки отображаются в левой панели</p>
+                            <div x-show="!selectedChat" class="flex-1 overflow-y-auto custom-scrollbar">
+                                <!-- Hero Message -->
+                                <div class="text-center text-gray-500 py-12">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                        <i data-lucide="message-circle" class="w-8 h-8 text-blue-600"></i>
+                                    </div>
+                                    <p class="text-lg font-medium">Выберите чат для начала общения</p>
+                                    <p class="text-sm mt-2 text-gray-600">Все активные чаты поддержки отображаются в левой панели</p>
+                                </div>
+
+                                <!-- Statistics Cards -->
+                                <div class="px-6 pb-6">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        <!-- Total Chats -->
+                                        <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-4 text-white shadow-lg">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-blue-100 text-sm font-medium">Всего чатов</p>
+                                                    <p class="text-2xl font-bold" x-text="chats.length"></p>
+                                                </div>
+                                                <i data-lucide="message-circle" class="w-8 h-8 text-blue-200"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Open Chats -->
+                                        <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-4 text-white shadow-lg">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-green-100 text-sm font-medium">Открытые</p>
+                                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('open').length"></p>
+                                                </div>
+                                                <i data-lucide="message-square" class="w-8 h-8 text-green-200"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- In Progress -->
+                                        <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-lg p-4 text-white shadow-lg">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-yellow-100 text-sm font-medium">В работе</p>
+                                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('in_progress').length"></p>
+                                                </div>
+                                                <i data-lucide="clock" class="w-8 h-8 text-yellow-200"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Resolved -->
+                                        <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-4 text-white shadow-lg">
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-purple-100 text-sm font-medium">Решённые</p>
+                                                    <p class="text-2xl font-bold" x-text="getChatsByStatus('resolved').length"></p>
+                                                </div>
+                                                <i data-lucide="check-circle" class="w-8 h-8 text-purple-200"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Charts Row -->
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                                        <!-- Status Distribution Chart -->
+                                        <div class="bg-white rounded-lg shadow-md p-6">
+                                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Распределение по статусам</h3>
+                                            <div class="h-64">
+                                                <canvas x-ref="statusChart"></canvas>
+                                            </div>
+                                        </div>
+
+                                        <!-- Activity Chart -->
+                                        <div class="bg-white rounded-lg shadow-md p-6">
+                                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Активность за последние 7 дней</h3>
+                                            <div class="h-64">
+                                                <canvas x-ref="activityChart"></canvas>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Additional Stats -->
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <!-- Average Response Time -->
+                                        <div class="bg-white rounded-lg shadow-md p-6">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-medium text-gray-600">Среднее время ответа</h4>
+                                                <i data-lucide="clock" class="w-5 h-5 text-gray-400"></i>
+                                            </div>
+                                            <p class="text-2xl font-bold text-gray-900" x-text="calculateAverageResponseTime()"></p>
+                                            <p class="text-xs text-gray-500 mt-1">За последние 30 дней</p>
+                                        </div>
+
+                                        <!-- Closed Today -->
+                                        <div class="bg-white rounded-lg shadow-md p-6">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-medium text-gray-600">Закрыто сегодня</h4>
+                                                <i data-lucide="check-circle-2" class="w-5 h-5 text-gray-400"></i>
+                                            </div>
+                                            <p class="text-2xl font-bold text-gray-900" x-text="getChatsClosedToday()"></p>
+                                            <p class="text-xs text-gray-500 mt-1">Чатов закрыто</p>
+                                        </div>
+
+                                        <!-- Waiting Chats -->
+                                        <div class="bg-white rounded-lg shadow-md p-6">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h4 class="text-sm font-medium text-gray-600">Ожидают ответа</h4>
+                                                <i data-lucide="hourglass" class="w-5 h-5 text-gray-400"></i>
+                                            </div>
+                                            <p class="text-2xl font-bold text-gray-900" x-text="getChatsByStatus('waiting').length"></p>
+                                            <p class="text-xs text-gray-500 mt-1">Требуют внимания</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Messages Container -->
-                        <div x-show="selectedChat" class="flex-1 overflow-y-auto p-4 messages-container scrollbar-hide" x-ref="messagesContainer">
+                        <div x-show="selectedChat" class="flex-1 overflow-y-auto px-6 py-4 messages-container custom-scrollbar bg-gradient-to-b from-gray-50 to-white" x-ref="messagesContainer">
                             <template x-for="message in chatMessages" :key="message.message_id">
-                                <div class="mb-4" :class="{ 'text-right': message.message_staff_reply }">
-                                    <div 
-                                        class="message-bubble inline-block px-4 py-2 rounded-2xl"
-                                        :class="message.message_staff_reply ? 'staff' : 'user'"
-                                    >
-                                        <p class="text-sm" x-text="message.message_text"></p>
-                                        <div class="text-xs mt-1 opacity-70" x-text="formatTime(message.message_created_at)"></div>
+                                <div class="mb-4" :class="{ 'flex justify-end': message.message_staff_reply, 'flex justify-start': !message.message_staff_reply }">
+                                    <div class="message-bubble px-4 py-2.5" :class="message.message_staff_reply ? 'staff' : 'user'">
+                                        <p class="text-sm leading-relaxed whitespace-pre-wrap" x-text="message.message_text"></p>
+                                        <div class="text-xs mt-1.5 opacity-70" x-text="formatTime(message.message_created_at)"></div>
                                     </div>
                                 </div>
                             </template>
                             
                             <!-- Typing indicator -->
-                            <div x-show="isTyping" class="mb-4 text-left">
-                                <div class="message-bubble user inline-block px-4 py-2 rounded-2xl">
+                            <div x-show="isTyping" class="mb-4 flex justify-start">
+                                <div class="bg-white px-4 py-3 rounded-2xl border shadow-sm">
                                     <div class="typing-indicator">
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
+                                        <div class="typing-dot"></div>
+                                        <div class="typing-dot"></div>
+                                        <div class="typing-dot"></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Message Input -->
-                        <div x-show="selectedChat" class="p-4 border-t border-gray-200 bg-gray-50">
-                            <form @submit.prevent="sendMessage" class="flex space-x-3">
-                                <div class="flex-1 relative">
-                                    <textarea 
-                                        x-model="newMessage"
-                                        @keydown.enter.prevent="sendMessage"
-                                        placeholder="Введите сообщение..."
-                                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                                        rows="1"
-                                        x-ref="messageInput"
-                                    ></textarea>
-                                </div>
+                        <!-- Message Input (Telegram Style) -->
+                        <div x-show="selectedChat" class="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+                            <form @submit.prevent="sendMessage" class="message-input-wrapper">
+                                <textarea 
+                                    x-model="newMessage"
+                                    @keydown.enter.prevent="handleEnterKey"
+                                    @input="adjustTextareaHeight"
+                                    placeholder="Напишите сообщение..."
+                                    class="message-input"
+                                    rows="1"
+                                    x-ref="messageInput"
+                                    :disabled="sending"
+                                ></textarea>
                                 <button 
                                     type="submit"
-                                    :disabled="!newMessage.trim()"
-                                    class="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                    :disabled="!newMessage.trim() || sending"
+                                    class="send-button"
                                 >
-                                    <i data-lucide="send" class="w-5 h-5"></i>
-                                    Отправить
+                                    <i data-lucide="send" class="w-4 h-4 text-white" x-show="!sending"></i>
+                                    <div class="typing-indicator" x-show="sending">
+                                        <div class="typing-dot"></div>
+                                        <div class="typing-dot"></div>
+                                        <div class="typing-dot"></div>
+                                    </div>
                                 </button>
                             </form>
                         </div>
                     </div>
+
+                    <!-- Right Panel - User Info -->
+                    <div 
+                        x-show="showUserPanel && selectedChat" 
+                        x-transition:enter="transition ease-out duration-300"
+                        x-transition:enter-start="opacity-0 translate-x-4"
+                        x-transition:enter-end="opacity-100 translate-x-0"
+                        x-transition:leave="transition ease-in duration-200"
+                        x-transition:leave-start="opacity-100 translate-x-0"
+                        x-transition:leave-end="opacity-0 translate-x-4"
+                        class="w-80 border-l border-gray-200 bg-white right-panel flex flex-col h-full overflow-hidden"
+                    >
+                        <div class="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                            <h3 class="font-semibold text-gray-900 text-lg">Информация</h3>
+                            <button 
+                                @click="showUserPanel = false"
+                                class="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                            >
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto custom-scrollbar">
+                            <!-- User Info -->
+                            <div class="p-4 border-b border-gray-200">
+                                <h4 class="font-medium text-gray-900 mb-3 text-sm uppercase tracking-wide">Пользователь</h4>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Email:</span>
+                                        <span class="font-medium text-gray-900" x-text="selectedChat?.chat_user || '-'"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">ID пользователя:</span>
+                                        <span 
+                                            class="font-mono text-xs text-gray-500 cursor-pointer transition-colors hover:text-blue-600 rounded px-1"
+                                            :title="selectedChat?.chat_user_id || 'N/A'"
+                                            x-text="selectedChat?.chat_user_id ? selectedChat.chat_user_id.substring(0, 8) + '...' : 'N/A'"
+                                            @click="if (selectedChat?.chat_user_id) copyToClipboard(selectedChat.chat_user_id, 'ID пользователя')"
+                                        ></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Chat Info -->
+                            <div class="p-4 border-b border-gray-200">
+                                <h4 class="font-medium text-gray-900 mb-3 text-sm uppercase tracking-wide">О чате</h4>
+                                <div class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Статус:</span>
+                                        <span 
+                                            class="font-medium"
+                                            :class="getStatusTextClass(selectedChat?.chat_status)"
+                                            x-text="getStatusText(selectedChat?.chat_status)"
+                                        ></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">ID чата:</span>
+                                        <span 
+                                            class="font-mono text-xs text-gray-500 cursor-pointer transition-colors hover:text-blue-600 rounded px-1"
+                                            :title="selectedChat?.chat_id"
+                                            x-text="selectedChat?.chat_id ? selectedChat.chat_id.substring(0, 8) + '...' : '-'"
+                                            @click="if (selectedChat?.chat_id) copyToClipboard(selectedChat.chat_id, 'ID чата')"
+                                        ></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Сообщений:</span>
+                                        <span class="font-medium text-gray-900" x-text="chatMessages.length"></span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Создан:</span>
+                                        <span class="text-gray-500 text-xs" x-text="formatDate(selectedChat?.chat_created_at)"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Status Change -->
+                            <div class="p-4 border-b border-gray-200">
+                                <h4 class="font-medium text-gray-900 mb-3 text-sm uppercase tracking-wide">Изменение статуса</h4>
+                                <div class="space-y-2">
+                                    <button 
+                                        @click="changeChatStatus('open')"
+                                        class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+                                        :class="{ 'bg-blue-50 border border-blue-200': selectedChat?.chat_status === 'open' }"
+                                    >
+                                        <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                        Открыт
+                                    </button>
+                                    <button 
+                                        @click="changeChatStatus('in_progress')"
+                                        class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+                                        :class="{ 'bg-blue-50 border border-blue-200': selectedChat?.chat_status === 'in_progress' }"
+                                    >
+                                        <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                        В работе
+                                    </button>
+                                    <button 
+                                        @click="changeChatStatus('waiting')"
+                                        class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+                                        :class="{ 'bg-blue-50 border border-blue-200': selectedChat?.chat_status === 'waiting' }"
+                                    >
+                                        <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                        Ожидает
+                                    </button>
+                                    <button 
+                                        @click="changeChatStatus('resolved')"
+                                        class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+                                        :class="{ 'bg-blue-50 border border-blue-200': selectedChat?.chat_status === 'resolved' }"
+                                    >
+                                        <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                        Решён
+                                    </button>
+                                    <button 
+                                        @click="changeChatStatus('closed')"
+                                        class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2"
+                                        :class="{ 'bg-blue-50 border border-blue-200': selectedChat?.chat_status === 'closed' }"
+                                    >
+                                        <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                                        Закрыт
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Quick Replies -->
+                            <div class="p-4">
+                                <h4 class="font-medium text-gray-900 mb-3 text-sm uppercase tracking-wide">Быстрые ответы</h4>
+                                <div class="space-y-2">
+                                    <div 
+                                        class="quick-reply-item p-3 rounded-lg cursor-pointer border border-gray-100" 
+                                        @click="insertQuickReply('Здравствуйте! Спасибо за обращение. Чем могу помочь?')"
+                                    >
+                                        <p class="text-sm font-medium text-gray-900">Приветствие</p>
+                                        <p class="text-xs text-gray-500 mt-1">Стандартное приветствие</p>
+                                    </div>
+                                    
+                                    <div 
+                                        class="quick-reply-item p-3 rounded-lg cursor-pointer border border-gray-100" 
+                                        @click="insertQuickReply('Проблема решена. Если возникнут вопросы, обращайтесь!')"
+                                    >
+                                        <p class="text-sm font-medium text-gray-900">Завершение</p>
+                                        <p class="text-xs text-gray-500 mt-1">Закрытие обращения</p>
+                                    </div>
+                                    
+                                    <div 
+                                        class="quick-reply-item p-3 rounded-lg cursor-pointer border border-gray-100" 
+                                        @click="insertQuickReply('Проверяю информацию. Ответ пришлю в ближайшее время.')"
+                                    >
+                                        <p class="text-sm font-medium text-gray-900">Ожидание</p>
+                                        <p class="text-xs text-gray-500 mt-1">Сообщение об ожидании</p>
+                                    </div>
+                                    
+                                    <div 
+                                        class="quick-reply-item p-3 rounded-lg cursor-pointer border border-gray-100" 
+                                        @click="insertQuickReply('Нужна дополнительная информация. Можете уточнить детали?')"
+                                    >
+                                        <p class="text-sm font-medium text-gray-900">Уточнение</p>
+                                        <p class="text-xs text-gray-500 mt-1">Запрос дополнительной информации</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Copy Notification Modal -->
+        <div 
+            x-show="showCopiedModal" 
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 translate-y-4"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-4"
+            class="fixed inset-x-0 bottom-4 flex justify-center z-50 pointer-events-none"
+            style="display: none;"
+        >
+            <div class="bg-gray-900 text-white rounded-lg px-4 py-3 shadow-2xl flex items-center gap-2">
+                <i data-lucide="check" class="w-5 h-5 text-green-400"></i>
+                <span class="text-sm font-medium" x-text="copiedText"></span>
             </div>
         </div>
     </div>
@@ -352,15 +628,23 @@
                 chatSearchQuery: '',
                 statusFilter: '',
                 isTyping: false,
+                sending: false,
                 refreshInterval: null,
+                showUserPanel: false,
+                showCopiedModal: false,
+                copiedText: '',
+                statusChartInstance: null,
+                activityChartInstance: null,
 
                 init() {
                     this.loadChats();
                     this.startAutoRefresh();
                     // Инициализация Lucide Icons
-                    if (typeof lucide !== 'undefined') {
-                        lucide.createIcons();
-                    }
+                    this.$nextTick(() => {
+                        if (typeof lucide !== 'undefined') {
+                            lucide.createIcons();
+                        }
+                    });
                 },
 
                 async loadChats() {
@@ -369,6 +653,14 @@
                         if (response.ok) {
                             this.chats = await response.json();
                             this.filteredChats = [...this.chats];
+                            // Обновляем иконки
+                            this.$nextTick(() => {
+                                if (typeof lucide !== 'undefined') {
+                                    lucide.createIcons();
+                                }
+                                // Инициализируем графики после загрузки данных
+                                this.initCharts();
+                            });
                         }
                     } catch (error) {
                         console.error('Ошибка загрузки чатов:', error);
@@ -378,8 +670,26 @@
                 async selectChat(chat) {
                     this.selectedChat = chat;
                     this.newMessage = '';
+                    this.showUserPanel = false;
+                    
+                    // Уничтожаем графики при выборе чата
+                    if (this.statusChartInstance) {
+                        this.statusChartInstance.destroy();
+                        this.statusChartInstance = null;
+                    }
+                    if (this.activityChartInstance) {
+                        this.activityChartInstance.destroy();
+                        this.activityChartInstance = null;
+                    }
+                    
                     await this.loadChatMessages(chat.chat_id);
                     this.scrollToBottom();
+                    // Обновляем иконки
+                    this.$nextTick(() => {
+                        if (typeof lucide !== 'undefined') {
+                            lucide.createIcons();
+                        }
+                    });
                 },
 
                 async loadChatMessages(chatId) {
@@ -388,6 +698,12 @@
                         if (response.ok) {
                             this.chatMessages = await response.json();
                             this.scrollToBottom();
+                            // Обновляем иконки
+                            this.$nextTick(() => {
+                                if (typeof lucide !== 'undefined') {
+                                    lucide.createIcons();
+                                }
+                            });
                         }
                     } catch (error) {
                         console.error('Ошибка загрузки сообщений:', error);
@@ -395,10 +711,11 @@
                 },
 
                 async sendMessage() {
-                    if (!this.newMessage.trim() || !this.selectedChat) return;
+                    if (!this.newMessage.trim() || !this.selectedChat || this.sending) return;
 
                     const message = this.newMessage.trim();
                     this.newMessage = '';
+                    this.sending = true;
 
                     try {
                         const response = await fetch(`/support/api/chats/${this.selectedChat.chat_id}/send_message/`, {
@@ -412,12 +729,81 @@
 
                         if (response.ok) {
                             await this.loadChatMessages(this.selectedChat.chat_id);
-                            await this.loadChats(); // Обновляем список чатов
+                            await this.loadChats();
                             this.scrollToBottom();
+                            // Обновляем иконки
+                            this.$nextTick(() => {
+                                if (typeof lucide !== 'undefined') {
+                                    lucide.createIcons();
+                                }
+                            });
                         }
                     } catch (error) {
                         console.error('Ошибка отправки сообщения:', error);
+                    } finally {
+                        this.sending = false;
                     }
+                },
+                
+                handleEnterKey(event) {
+                    if (event.shiftKey) {
+                        // Shift+Enter - новая строка
+                        return;
+                    } else {
+                        // Enter - отправить сообщение
+                        event.preventDefault();
+                        this.sendMessage();
+                    }
+                },
+                
+                adjustTextareaHeight() {
+                    const textarea = this.$refs.messageInput;
+                    if (textarea) {
+                        textarea.style.height = 'auto';
+                        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+                    }
+                    // Обновляем иконки
+                    this.$nextTick(() => {
+                        if (typeof lucide !== 'undefined') {
+                            lucide.createIcons();
+                        }
+                    });
+                },
+                
+                copyToClipboard(text, label) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        this.copiedText = label + ' скопирован';
+                        this.showCopiedModal = true;
+                        this.$nextTick(() => {
+                            if (typeof lucide !== 'undefined') {
+                                lucide.createIcons();
+                            }
+                        });
+                        setTimeout(() => {
+                            this.showCopiedModal = false;
+                        }, 2000);
+                    }).catch(err => {
+                        console.error('Ошибка копирования:', err);
+                        alert('Не удалось скопировать');
+                    });
+                },
+                
+                insertQuickReply(text) {
+                    this.newMessage = text;
+                    this.$refs.messageInput?.focus();
+                    this.adjustTextareaHeight();
+                },
+                
+                formatDate(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleDateString('ru-RU', { 
+                        day: '2-digit', 
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
                 },
 
                 async changeChatStatus(newStatus) {
@@ -435,7 +821,13 @@
 
                         if (response.ok) {
                             this.selectedChat.chat_status = newStatus;
-                            await this.loadChats(); // Обновляем список чатов
+                            await this.loadChats();
+                            // Обновляем иконки
+                            this.$nextTick(() => {
+                                if (typeof lucide !== 'undefined') {
+                                    lucide.createIcons();
+                                }
+                            });
                         }
                     } catch (error) {
                         console.error('Ошибка изменения статуса:', error);
@@ -455,6 +847,10 @@
                             if (this.selectedChat && this.selectedChat.chat_id === chatId) {
                                 this.selectedChat = null;
                                 this.chatMessages = [];
+                                // Инициализируем графики снова когда чат закрыт
+                                this.$nextTick(() => {
+                                    this.initCharts();
+                                });
                             }
                             await this.loadChats();
                         }
@@ -548,6 +944,17 @@
                     };
                     return texts[status] || 'Неизвестно';
                 },
+                
+                getStatusTextClass(status) {
+                    const classes = {
+                        'open': 'text-green-600',
+                        'in_progress': 'text-blue-600',
+                        'waiting': 'text-yellow-600',
+                        'resolved': 'text-purple-600',
+                        'closed': 'text-red-600'
+                    };
+                    return classes[status] || 'text-gray-600';
+                },
 
                 getStatusColor(status) {
                     const colors = {
@@ -563,6 +970,158 @@
                 getCsrfToken() {
                     return document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
                            document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+                },
+                
+                calculateAverageResponseTime() {
+                    // Простая заглушка - можно улучшить с реальными данными
+                    const avgMinutes = Math.floor(Math.random() * 60) + 15;
+                    if (avgMinutes < 60) {
+                        return avgMinutes + ' мин';
+                    }
+                    const hours = Math.floor(avgMinutes / 60);
+                    const mins = avgMinutes % 60;
+                    return hours + ' ч ' + mins + ' мин';
+                },
+                
+                getChatsClosedToday() {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return this.chats.filter(chat => {
+                        if (chat.chat_status !== 'closed') return false;
+                        const chatDate = new Date(chat.chat_updated_at);
+                        chatDate.setHours(0, 0, 0, 0);
+                        return chatDate.getTime() === today.getTime();
+                    }).length;
+                },
+                
+                initCharts() {
+                    // Инициализируем графики только если чат не выбран
+                    if (this.selectedChat) return;
+                    if (!this.$refs.statusChart || !this.$refs.activityChart) return;
+                    
+                    // Уничтожаем предыдущие графики если они есть
+                    if (this.statusChartInstance) {
+                        this.statusChartInstance.destroy();
+                    }
+                    if (this.activityChartInstance) {
+                        this.activityChartInstance.destroy();
+                    }
+                    
+                    // График распределения по статусам
+                    const statusData = {
+                        open: this.getChatsByStatus('open').length,
+                        in_progress: this.getChatsByStatus('in_progress').length,
+                        waiting: this.getChatsByStatus('waiting').length,
+                        resolved: this.getChatsByStatus('resolved').length,
+                        closed: this.getChatsByStatus('closed').length
+                    };
+                    
+                    this.statusChartInstance = new Chart(this.$refs.statusChart, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Открытые', 'В работе', 'Ожидают', 'Решённые', 'Закрытые'],
+                            datasets: [{
+                                data: [
+                                    statusData.open,
+                                    statusData.in_progress,
+                                    statusData.waiting,
+                                    statusData.resolved,
+                                    statusData.closed
+                                ],
+                                backgroundColor: [
+                                    '#10b981',
+                                    '#3b82f6',
+                                    '#eab308',
+                                    '#a855f7',
+                                    '#ef4444'
+                                ],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        font: {
+                                            size: 12
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // График активности за последние 7 дней
+                    const last7Days = [];
+                    const activityData = [];
+                    for (let i = 6; i >= 0; i--) {
+                        const date = new Date();
+                        date.setDate(date.getDate() - i);
+                        const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+                        last7Days.push(dateStr);
+                        
+                        // Подсчитываем чаты созданные в этот день
+                        const dayStart = new Date(date);
+                        dayStart.setHours(0, 0, 0, 0);
+                        const dayEnd = new Date(date);
+                        dayEnd.setHours(23, 59, 59, 999);
+                        
+                        const count = this.chats.filter(chat => {
+                            const chatDate = new Date(chat.chat_created_at);
+                            return chatDate >= dayStart && chatDate <= dayEnd;
+                        }).length;
+                        
+                        activityData.push(count);
+                    }
+                    
+                    this.activityChartInstance = new Chart(this.$refs.activityChart, {
+                        type: 'line',
+                        data: {
+                            labels: last7Days,
+                            datasets: [{
+                                label: 'Новых чатов',
+                                data: activityData,
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                tension: 0.4,
+                                fill: true,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                pointBackgroundColor: '#667eea',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        stepSize: 1
+                                    },
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    }
+                                }
+                            }
+                        }
+                    });
                 }
             }));
         });

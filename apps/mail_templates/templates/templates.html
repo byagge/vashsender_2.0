@@ -870,19 +870,78 @@
         },
 
         async loadCKEditor() {
-          return new Promise((resolve, reject) => {
+          const version = '40.1.0';
+          const sources = [
+            `https://cdn.ckeditor.com/ckeditor5/${version}/decoupled-document/ckeditor.js`,
+            `https://cdn.jsdelivr.net/npm/@ckeditor/ckeditor5-build-decoupled-document@${version}/build/ckeditor.js`,
+            `https://unpkg.com/@ckeditor/ckeditor5-build-decoupled-document@${version}/build/ckeditor.js`
+          ];
+
+          const waitForGlobal = (timeoutMs = 2500) => new Promise((resolve, reject) => {
+            if (window.DecoupledEditor) return resolve();
+            const start = Date.now();
+            const interval = setInterval(() => {
+              if (window.DecoupledEditor) {
+                clearInterval(interval);
+                resolve();
+              } else if (Date.now() - start >= timeoutMs) {
+                clearInterval(interval);
+                reject(new Error('CKEditor load timeout'));
+              }
+            }, 100);
+          });
+
+          const loadScript = (url, timeoutMs = 7000) => new Promise((resolve, reject) => {
+            if (window.DecoupledEditor) return resolve();
+            const existing = document.querySelector(`script[src="${url}"]`);
+            if (existing) {
+              // If script tag already exists (possibly injected elsewhere), just wait for it
+              waitForGlobal(timeoutMs).then(resolve).catch(reject);
+              return;
+            }
             const script = document.createElement('script');
-            script.src = 'https://cdn.ckeditor.com/ckeditor5/40.1.0/decoupled-document/ckeditor.js';
+            script.src = url;
+            script.async = true;
+            script.crossOrigin = 'anonymous';
+            script.referrerPolicy = 'no-referrer';
+            script.setAttribute('data-ck-fallback', url);
+            const timer = setTimeout(() => {
+              script.onload = null;
+              script.onerror = null;
+              reject(new Error('CKEditor load timeout'));
+            }, timeoutMs);
             script.onload = () => {
-              console.log('CKEditor script loaded');
+              clearTimeout(timer);
               resolve();
             };
             script.onerror = () => {
-              console.error('Failed to load CKEditor script');
-              reject(new Error('Failed to load CKEditor'));
+              clearTimeout(timer);
+              reject(new Error('CKEditor load error'));
             };
             document.head.appendChild(script);
           });
+
+          // If a primary tag already exists (from the static <script>), give it a brief chance
+          const hasPrimary = !!document.querySelector('script[src*="cdn.ckeditor.com/ckeditor5/"]');
+          if (hasPrimary && !window.DecoupledEditor) {
+            try { await waitForGlobal(2000); } catch (e) { /* continue to fallbacks */ }
+          }
+          if (window.DecoupledEditor) return;
+
+          for (const url of sources) {
+            if (window.DecoupledEditor) break;
+            try {
+              await loadScript(url);
+              await waitForGlobal(2000);
+              if (window.DecoupledEditor) return;
+            } catch (e) {
+              console.warn('CKEditor load failed from', url, e);
+            }
+          }
+
+          if (!window.DecoupledEditor) {
+            throw new Error('Failed to load CKEditor from all CDNs');
+          }
         },
 
         editTemplate(tpl) {
