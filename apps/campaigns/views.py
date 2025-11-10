@@ -178,28 +178,55 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
         # --- ОГРАНИЧЕНИЕ ПО ТАРИФУ НА ОТПРАВКУ ---
         user = request.user
-        plan = getattr(user, 'current_plan', None)
-        if not plan:
-            return Response({'error': 'Не найден тариф пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Сколько писем будет отправлено в этой кампании
-        recipients_count = sum(cl.contacts.count() for cl in campaign.contact_lists.all())
-        
-        # Проверяем только фактический тарифный доступ (без дневных/искусственных лимитов)
+        # Используем правильные функции из billing.utils
         from apps.billing.utils import can_user_send_emails, get_user_plan_info
-        plan_info = get_user_plan_info(user)
+        from apps.mailer.models import Contact as MailerContact
         
+        # Сколько писем будет отправлено в этой кампании (считаем только VALID контакты)
+        recipients_count = 0
+        for cl in campaign.contact_lists.all():
+            recipients_count += cl.contacts.filter(status=MailerContact.VALID).count()
+        
+        print(f"Recipients count: {recipients_count}")
+        
+        if recipients_count == 0:
+            return Response({
+                'error': 'В выбранных списках нет валидных контактов для отправки.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Получаем информацию о тарифе пользователя
+        plan_info = get_user_plan_info(user)
+        print(f"Plan info: {plan_info}")
+        
+        # Проверяем лимиты в зависимости от типа тарифа
         if plan_info['has_plan'] and plan_info['plan_type'] == 'Letters':
+            # Тариф с письмами - проверяем остаток писем
             if not can_user_send_emails(user, recipients_count):
+                remaining = plan_info.get('emails_remaining', 0)
                 return Response({
-                    'error': 'Количество получателей больше, чем предусмотрено тарифом'
+                    'error': f'Количество получателей ({recipients_count}) превышает остаток писем в тарифе ({remaining}). Пожалуйста, пополните баланс или уменьшите количество получателей.'
                 }, status=status.HTTP_400_BAD_REQUEST)
         elif plan_info['has_plan'] and plan_info['plan_type'] == 'Subscribers':
+            # Тариф с подписчиками - проверяем срок действия и лимит подписчиков
             if plan_info['is_expired']:
                 return Response({
                     'error': 'Тариф истёк. Пожалуйста, продлите тариф для отправки кампаний.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-        # Бесплатный тариф: без месячных и дневных ограничений (0 = неограниченно)
+            # Проверяем лимит по подписчикам (если есть)
+            if plan_info.get('subscribers_limit') and recipients_count > plan_info['subscribers_limit']:
+                return Response({
+                    'error': f'Количество получателей ({recipients_count}) превышает лимит тарифа ({plan_info["subscribers_limit"]} подписчиков). Пожалуйста, обновите тариф или уменьшите количество получателей.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Бесплатный тариф - проверяем лимиты
+            if not can_user_send_emails(user, recipients_count):
+                from apps.billing.models import BillingSettings
+                free_limit = BillingSettings.get_settings().free_plan_subscribers or 200
+                remaining = max(0, free_limit - (plan_info.get('emails_sent', 0) or 0))
+                return Response({
+                    'error': f'Превышен лимит бесплатного тарифа. Отправлено: {plan_info.get("emails_sent", 0)}, Лимит: {free_limit}, Остаток: {remaining}. Для отправки {recipients_count} писем необходимо приобрести платный тариф.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         # --- ВАЛИДАЦИЯ ПОЛЕЙ КАМПАНИИ ---
         print("Validating campaign fields:")

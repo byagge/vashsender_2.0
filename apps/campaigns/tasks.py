@@ -745,7 +745,22 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         import traceback
         traceback.print_exc()
         
-        # Обновляем статус кампании на failed
+        # Проверяем, является ли ошибка SoftTimeLimitExceeded
+        from celery.exceptions import SoftTimeLimitExceeded
+        
+        # SoftTimeLimitExceeded - это нормальная ситуация для больших рассылок
+        # Не устанавливаем статус FAILED в этом случае
+        if isinstance(exc, SoftTimeLimitExceeded):
+            print(f"Кампания {campaign_id} достигла мягкого лимита времени, но это не ошибка")
+            print(f"Рассылка продолжит работу и завершится автоматически")
+            # Не меняем статус кампании, она продолжит работать
+            return {
+                'campaign_id': campaign_id,
+                'status': 'soft_time_limit_reached',
+                'message': 'Campaign reached soft time limit but will continue processing'
+            }
+        
+        # Для всех остальных ошибок обновляем статус кампании на failed
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             campaign.status = Campaign.STATUS_FAILED
