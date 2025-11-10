@@ -334,11 +334,22 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
 
 from django.shortcuts import redirect, get_object_or_404
 from django.views import View
+from django.http import HttpResponse
+import uuid as uuid_module
 
 class SenderConfirmView(View):
     def get(self, request):
         token = request.GET.get('token')
-        sender = get_object_or_404(SenderEmail, verification_token=token)
+        if not token:
+            return HttpResponse("Token is required", status=400)
+        
+        try:
+            # Преобразуем строку токена в UUID объект
+            token_uuid = uuid_module.UUID(token)
+        except (ValueError, AttributeError):
+            return HttpResponse("Invalid token format", status=400)
+        
+        sender = get_object_or_404(SenderEmail, verification_token=token_uuid)
         sender.is_verified = True
         sender.verified_at = timezone.now()
         sender.save(update_fields=['is_verified','verified_at'])

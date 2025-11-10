@@ -232,21 +232,6 @@
 </head>
 <body>
     <div class="email-container">
-        <!-- Header -->
-        <div class="header">
-            <div class="logo">
-                <div class="logo-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/>
-                        <rect x="2" y="4" width="20" height="16" rx="2"/>
-                    </svg>
-                </div>
-                vashsender
-            </div>
-            <h1 class="header-title">Подтверждение Email</h1>
-            <p class="header-subtitle">Активация вашего аккаунта</p>
-        </div>
-        
         <!-- Content -->
         <div class="content">
             <p class="greeting">Здравствуйте, {{ user.full_name }}!</p>
@@ -272,7 +257,6 @@
                     После подтверждения вы получите доступ к:
                 </div>
                 <div class="features">
-                    <div class="features-title">Возможности платформы</div>
                     <div class="features-list">
                         <div class="feature-item">
                             <span class="feature-icon">
@@ -354,7 +338,6 @@
             
             <p class="footer-text" style="margin-top: 20px; font-size: 12px; color: #8a9bb3;">
                 Это автоматическое письмо, не отвечайте на него.<br>
-                © 2024 vashsender.ru. Все права защищены.
             </p>
         </div>
     </div>
