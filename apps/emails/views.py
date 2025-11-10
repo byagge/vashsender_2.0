@@ -223,7 +223,7 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
 
         # 3) Всё ок — создаём отправителя и шлём письмо
         try:
-            token = uuid.uuid4().hex
+            token = uuid.uuid4()
             sender = SenderEmail.objects.create(
                 owner=request.user,
                 email=email_addr,
@@ -234,7 +234,7 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
 
             # Отправляем письмо-подтверждение
             confirm_url = request.build_absolute_uri(
-                f"/emails/confirm-sender/?token={token}"
+                f"/emails/confirm-sender/?token={str(token).replace('-', '')}"
             )
             # Use shared SMTP pool to match campaigns delivery behavior
             try:
@@ -345,7 +345,13 @@ class SenderConfirmView(View):
         
         try:
             # Преобразуем строку токена в UUID объект
-            token_uuid = uuid_module.UUID(token)
+            # Токен приходит без дефисов, добавляем их для корректного парсинга
+            if len(token) == 32 and '-' not in token:
+                # Форматируем строку в стандартный UUID формат
+                formatted_token = f"{token[:8]}-{token[8:12]}-{token[12:16]}-{token[16:20]}-{token[20:]}"
+                token_uuid = uuid_module.UUID(formatted_token)
+            else:
+                token_uuid = uuid_module.UUID(token)
         except (ValueError, AttributeError):
             return HttpResponse("Invalid token format", status=400)
         
