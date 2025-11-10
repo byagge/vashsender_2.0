@@ -19,7 +19,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import EmailTemplate, TemplateImage
-from .serializers import EmailTemplateSerializer, TemplateImageSerializer
+from .serializers import EmailTemplateSerializer, EmailTemplateListSerializer, TemplateImageSerializer
 
 
 # mail_templates/views.py
@@ -28,14 +28,35 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import EmailTemplate
-from .serializers import EmailTemplateSerializer
+from .serializers import EmailTemplateSerializer, EmailTemplateListSerializer
 
 class EmailTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = EmailTemplateSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return EmailTemplate.objects.filter(owner=self.request.user)
+        """
+        Оптимизированный queryset с select_related для owner
+        и ограничением полей для списка
+        """
+        queryset = EmailTemplate.objects.filter(owner=self.request.user).select_related('owner')
+        
+        # Для списка загружаем только необходимые поля
+        if self.action == 'list':
+            queryset = queryset.only(
+                'id', 'title', 'html_content', 'is_draft', 
+                'send_count', 'created_at', 'updated_at', 'owner'
+            )
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        """
+        Используем облегченный сериализатор для списка шаблонов
+        """
+        if self.action == 'list':
+            return EmailTemplateListSerializer
+        return EmailTemplateSerializer
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)

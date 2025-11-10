@@ -4,6 +4,28 @@ from rest_framework import serializers
 from .models import EmailTemplate, TemplateImage
 
 
+class EmailTemplateListSerializer(serializers.ModelSerializer):
+    """Облегченный сериализатор для списка шаблонов (без полного контента)"""
+    content_preview = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = EmailTemplate
+        fields = [
+            'id', 'title', 'content_preview', 'is_draft', 
+            'send_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'send_count', 'created_at', 'updated_at']
+    
+    def get_content_preview(self, obj):
+        """Возвращает первые 150 символов контента для превью"""
+        if obj.html_content:
+            # Удаляем HTML-теги и берем первые 150 символов
+            import re
+            text = re.sub(r'<[^>]+>', '', obj.html_content)
+            return text[:150] + '...' if len(text) > 150 else text
+        return ''
+
+
 class EmailTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmailTemplate
