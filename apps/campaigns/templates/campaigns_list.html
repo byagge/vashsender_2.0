@@ -808,6 +808,7 @@
         autoRefreshInterval: null,
         statsPollingInterval: null,
         statsPollingDelay: 4000,
+        progressCache: {},
         isRetrying: false,
         exportFormat: 'xlsx',
         showExportModal: false,
@@ -1287,6 +1288,7 @@
           if (data) {
             this.applyProgressUpdate(data);
           }
+          return data;
         },
 
         async fetchCampaignDetails(campaignId) {
@@ -1331,6 +1333,7 @@
 
         applyProgressUpdate(data) {
           if (!data || !data.progress) return;
+          this.progressCache[data.campaign_id] = data.progress;
           const updates = {};
           if (typeof data.status === 'string') {
             updates.status = data.status;
@@ -1365,14 +1368,31 @@
 
         startStatsPolling(campaignId) {
           this.stopStatsPolling();
+          let completionChecks = 0;
+          const maxCompletionChecks = 3;
           const poll = async () => {
             await Promise.all([
               this.refreshCampaignById(campaignId),
               this.refreshCampaignProgress(campaignId)
             ]);
             const current = this.getCampaignById(campaignId);
-            if (!current || current.status !== 'sending') {
+            const progress = this.progressCache[campaignId];
+            const isComplete = progress && progress.total && progress.sent >= progress.total;
+
+            if (!current || !this.showStatsModal) {
               this.stopStatsPolling();
+              return;
+            }
+
+            if (current.status === 'sending') {
+              completionChecks = 0;
+              return;
+            }
+
+            completionChecks += 1;
+            if (isComplete || completionChecks >= maxCompletionChecks) {
+              this.stopStatsPolling();
+              this.loadCampaigns();
             }
           };
           poll();
