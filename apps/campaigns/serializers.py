@@ -83,7 +83,8 @@ class CampaignSerializer(serializers.ModelSerializer):
             {
                 'id': str(cl.id),
                 'name': cl.name,
-                'contacts_count': cl.contacts.count()
+                'contacts_count': cl.contacts.count(),
+                'valid_contacts_count': cl.contacts.filter(status=Contact.VALID).count()
             }
             for cl in obj.contact_lists.all()
         ]
@@ -161,7 +162,8 @@ class CampaignListSerializer(serializers.ModelSerializer):
             {
                 'id': str(cl.id),
                 'name': cl.name,
-                'contacts_count': cl.contacts.count()
+                'contacts_count': cl.contacts.count(),
+                'valid_contacts_count': cl.contacts.filter(status=Contact.VALID).count()
             }
             for cl in obj.contact_lists.all()
         ]

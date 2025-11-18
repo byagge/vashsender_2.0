@@ -373,9 +373,15 @@
                         <div class="space-y-2 text-sm">
                           <template x-if="campaign.contact_lists_detail && campaign.contact_lists_detail.length > 0">
                             <template x-for="list in campaign.contact_lists_detail" :key="list.id">
-                              <div class="flex justify-between">
-                                <span class="text-gray-500" x-text="list.name + ':'"></span>
-                                <span class="font-medium" x-text="(list.contacts_count || 0) + ' контактов'"></span>
+                              <div class="flex flex-col gap-1">
+                                <div class="flex justify-between">
+                                  <span class="text-gray-500 font-medium" x-text="list.name"></span>
+                                  <span class="font-semibold text-gray-900" x-text="(list.contacts_count || 0) + ' контактов'"></span>
+                                </div>
+                                <div class="text-xs text-gray-500 flex justify-between">
+                                  <span>Допустимые к отправке контакты</span>
+                                  <span class="font-semibold text-gray-900" x-text="(list.valid_contacts_count || 0)"></span>
+                                </div>
                               </div>
                             </template>
                           </template>
@@ -595,9 +601,15 @@
             <div class="space-y-2 text-sm">
               <template x-if="selectedCampaign?.contact_lists_detail && selectedCampaign?.contact_lists_detail.length > 0">
                 <template x-for="list in selectedCampaign.contact_lists_detail" :key="list.id">
-                  <div class="flex justify-between">
-                    <span class="text-gray-500" x-text="list.name + ':'"></span>
-                    <span class="font-medium" x-text="(list.contacts_count || 0) + ' контактов'"></span>
+                  <div class="flex flex-col gap-1">
+                    <div class="flex justify-between">
+                      <span class="text-gray-500 font-medium" x-text="list.name"></span>
+                      <span class="font-semibold text-gray-900" x-text="(list.contacts_count || 0) + ' контактов'"></span>
+                    </div>
+                    <div class="text-xs text-gray-500 flex justify-between">
+                      <span>Допустимые к отправке контакты</span>
+                      <span class="font-semibold text-gray-900" x-text="(list.valid_contacts_count || 0)"></span>
+                    </div>
                   </div>
                 </template>
               </template>
@@ -968,14 +980,14 @@
             const data = await response.json();
             console.log('Campaigns data:', data);
             
-            this.campaigns = data.results || [];
+            this.campaigns = (data.results || []).map(campaign => this.applyProgressOverlay({...campaign}));
             this.count = data.count || 0;
             this.currentPage = data.page || 1;
             this.num_pages = data.num_pages || 1;
             if (this.showStatsModal && this.selectedCampaign) {
               const updated = this.campaigns.find(c => c.id === this.selectedCampaign.id);
               if (updated) {
-                this.selectedCampaign = { ...this.selectedCampaign, ...updated };
+                this.selectedCampaign = this.applyProgressOverlay({ ...this.selectedCampaign, ...updated });
               }
             }
             this.$nextTick(() => {
@@ -1359,10 +1371,11 @@
           if (!campaignId || !payload) return;
           const index = this.campaigns.findIndex(c => c.id === campaignId);
           if (index !== -1) {
-            this.campaigns.splice(index, 1, { ...this.campaigns[index], ...payload });
+            const merged = { ...this.campaigns[index], ...payload };
+            this.campaigns.splice(index, 1, this.applyProgressOverlay(merged));
           }
           if (this.selectedCampaign && this.selectedCampaign.id === campaignId) {
-            this.selectedCampaign = { ...this.selectedCampaign, ...payload };
+            this.selectedCampaign = this.applyProgressOverlay({ ...this.selectedCampaign, ...payload });
           }
         },
 
@@ -1377,7 +1390,7 @@
             ]);
             const current = this.getCampaignById(campaignId);
             const progress = this.progressCache[campaignId];
-            const isComplete = progress && progress.total && progress.sent >= progress.total;
+            const isComplete = progress && progress.total && typeof progress.sent === 'number' && progress.sent >= progress.total;
 
             if (!current || !this.showStatsModal) {
               this.stopStatsPolling();
@@ -1397,6 +1410,35 @@
           };
           poll();
           this.statsPollingInterval = setInterval(poll, this.statsPollingDelay);
+        },
+
+        clampCampaignMetrics(campaign) {
+          if (!campaign) return campaign;
+          if ((campaign.delivered_emails || 0) > (campaign.emails_sent || 0)) {
+            campaign.delivered_emails = campaign.emails_sent || 0;
+          }
+          return campaign;
+        },
+
+        applyProgressOverlay(campaign) {
+          if (!campaign) return campaign;
+          const progress = this.progressCache[campaign.id];
+          const updated = { ...campaign };
+          if (progress) {
+            if (typeof progress.sent === 'number') {
+              if ((updated.emails_sent || 0) < progress.sent) {
+                updated.emails_sent = progress.sent;
+              }
+              if ((updated.delivered_emails || 0) > (updated.emails_sent || 0)) {
+                updated.delivered_emails = updated.emails_sent || 0;
+              }
+            }
+            if (progress.total && typeof progress.sent === 'number' && progress.sent >= progress.total) {
+              updated.status = 'sent';
+              updated.status_display = 'Отправлено';
+            }
+          }
+          return this.clampCampaignMetrics(updated);
         }
       }
     }
