@@ -534,7 +534,7 @@
       <div class="bg-white rounded-lg p-6 w-full max-w-2xl">
         <div class="flex justify-between items-center mb-6">
           <h3 class="text-lg font-semibold" x-text="'Статистика: ' + (selectedCampaign?.name || '') + ((selectedCampaign?.sender_email_detail?.email) ? ' (' + selectedCampaign.sender_email_detail.email + ')' : (selectedCampaign?.sender_email?.email ? ' (' + selectedCampaign.sender_email.email + ')' : ''))"></h3>
-          <button @click="showStatsModal = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="closeStatsModal()" class="text-gray-400 hover:text-gray-600">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
@@ -805,6 +805,9 @@
         showStatsModal: false,
         showPreviewModal: false,
         selectedCampaign: null,
+        autoRefreshInterval: null,
+        statsPollingInterval: null,
+        statsPollingDelay: 4000,
         isRetrying: false,
         exportFormat: 'xlsx',
         showExportModal: false,
@@ -897,6 +900,11 @@
           this.$watch('searchTerm', () => this.debouncedReload());
           this.$watch('statusFilter', () => this.debouncedReload());
           this.$watch('senderFilter', () => this.debouncedReload());
+          this.$watch('showStatsModal', value => {
+            if (!value) {
+              this.stopStatsPolling();
+            }
+          });
           
           // Автоматическое обновление данных каждые 5 секунд для кампаний в статусе "sending"
           this.autoRefreshInterval = setInterval(() => {
@@ -923,6 +931,7 @@
           if (this.autoRefreshInterval) {
             clearInterval(this.autoRefreshInterval);
           }
+          this.stopStatsPolling();
         },
 
         async loadCampaigns(page = this.currentPage) {
@@ -962,6 +971,12 @@
             this.count = data.count || 0;
             this.currentPage = data.page || 1;
             this.num_pages = data.num_pages || 1;
+            if (this.showStatsModal && this.selectedCampaign) {
+              const updated = this.campaigns.find(c => c.id === this.selectedCampaign.id);
+              if (updated) {
+                this.selectedCampaign = { ...this.selectedCampaign, ...updated };
+              }
+            }
             this.$nextTick(() => {
               this.createIcons();
             });
@@ -1136,12 +1151,23 @@
           }
         },
 
-        showStats(campaign) {
+        async showStats(campaign) {
           this.selectedCampaign = campaign;
           this.showStatsModal = true;
+          await this.refreshCampaignById(campaign.id);
+          if (campaign.status === 'sending') {
+            this.startStatsPolling(campaign.id);
+          } else {
+            this.stopStatsPolling();
+          }
           this.$nextTick(() => {
             this.createIcons();
           });
+        },
+
+        closeStatsModal() {
+          this.showStatsModal = false;
+          this.stopStatsPolling();
         },
 
         showPreview(campaign) {
@@ -1240,6 +1266,60 @@
           } catch (e) {
             alert('Ошибка экспорта отчета');
           }
+        },
+
+        stopStatsPolling() {
+          if (this.statsPollingInterval) {
+            clearInterval(this.statsPollingInterval);
+            this.statsPollingInterval = null;
+          }
+        },
+
+        async refreshCampaignById(campaignId) {
+          const data = await this.fetchCampaignDetails(campaignId);
+          if (data) {
+            this.applyCampaignUpdate(data);
+          }
+        },
+
+        async fetchCampaignDetails(campaignId) {
+          try {
+            const response = await fetch(`/campaigns/api/campaigns/${campaignId}/`, {
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/json'
+              }
+            });
+            if (!response.ok) {
+              throw new Error('Failed to fetch campaign');
+            }
+            return await response.json();
+          } catch (error) {
+            console.error('Error fetching campaign details:', error);
+            return null;
+          }
+        },
+
+        applyCampaignUpdate(data) {
+          const index = this.campaigns.findIndex(c => c.id === data.id);
+          if (index !== -1) {
+            this.campaigns.splice(index, 1, data);
+          }
+          if (this.selectedCampaign && this.selectedCampaign.id === data.id) {
+            this.selectedCampaign = { ...this.selectedCampaign, ...data };
+          }
+        },
+
+        startStatsPolling(campaignId) {
+          this.stopStatsPolling();
+          const poll = async () => {
+            await this.refreshCampaignById(campaignId);
+            if (!this.selectedCampaign || this.selectedCampaign.id !== campaignId || this.selectedCampaign.status !== 'sending') {
+              this.stopStatsPolling();
+            }
+          };
+          poll();
+          this.statsPollingInterval = setInterval(poll, this.statsPollingDelay);
         }
       }
     }
