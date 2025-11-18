@@ -32,6 +32,27 @@ except ImportError:
         print("Warning: dkim library not available. DKIM signing will be disabled.")
 
 
+PROGRESS_CACHE_TIMEOUT = 60 * 60  # 1 hour
+
+
+def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_sent=0):
+    """
+    Обновляет кэш прогресса кампании для быстрого отображения на фронте.
+    """
+    cache_key = f'campaign_progress_{campaign_id}'
+    progress = cache.get(cache_key) or {'total': 0, 'sent': 0}
+    
+    if total is not None:
+        progress['total'] = max(int(total), 0)
+    if sent is not None:
+        progress['sent'] = max(int(sent), 0)
+    if delta_sent:
+        progress['sent'] = max(progress.get('sent', 0) + int(delta_sent), 0)
+    
+    cache.set(cache_key, progress, PROGRESS_CACHE_TIMEOUT)
+    return progress
+
+
 class SMTPConnectionPool:
     """Пул SMTP соединений для эффективной отправки писем"""
     
@@ -428,7 +449,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 campaign.celery_task_id = None
                 campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
                 return {'error': 'No contacts found'}
-                
         except Exception as e:
             print(f"Error getting contacts for campaign {campaign_id}: {e}")
             campaign.status = Campaign.STATUS_FAILED
@@ -436,6 +456,16 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             campaign.celery_task_id = None
             campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
             raise self.retry(countdown=60, max_retries=2)
+        
+        existing_sent = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
+            is_sent=True
+        ).count()
+        update_campaign_progress_cache(
+            campaign_id,
+            total=total_contacts,
+            sent=existing_sent
+        )
         
         # Проверяем лимиты тарифа перед отправкой
         try:
@@ -532,6 +562,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                     campaign.failure_reason = campaign.failure_reason or 'no emails sent'
                 campaign.celery_task_id = None
                 campaign.save(update_fields=['status', 'failure_reason', 'sent_at', 'celery_task_id'])
+                update_campaign_progress_cache(campaign_id, sent=total_sent)
             except Exception:
                 pass
             execution_time = time.time() - start_time
@@ -945,6 +976,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         ).count()
         
         print(f"Campaign statistics: total_recipients={total_recipients}, total_sent={total_sent}, total_failed={total_failed}")
+        update_campaign_progress_cache(campaign_id, total=total_recipients or len(contact_ids), sent=total_sent)
         
         # Обновляем статус кампании только если все получатели обработаны
         if total_recipients > 0 and (total_sent + total_failed) >= total_recipients:
@@ -1283,6 +1315,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"Email sent successfully to {contact.email}")
         
         # Создаем запись получателя и tracking с транзакцией
+        increment_progress = False
         with transaction.atomic():
             # Создаем CampaignRecipient
             recipient, created = CampaignRecipient.objects.get_or_create(
@@ -1296,6 +1329,9 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                     recipient.is_sent = True
                     recipient.sent_at = timezone.now()
                     recipient.save(update_fields=['is_sent', 'sent_at'])
+                    increment_progress = True
+            else:
+                increment_progress = True
             
             # Создаем EmailTracking для статистики
             tracking, tracking_created = EmailTracking.objects.get_or_create(
@@ -1311,6 +1347,9 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                 # Если запись уже существует, обновляем время доставки
                 tracking.delivered_at = timezone.now()
                 tracking.save(update_fields=['delivered_at'])
+        
+        if increment_progress:
+            update_campaign_progress_cache(campaign_id, delta_sent=1)
         
         print(f"Created CampaignRecipient and EmailTracking: campaign_id={campaign_id}, contact_id={contact_id}, is_sent=True")
         
