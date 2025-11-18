@@ -1397,7 +1397,7 @@
               return;
             }
 
-            if (current.status === 'sending') {
+            if (current.status === 'sending' && !isComplete) {
               completionChecks = 0;
               return;
             }

@@ -979,39 +979,35 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         print(f"Campaign statistics: total_recipients={total_recipients}, total_sent={total_sent}, total_failed={total_failed}")
         update_campaign_progress_cache(campaign_id, total=total_recipients or len(contact_ids), sent=total_sent)
         
-        # Обновляем статус кампании только если все получатели обработаны
-        if total_recipients > 0 and (total_sent + total_failed) >= total_recipients:
-            if total_sent > 0:
-                campaign.status = Campaign.STATUS_SENT
-                print(f"Setting campaign status to SENT ({total_sent}/{total_recipients} sent)")
-            else:
-                campaign.status = Campaign.STATUS_FAILED
-                print(f"Setting campaign status to FAILED (no emails sent)")
-            
+        # Обновляем статус кампании
+        if total_recipients > 0 and total_sent >= total_recipients:
+            campaign.status = Campaign.STATUS_SENT
             campaign.sent_at = timezone.now()
-            print(f"Saving campaign with status: {campaign.status}")
-            
-            # Принудительно обновляем статус в базе данных
-            from django.db import transaction
-            with transaction.atomic():
-                Campaign.objects.filter(id=campaign_id).update(
-                    status=campaign.status,
-                    sent_at=campaign.sent_at
-                )
-            
-            # Очищаем кэш для этой кампании
-            cache_key = f"campaign_{campaign_id}"
-            cache.delete(cache_key)
-            
-            # Проверяем, что статус действительно сохранился
-            try:
-                campaign.refresh_from_db()
-                print(f"Campaign {campaign.name} status after save: {campaign.status}")
-            except Campaign.DoesNotExist:
-                print(f"Campaign {campaign_id} not found after refresh")
+            campaign.celery_task_id = None
+            campaign.failure_reason = None
+            Campaign.objects.filter(id=campaign_id).update(
+                status=campaign.status,
+                sent_at=campaign.sent_at,
+                celery_task_id=None,
+                failure_reason=None
+            )
+            cache.delete(f"campaign_{campaign_id}")
+            print(f"Campaign {campaign_id} marked as SENT ({total_sent}/{total_recipients})")
+        elif total_recipients > 0 and (total_sent + total_failed) >= total_recipients:
+            campaign.status = Campaign.STATUS_FAILED
+            campaign.sent_at = timezone.now()
+            campaign.celery_task_id = None
+            campaign.failure_reason = campaign.failure_reason or 'some recipients failed to send'
+            Campaign.objects.filter(id=campaign_id).update(
+                status=campaign.status,
+                sent_at=campaign.sent_at,
+                celery_task_id=None,
+                failure_reason=campaign.failure_reason
+            )
+            cache.delete(f"campaign_{campaign_id}")
+            print(f"Campaign {campaign_id} marked as FAILED (sent {total_sent}/{total_recipients})")
         else:
             print(f"Not all recipients processed yet: {total_sent + total_failed}/{total_recipients}")
-            print(f"Keeping campaign status as SENDING")
         
         print(f"Batch {batch_number} completed: {sent_count} sent, {failed_count} failed")
         
