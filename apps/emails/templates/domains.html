@@ -774,7 +774,7 @@
                         </div>
                         
                     </div>
-                    <p class="text-sm text-green-700 mb-3">Добавьте эту TXT-запись с селектором «vashsender»:</p>
+                    <p class="text-sm text-green-700 mb-3">Добавьте эту TXT-запись для DKIM</p>
                     <div class="bg-white p-3 rounded border">
                         <template x-if="selectedDomain.dkim_dns_record && selectedDomain.dkim_dns_record.trim() !== ''">
                             <div>
@@ -880,7 +880,7 @@
                     <ul class="list-disc list-inside space-y-1">
                         <li>Распространение изменений DNS может занять до 48 часов.</li>
                         <li>Нажмите «Проверить DNS», чтобы проверить настройки.</li>
-                        <li>Обе записи должны быть проверены перед отправкой электронных писем.</li>
+                        <li>Записи должны быть проверены перед отправкой электронных писем.</li>
                     </ul>
                 </div>
             </div>

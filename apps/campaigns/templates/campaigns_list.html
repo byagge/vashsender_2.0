@@ -45,106 +45,128 @@
     
     <!-- Hero блок: если нет доменов и почт -->
     {% if not has_domains_or_emails %}
-    <div class="flex min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 relative">
+    <div class="h-screen overflow-y-auto bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 relative">
       <!-- Декоративные элементы -->
       <div class="absolute inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-0 right-0 w-96 h-96 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-        <div class="absolute bottom-0 left-0 w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style="animation-delay: 2s;"></div>
-        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style="animation-delay: 4s;"></div>
+        <div class="absolute top-0 right-0 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style="animation-delay: 2s;"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style="animation-delay: 4s;"></div>
       </div>
       
-      <div class="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative z-10">
-        <div class="max-w-3xl w-full">
-          <!-- Иконка с анимацией -->
-          <div class="text-center mb-8">
-            <div class="mx-auto w-28 h-28 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-3xl flex items-center justify-center mb-6 shadow-2xl transform hover:scale-105 transition-transform duration-300 relative">
-              <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-blue-400 to-purple-500 opacity-75 blur-xl"></div>
-              <i data-lucide="mail" class="w-14 h-14 text-white relative z-10"></i>
+      <div class="relative z-10 py-4 sm:py-6 px-4 sm:px-6">
+        <div class="max-w-6xl mx-auto">
+          <!-- Иконка с анимацией и заголовок -->
+          <div class="text-center mb-4 sm:mb-6">
+            <div class="mx-auto w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-3 sm:mb-4 shadow-2xl transform hover:scale-105 transition-transform duration-300 relative">
+              <div class="absolute inset-0 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-blue-400 to-purple-500 opacity-75 blur-xl"></div>
+              <i data-lucide="mail" class="w-10 h-10 sm:w-12 sm:h-12 text-white relative z-10"></i>
             </div>
             
             <!-- Заголовок -->
-            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4 leading-tight">
+            <h1 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 mb-2 sm:mb-3 leading-tight">
               Добавьте домен и почту<br class="hidden sm:block"> для начала работы
             </h1>
             
             <!-- Описание -->
-            <p class="text-lg sm:text-xl text-gray-600 mb-8 leading-relaxed max-w-2xl mx-auto">
-              Перед созданием рассылок необходимо добавить домен и настроить отправителя. 
-              Это обеспечит надежную доставку ваших писем и защиту от спама.
+            <p class="text-base sm:text-lg text-gray-600 mb-4 sm:mb-6 leading-relaxed max-w-2xl mx-auto">
+              Перед созданием рассылок необходимо добавить домен и настроить отправителя.
             </p>
           </div>
           
-          <!-- Инструкция с улучшенным дизайном -->
-          <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-6 sm:p-8 lg:p-10 mb-8 space-y-6">
-            <!-- Шаг 1 -->
-            <div class="flex gap-4 sm:gap-6 group">
-              <div class="flex-shrink-0">
-                <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <span class="text-white font-bold text-lg sm:text-xl">1</span>
+          <!-- Инструкция в две колонки на больших экранах -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+            <!-- Левая колонка -->
+            <div class="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl border border-white/20 p-4 sm:p-6">
+              <!-- Шаг 1 -->
+              <div class="flex gap-3 sm:gap-4 group mb-4 sm:mb-6">
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <span class="text-white font-bold text-base sm:text-lg">1</span>
+                  </div>
+                </div>
+                <div class="flex-1 pt-0.5">
+                  <h3 class="text-base sm:text-lg font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center gap-2">
+                    <i data-lucide="globe" class="w-4 h-4 sm:w-5 sm:h-5 text-blue-600"></i>
+                    Добавьте домен
+                  </h3>
+                  <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                    Перейдите в раздел «Домены» и добавьте ваш домен. Система поможет настроить DNS-записи.
+                  </p>
                 </div>
               </div>
-              <div class="flex-1 pt-1">
-                <h3 class="text-lg sm:text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i data-lucide="globe" class="w-5 h-5 text-blue-600"></i>
-                  Добавьте домен
-                </h3>
-                <p class="text-gray-600 leading-relaxed">
-                  Перейдите в раздел «Домены» и добавьте ваш домен. Система поможет настроить DNS-записи для верификации домена.
-                </p>
+              
+              <!-- Разделитель -->
+              <div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-4 sm:mb-6"></div>
+              
+              <!-- Шаг 2 -->
+              <div class="flex gap-3 sm:gap-4 group">
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <span class="text-white font-bold text-base sm:text-lg">2</span>
+                  </div>
+                </div>
+                <div class="flex-1 pt-0.5">
+                  <h3 class="text-base sm:text-lg font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center gap-2">
+                    <i data-lucide="shield-check" class="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600"></i>
+                    Верифицируйте домен
+                  </h3>
+                  <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                    Добавьте SPF, DKIM и DMARC записи в настройки DNS вашего домена.
+                  </p>
+                </div>
               </div>
             </div>
             
-            <!-- Разделитель -->
-            <div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
-            
-            <!-- Шаг 2 -->
-            <div class="flex gap-4 sm:gap-6 group">
-              <div class="flex-shrink-0">
-                <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <span class="text-white font-bold text-lg sm:text-xl">2</span>
+            <!-- Правая колонка -->
+            <div class="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl border border-white/20 p-4 sm:p-6">
+              <!-- Шаг 3 -->
+              <div class="flex gap-3 sm:gap-4 group mb-4 sm:mb-6">
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <span class="text-white font-bold text-base sm:text-lg">3</span>
+                  </div>
+                </div>
+                <div class="flex-1 pt-0.5">
+                  <h3 class="text-base sm:text-lg font-bold text-gray-900 mb-1.5 sm:mb-2 flex items-center gap-2">
+                    <i data-lucide="mail" class="w-4 h-4 sm:w-5 sm:h-5 text-purple-600"></i>
+                    Добавьте email-отправителя
+                  </h3>
+                  <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                    После верификации домена добавьте email-адрес, с которого будут отправляться рассылки.
+                  </p>
                 </div>
               </div>
-              <div class="flex-1 pt-1">
-                <h3 class="text-lg sm:text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i data-lucide="shield-check" class="w-5 h-5 text-indigo-600"></i>
-                  Верифицируйте домен
-                </h3>
-                <p class="text-gray-600 leading-relaxed">
-                  Добавьте SPF, DKIM и DMARC записи в настройки DNS вашего домена. Это необходимо для успешной доставки писем.
-                </p>
-              </div>
-            </div>
-            
-            <!-- Разделитель -->
-            <div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
-            
-            <!-- Шаг 3 -->
-            <div class="flex gap-4 sm:gap-6 group">
-              <div class="flex-shrink-0">
-                <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
-                  <span class="text-white font-bold text-lg sm:text-xl">3</span>
+              
+              <!-- Разделитель -->
+              <div class="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mb-4 sm:mb-6"></div>
+              
+              <!-- Дополнительная информация -->
+              <div class="flex gap-3 sm:gap-4">
+                <div class="flex-shrink-0">
+                  <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
+                    <i data-lucide="info" class="w-5 h-5 sm:w-6 sm:h-6 text-white"></i>
+                  </div>
                 </div>
-              </div>
-              <div class="flex-1 pt-1">
-                <h3 class="text-lg sm:text-xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <i data-lucide="mail" class="w-5 h-5 text-purple-600"></i>
-                  Добавьте email-отправителя
-                </h3>
-                <p class="text-gray-600 leading-relaxed">
-                  После верификации домена добавьте email-адрес, с которого будут отправляться рассылки. Подтвердите адрес по ссылке из письма.
-                </p>
+                <div class="flex-1 pt-0.5">
+                  <h3 class="text-base sm:text-lg font-bold text-gray-900 mb-1.5 sm:mb-2">
+                    Готово к отправке
+                  </h3>
+                  <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                    После настройки вы сможете создавать рассылки и отправлять письма вашей аудитории.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
           
           <!-- Кнопки действий -->
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a href="/emails/" class="group relative w-full sm:w-auto bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-8 py-4 rounded-2xl font-semibold hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-3 shadow-xl hover:scale-105 transform">
-              <span class="absolute inset-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-              <i data-lucide="mail" class="w-5 h-5 relative z-10"></i>
-              <span class="relative z-10">Перейти к настройке доменов и почт</span>
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <a href="/emails/" class="group relative w-full sm:w-auto bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3 shadow-xl hover:scale-105 transform">
+              <span class="absolute inset-0 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 rounded-xl sm:rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+              <i data-lucide="mail" class="w-4 h-4 sm:w-5 sm:h-5 relative z-10"></i>
+              <span class="relative z-10">Перейти к настройке</span>
             </a>
-            <a href="/emails/" class="text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-2 transition-all duration-300 hover:gap-3 group">
+            <a href="/emails/" class="text-indigo-600 hover:text-indigo-700 font-semibold text-sm sm:text-base flex items-center gap-2 transition-all duration-300 hover:gap-3 group">
               <span>Подробнее</span>
               <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300"></i>
             </a>
@@ -848,6 +870,7 @@
             'arrow-right': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12,5 19,12 12,19"></polyline></svg>',
             'globe': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
             'shield-check': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9,12 11,14 15,10"></polyline></svg>',
+            'info': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
             'file-spreadsheet': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14,2 14,8 20,8"></polyline><rect x="8" y="12" width="8" height="2"></rect><rect x="8" y="16" width="8" height="2"></rect></svg>',
             'file-text': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14,2 14,8 20,8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10,9 9,9 8,9"></polyline></svg>',
             'file': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13,2 13,9 20,9"></polyline></svg>',
