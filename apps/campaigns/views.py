@@ -849,6 +849,13 @@ class CampaignListView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['is_admin'] = self.request.user.is_staff
+        
+        # Проверяем наличие доменов и почт у пользователя
+        from apps.emails.models import Domain, SenderEmail
+        has_domains = Domain.objects.filter(owner=self.request.user).exists()
+        has_emails = SenderEmail.objects.filter(owner=self.request.user).exists()
+        context['has_domains_or_emails'] = has_domains or has_emails
+        
         return context
 
 

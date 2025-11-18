@@ -42,7 +42,73 @@
   {% include "dashboard/common/sidebar.html" %}
   <div class="main-content md:ml-64">
     {% csrf_token %}
+    
+    <!-- Hero блок: если нет доменов и почт -->
+    {% if not has_domains_or_emails %}
+    <div class="flex h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div class="flex-1 flex items-center justify-center p-8">
+        <div class="max-w-2xl w-full text-center">
+          <!-- Иконка -->
+          <div class="mx-auto w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mb-8 shadow-lg">
+            <i data-lucide="mail" class="w-12 h-12 text-white"></i>
+          </div>
+          
+          <!-- Заголовок -->
+          <h1 class="text-4xl font-bold text-gray-900 mb-4">
+            Добавьте домен и почту для начала работы
+          </h1>
+          
+          <!-- Описание -->
+          <p class="text-xl text-gray-600 mb-8 leading-relaxed">
+            Перед созданием рассылок необходимо добавить домен и настроить отправителя. 
+            Это обеспечит надежную доставку ваших писем и защиту от спама.
+          </p>
+          
+          <!-- Инструкция -->
+          <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-8 text-left">
+            <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+              <span class="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-bold">1</span>
+              Добавьте домен
+            </h2>
+            <p class="text-gray-600 mb-6 pl-11">
+              Перейдите в раздел «Домены» и добавьте ваш домен. Система поможет настроить DNS-записи для верификации домена.
+            </p>
+            
+            <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+              <span class="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-bold">2</span>
+              Верифицируйте домен
+            </h2>
+            <p class="text-gray-600 mb-6 pl-11">
+              Добавьте SPF, DKIM и DMARC записи в настройки DNS вашего домена. Это необходимо для успешной доставки писем.
+            </p>
+            
+            <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+              <span class="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full font-bold">3</span>
+              Добавьте email-отправителя
+            </h2>
+            <p class="text-gray-600 pl-11">
+              После верификации домена добавьте email-адрес, с которого будут отправляться рассылки. Подтвердите адрес по ссылке из письма.
+            </p>
+          </div>
+          
+          <!-- Кнопки действий -->
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a href="/emails/" class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-1">
+              <i data-lucide="mail" class="w-5 h-5"></i>
+              Перейти к настройке доменов и почт
+            </a>
+            <a href="/emails/" class="text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2 transition-colors">
+              Подробнее
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    
     <!-- Main Container -->
+    {% if has_domains_or_emails %}
     <div class="flex h-screen bg-gray-50" x-show="filteredCampaigns().length > 0 || searchTerm !== '' || statusFilter !== 'All'">
       <!-- Main Content -->
       <div class="flex-1 overflow-auto">
@@ -630,9 +696,24 @@
         </div>
       </div>
     </div>
+    {% endif %}
   </div>
 
   <script>
+    // Инициализация иконок для hero-блока (если доменов/почт нет)
+    document.addEventListener('DOMContentLoaded', function() {
+      // Инициализируем Lucide иконки
+      if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        setTimeout(() => {
+          try {
+            lucide.createIcons();
+          } catch (error) {
+            console.warn('Failed to create Lucide icons:', error);
+          }
+        }, 100);
+      }
+    });
+
     // Получаем CSRF токен из мета-тега
     function getCSRFToken() {
       const token = document.querySelector('[name=csrfmiddlewaretoken]');
@@ -717,6 +798,7 @@
             'trash-2': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>',
             'edit': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
             'x': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>',
+            'arrow-right': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12,5 19,12 12,19"></polyline></svg>',
             'file-spreadsheet': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14,2 14,8 20,8"></polyline><rect x="8" y="12" width="8" height="2"></rect><rect x="8" y="16" width="8" height="2"></rect></svg>',
             'file-text': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14,2 14,8 20,8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10,9 9,9 8,9"></polyline></svg>',
             'file': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13,2 13,9 20,9"></polyline></svg>',
