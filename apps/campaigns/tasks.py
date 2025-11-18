@@ -379,10 +379,11 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             print(f"Error getting campaign {campaign_id}: {e}")
             raise self.retry(countdown=120, max_retries=3)
         
-        # Проверяем, что кампания не уже отправляется (только если не пропускаем модерацию)
-        if not skip_moderation and campaign.status == Campaign.STATUS_SENDING:
-            print(f"Кампания {campaign_id} уже отправляется")
-            return {'error': 'Campaign already sending'}
+        # Проверяем, что нет параллельных запусков той же кампании
+        if campaign.status == Campaign.STATUS_SENDING and campaign.celery_task_id:
+            if campaign.celery_task_id != self.request.id:
+                print(f"Кампания {campaign_id} уже отправляется (task {campaign.celery_task_id})")
+                return {'error': 'Campaign already sending'}
         
         # Проверяем, нужна ли модерация
         user = campaign.user
