@@ -1,7 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
+from django.conf import settings
+import os
 from apps.billing.models import Plan, PlanType
 
 # Create your views here.
@@ -174,3 +176,22 @@ def privacy_page(request):
 def antispam_page(request):
     """Страница антиспам соглашения"""
     return render(request, 'legal/antispam.html')
+
+def download_instruction_file(request):
+    """View для скачивания файла инструкции"""
+    file_path = os.path.join(settings.BASE_DIR, 'apps', 'main', 'templates', 'legal', 'Инструкция на сайт.docx')
+    
+    if not os.path.exists(file_path):
+        from django.http import Http404
+        raise Http404("Файл не найден")
+    
+    file_name = 'Инструкция на сайт.docx'
+    
+    # FileResponse автоматически закроет файл после отправки ответа
+    response = FileResponse(
+        open(file_path, 'rb'),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{file_name}"'
+    
+    return response
