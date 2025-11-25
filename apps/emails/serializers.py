@@ -24,20 +24,45 @@ class DomainSerializer(serializers.ModelSerializer):
         ]
 
     def validate_domain_name(self, value):
+        """
+        Нормализуем домен:
+        - убираем http://, https://
+        - убираем ведущий www.
+        - отбрасываем путь, query и fragment
+        В итоге сохраняем только чистое имя домена.
+        """
         if not value:
             raise serializers.ValidationError("Название домена не может быть пустым")
-        
+
         # Убираем пробелы и приводим к нижнему регистру
         value = value.strip().lower()
-        
-        # Проверяем, что домен содержит точку (базовая валидация)
-        if '.' not in value:
+
+        # Удаляем протокол, если пользователь ввёл URL
+        if value.startswith("http://"):
+            value = value[len("http://"):]
+        elif value.startswith("https://"):
+            value = value[len("https://"):]
+
+        # Отбрасываем путь, query и fragment (всё после первого /, ?, #)
+        for sep in ["/", "?", "#"]:
+            if sep in value:
+                value = value.split(sep, 1)[0]
+
+        # Удаляем ведущий www.
+        if value.startswith("www."):
+            value = value[4:]
+
+        # Повторно подрежем пробелы на всякий случай
+        value = value.strip()
+
+        # Базовая валидация: домен должен содержать точку
+        if "." not in value:
             raise serializers.ValidationError("Некорректный формат домена")
-        
-        # Проверяем, что домен не начинается и не заканчивается точкой
-        if value.startswith('.') or value.endswith('.'):
+
+        # Домен не должен начинаться или заканчиваться точкой
+        if value.startswith(".") or value.endswith("."):
             raise serializers.ValidationError("Некорректный формат домена")
-        
+
         return value
 
     def get_dkim_dns_record(self, obj):
