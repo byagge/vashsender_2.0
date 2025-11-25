@@ -255,6 +255,9 @@ EMAIL_RATE_LIMIT = 0.2   # Писем в секунду (1 письмо в 5 с�
 EMAIL_MAX_RETRIES = 3   # Максимальное количество попыток
 EMAIL_RETRY_DELAY = 60  # Задержка между попытками в секундах
 EMAIL_CONNECTION_TIMEOUT = 30
+CAMPAIGN_BATCH_WAIT_TIMEOUT = None
+CAMPAIGN_BATCH_ADDITIONAL_WAIT = None
+EMAIL_TASK_WAIT_TIMEOUT = None
 
 # Celery Beat Schedule для периодических задач
 CELERY_BEAT_SCHEDULE = {

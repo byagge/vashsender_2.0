@@ -335,8 +335,7 @@ def test_celery():
         print("Test Celery task is running!")
     return "Test task completed successfully"
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns', 
-            time_limit=14400, soft_time_limit=13800)  # 4 часа максимум, 3ч50м мягкий лимит
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns')
 def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict[str, Any]:
     """
     Основная задача для отправки кампании
@@ -349,10 +348,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
     print(f"Queue: {self.request.delivery_info.get('routing_key', 'unknown')}")
     
     try:
-        # Проверяем таймаут
-        if time.time() - start_time > 13800:  # 3ч50м
-            raise TimeoutError("Task timeout approaching")
-        
         # Принудительно обновляем состояние задачи
         self.update_state(
             state='STARTED',
@@ -592,10 +587,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         for i, batch in enumerate(batches):
             print(f"Launching batch {i + 1}/{len(batches)} with {len(batch)} contacts")
             
-            # Проверяем таймаут перед запуском каждого батча
-            if time.time() - start_time > 3300:
-                raise TimeoutError("Task timeout approaching before launching all batches")
-            
             try:
                 # Без искусственных задержек между батчами
                 
@@ -632,11 +623,11 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Продолжаем с другими батчами
                 continue
         
-        # Ждем завершения всех батчей с увеличенным таймаутом
-        max_wait_time = 14400  # 4 часа максимум ожидания
+        # Ждем завершения всех батчей (без жесткого лимита времени)
+        max_wait_time = getattr(settings, 'CAMPAIGN_BATCH_WAIT_TIMEOUT', None)
         wait_start = time.time()
         
-        while time.time() - wait_start < max_wait_time:
+        while True:
             completed_batches = sum(1 for task in batch_tasks if task.ready())
             if completed_batches == len(batch_tasks):
                 print(f"All {len(batch_tasks)} batches completed")
@@ -656,9 +647,10 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             )
             
             time.sleep(10)  # Проверяем каждые 10 секунд
-        else:
-            print(f"Timeout waiting for batches after {max_wait_time} seconds")
-            # Продолжаем выполнение, даже если не все батчи завершились
+            
+            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
+                print(f"Reached configured wait timeout ({max_wait_time}s), continuing without waiting for all batches")
+                break
         
         # Финальная проверка статуса кампании
         try:
@@ -686,11 +678,11 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             print(f"Final statistics: total_recipients={total_recipients}, total_sent={total_sent}, active_batches={active_batches}")
             
             # Ждем еще немного, если есть активные батчи
-            if active_batches > 0:
+            max_additional_wait = getattr(settings, 'CAMPAIGN_BATCH_ADDITIONAL_WAIT', None)
+            if active_batches > 0 and (max_additional_wait is None or max_additional_wait > 0):
                 print(f"Waiting for {active_batches} active batches to complete...")
                 additional_wait = 0
-                max_additional_wait = 1800  # 30 минут дополнительного ожидания
-                while additional_wait < max_additional_wait:
+                while True:
                     active_count = sum(1 for task in batch_tasks if not task.ready())
                     if active_count == 0:
                         print("All batches completed")
@@ -704,6 +696,10 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                         is_sent=True
                     ).count()
                     print(f"Progress: {total_sent}/{total_recipients} sent, {active_count} batches still active")
+                    
+                    if max_additional_wait and additional_wait >= max_additional_wait:
+                        print(f"Reached additional wait timeout ({max_additional_wait}s), continuing")
+                        break
             
             # Финальная проверка статистики
             total_sent = CampaignRecipient.objects.filter(
@@ -806,8 +802,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         raise self.retry(exc=exc, countdown=120, max_retries=3)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=5400, soft_time_limit=4800)  # 90 минут максимум, 80 минут мягкий лимит
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email')
 def send_email_batch(self, campaign_id: str, contact_ids: List[int], 
                     batch_number: int, total_batches: int) -> Dict[str, Any]:
     """
@@ -818,10 +813,6 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
     
     try:
         print(f"Starting send_email_batch for campaign {campaign_id}, batch {batch_number}/{total_batches}")
-        
-        # Проверяем таймаут
-        if time.time() - start_time > 4800:  # 80 минут
-            raise TimeoutError("Batch task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
         # Отправляем только валидным контактам
@@ -861,10 +852,6 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         
         for i, contact in enumerate(contacts):
             try:
-                # Проверяем таймаут в цикле
-                if time.time() - start_time > 4800:
-                    raise TimeoutError("Batch task timeout approaching during email sending")
-                
                 # Планируем отправку письма с учётом настраиваемой скорости
                 countdown = int(i * delay_step_seconds) if delay_step_seconds > 0 else 0
                 task_result = send_single_email.apply_async(
@@ -892,13 +879,13 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 print(f"Ошибка планирования письма для контакта {contact.id}: {str(e)}")
                 continue
         
-        # Ждем завершения всех задач с таймаутом
+        # Ждем завершения всех задач (по умолчанию без таймаута)
         print(f"Waiting for {len(email_tasks)} email tasks to complete...")
-        max_wait_time = 5400  # 90 минут максимум ожидания
+        max_wait_time = getattr(settings, 'EMAIL_TASK_WAIT_TIMEOUT', None)
         wait_start = time.time()
         completed_tasks = set()
         
-        while time.time() - wait_start < max_wait_time:
+        while True:
             # Проверяем статус всех задач
             for task_result, contact_id in email_tasks:
                 if contact_id in completed_tasks:
@@ -942,18 +929,11 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 print(f"All {len(email_tasks)} email tasks completed")
                 break
             
-            # Проверяем таймаут
-            if time.time() - start_time > 4800:
-                print(f"Timeout approaching, {len(completed_tasks)}/{len(email_tasks)} tasks completed")
-                break
-            
             time.sleep(5)  # Проверяем каждые 5 секунд
-        else:
-            print(f"Timeout waiting for email tasks after {max_wait_time} seconds")
-            # Подсчитываем незавершенные задачи как failed
-            remaining = len(email_tasks) - len(completed_tasks)
-            failed_count += remaining
-            print(f"Marking {remaining} remaining tasks as failed due to timeout")
+            
+            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
+                print(f"Reached configured email task wait timeout ({max_wait_time}s); continuing with remaining tasks in background")
+                break
         
         # Возвращаем соединение в пул
         if smtp_connection:
@@ -1056,8 +1036,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         raise self.retry(exc=exc, countdown=60, max_retries=3)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email',
-            time_limit=3600, soft_time_limit=3000)  # до 60 минут на письмо
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email')
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
@@ -1067,10 +1046,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
     
     try:
         print(f"Starting send_single_email for campaign {campaign_id}, contact {contact_id}")
-        
-        # Проверяем таймаут
-        if time.time() - start_time > 3000:  # 50 минут
-            raise TimeoutError("Single email task timeout approaching")
         
         campaign = Campaign.objects.get(id=campaign_id)
         contact = Contact.objects.get(id=contact_id)
