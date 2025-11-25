@@ -18,7 +18,13 @@ from rest_framework.parsers import MultiPartParser
 
 from .models import ContactList, Contact, ImportTask
 from .serializers import ContactListSerializer, ContactSerializer, ContactListListSerializer, ContactListDetailSerializer, MailerDomainSerializer
-from .utils import parse_emails, classify_email
+from .utils import (
+    parse_emails,
+    classify_email,
+    can_add_contacts,
+    format_quota_error,
+    get_contact_quota,
+)
 from apps.billing.models import Plan
 
 
@@ -97,13 +103,10 @@ class ContactListViewSet(viewsets.ModelViewSet):
         plan = getattr(user, 'current_plan', None)
         if not plan:
             return Response({'error': 'Не найден тариф пользователя.'}, status=status.HTTP_400_BAD_REQUEST)
-        contact_limit = getattr(plan, 'subscribers', 0)
-        # Считаем общее число контактов во всех списках пользователя
-        total_contacts = Contact.objects.filter(contact_list__owner=user).count()
-        
-        if contact_limit and total_contacts >= contact_limit:
-            error_message = f'Превышен лимит контактов.'
-            return Response({'error': error_message}, status=status.HTTP_400_BAD_REQUEST)
+
+        can_add, quota = can_add_contacts(user, amount=1)
+        if not can_add:
+            return Response({'error': format_quota_error(quota)}, status=status.HTTP_400_BAD_REQUEST)
         # --- КОНЕЦ ОГРАНИЧЕНИЯ ---
 
         ser = ContactSerializer(data=request.data)
@@ -146,6 +149,10 @@ class ContactListViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({'detail': 'No file uploaded.'},
                             status=status.HTTP_400_BAD_REQUEST)
+
+        can_add, quota = can_add_contacts(request.user)
+        if not can_add:
+            return Response({'error': format_quota_error(quota)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Создаем задачу импорта
         import_task = ImportTask.objects.create(
@@ -333,6 +340,17 @@ class ContactListViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No file uploaded.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        quota = get_contact_quota(request.user)
+        limit = quota.get('limit') or 0
+        remaining_slots = quota.get('remaining') if limit else None
+        if limit and (remaining_slots is None or remaining_slots <= 0):
+            return Response({'error': format_quota_error(quota)}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing_emails = set(
+            Contact.objects.filter(contact_list=contact_list).values_list('email', flat=True)
+        )
+        limit_reached = False
+
         emails = parse_emails(file_obj, file_obj.name)
         total_emails = len(emails)
         
@@ -340,18 +358,28 @@ class ContactListViewSet(viewsets.ModelViewSet):
         contacts_to_create = []
         processed = 0
         
-        for email in emails:
+        for raw_email in emails:
             try:
                 processed += 1
                 
                 # Проверяем только базовый синтаксис
-                if '@' in email and '.' in email.split('@')[1]:
+                if '@' in raw_email and '.' in raw_email.split('@')[1]:
+                    normalized_email = raw_email.lower().strip()
+                    if normalized_email in existing_emails:
+                        continue
+                    if limit and remaining_slots is not None and remaining_slots <= 0:
+                        limit_reached = True
+                        break
+
                     new_contact = Contact(
                         contact_list=contact_list,
-                        email=email.lower().strip(),
+                        email=normalized_email,
                         status=Contact.VALID  # Предполагаем что все валидные
                     )
                     contacts_to_create.append(new_contact)
+                    existing_emails.add(normalized_email)
+                    if remaining_slots is not None:
+                        remaining_slots -= 1
                 
                 # Батчинг: сохраняем каждые 1000 контактов
                 if len(contacts_to_create) >= 1000:
@@ -373,13 +401,22 @@ class ContactListViewSet(viewsets.ModelViewSet):
 
         elapsed_time = time.time() - start_time
 
-        return Response({
+        message = 'Fast import completed. Run validation separately if needed.'
+        if limit_reached:
+            message = 'Fast import stopped: ' + format_quota_error(quota)
+
+        response_data = {
             'imported': processed,
             'total_processed': processed,
             'total_in_file': total_emails,
             'elapsed_time': round(elapsed_time, 2),
-            'message': 'Fast import completed. Run validation separately if needed.'
-        }, status=status.HTTP_201_CREATED)
+            'message': message,
+            'limit_reached': limit_reached,
+        }
+        if limit:
+            response_data['remaining_capacity'] = remaining_slots if remaining_slots is not None else 0
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='export')
     def export_contacts(self, request, pk=None):
@@ -462,6 +499,12 @@ class ContactListViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'No file uploaded.'},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        quota = get_contact_quota(request.user)
+        limit = quota.get('limit') or 0
+        remaining_slots = quota.get('remaining') if limit else None
+        if limit and (remaining_slots is None or remaining_slots <= 0):
+            return Response({'error': format_quota_error(quota)}, status=status.HTTP_400_BAD_REQUEST)
+
         # Создаем задачу импорта
         import_task = ImportTask.objects.create(
             contact_list=contact_list,
@@ -488,12 +531,13 @@ class ContactListViewSet(viewsets.ModelViewSet):
             existing_emails = set(Contact.objects.filter(
                 contact_list=contact_list
             ).values_list('email', flat=True))
+            limit_reached = False
             
             # Обрабатываем email большими батчами
             batch_size = 1000  # Большой размер батча
             contacts_to_create = []
             
-            for i, email in enumerate(emails):
+            for i, raw_email in enumerate(emails):
                 try:
                     processed += 1
                     
@@ -502,9 +546,14 @@ class ContactListViewSet(viewsets.ModelViewSet):
                         import_task.processed_emails = processed
                         import_task.save()
                     
-                    # Быстрая проверка существования
+                    # Нормализуем email и проверяем существование
+                    email = raw_email.lower().strip()
                     if email in existing_emails:
                         continue
+
+                    if limit and remaining_slots is not None and remaining_slots <= 0:
+                        limit_reached = True
+                        break
                     
                     # Быстрая валидация без DNS для большинства доменов
                     from .utils import validate_email_fast
@@ -520,6 +569,9 @@ class ContactListViewSet(viewsets.ModelViewSet):
                         )
                         contacts_to_create.append(new_contact)
                         added += 1
+                        existing_emails.add(email)
+                        if remaining_slots is not None:
+                            remaining_slots -= 1
                         if status_code == Contact.BLACKLIST:
                             blacklisted_count += 1
                     else:
@@ -530,6 +582,9 @@ class ContactListViewSet(viewsets.ModelViewSet):
                         )
                         contacts_to_create.append(new_contact)
                         invalid_count += 1
+                        existing_emails.add(email)
+                        if remaining_slots is not None:
+                            remaining_slots -= 1
                     
                     # Сохраняем большими батчами
                     if len(contacts_to_create) >= batch_size:
@@ -555,9 +610,11 @@ class ContactListViewSet(viewsets.ModelViewSet):
             import_task.blacklisted_count = blacklisted_count
             import_task.error_count = error_count
             import_task.completed_at = timezone.now()
+            if limit_reached:
+                import_task.error_message = format_quota_error(quota)
             import_task.save()
 
-            return Response({
+            response_data = {
                 'task_id': str(import_task.id),
                 'imported': added,
                 'invalid_count': invalid_count,
@@ -566,8 +623,15 @@ class ContactListViewSet(viewsets.ModelViewSet):
                 'total_processed': processed,
                 'total_in_file': total_emails,
                 'elapsed_time': round(elapsed_time, 2),
-                'status': 'completed'
-            }, status=status.HTTP_201_CREATED)
+                'status': 'completed',
+                'limit_reached': limit_reached,
+            }
+            if limit:
+                response_data['remaining_capacity'] = remaining_slots if remaining_slots is not None else 0
+            if limit_reached:
+                response_data['message'] = format_quota_error(quota)
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             # Обновляем задачу с ошибкой

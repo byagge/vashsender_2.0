@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>КАК СОЗДАТЬ РАССЫЛКУ — vashsender</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <style>
+    body { font-family: 'Montserrat', Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-[#f5f6fa] text-[#222] min-h-screen">
+  <!-- Header -->
+  <header class="flex items-center justify-between px-6 md:px-20 pt-8">
+    <a href="/" class="flex items-center text-2xl font-bold text-[#222] no-underline">
+      <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/>
+        <path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/>
+      </svg>
+      vashsender
+    </a>
+    <nav class="flex gap-8 items-center">
+      <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
+      <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+    </nav>
+  </header>
+
+  <!-- Content -->
+  <main class="max-w-4xl mx-auto px-6 md:px-20 py-12">
+    <div class="bg-white rounded-lg shadow-sm p-8">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-[#222a38] mb-4">КАК СОЗДАТЬ РАССЫЛКУ</h1>
+      </div>
+      
+      <div class="prose prose-lg max-w-none text-[#6b7a99]">
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №1: Добавьте домен</h2>
+        <p class="mb-4">Добавьте домен, с которого хотите отправлять письма. Это необходимо для настройки email-аутентификации, чтобы верифицировать отправку писем.
+          В качестве домена можно указать адрес сайта вашей компании (например, vashsite.ru)
+        </p>
+        <p class="mb-4">Для добавления домена перейдите в раздел "Настройки" → "Адреса отправителей", зайдите в раздел "Домены" и нажмите на кнопку "Добавить домен"</p>
+        <img src="https://i.ibb.co/7NttnRwL/inst1.jpg" alt="Добавление домена" class="w-full h-auto rounded-lg">
+
+
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №2: Подтвердите домен</h2>
+        <p class="mb-4">Для подтверждения домена нужно на вашем хостинге добавить несколько DNS-записей, чтобы подтвердить, что вы являетесь владельцем домена.</p>
+        <p class="mb-4">После добавления домена система сгенерирует необходимые DNS-записи.</p>
+        <img src="https://i.ibb.co/cKfBT40L/inst2.jpg" alt="Подтверждение домена" class="w-full h-auto rounded-lg">
+        <p class="mb-4">Чтобы добавить эти записи, зайдите в панель управления вашего хостинга. В разделе управления DNS-записями вашего домена добавьте соответствующие TXT-записи.</p>
+
+        <div class="my-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <strong class="block mb-2 text-[#1877ff]">Не получается подтвердить домен?</strong>
+          <span>Пожалуйста, <a href="https://vashsender.ru/support/chat" target="_blank" class="text-[#1877ff] underline hover:text-[#125fd1]">напишите в чат</a> — поможем разобраться!</span>
+        </div>
+
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №3: Добавьте адрес отправителя </h2>
+        <p class="mb-4">В качестве адреса отправителя укажите почтовый ящик, созданный на подтверждённом домене (например, news@vashsite.ru)</p>
+        <img src="https://i.ibb.co/SX0Y0xRL/inst3.jpg" alt="Добавление адреса отправителя" class="w-full h-auto rounded-lg">
+
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №4: Создайте шаблон письма</h2>
+        <p class="mb-4">Для создания шаблонов писем перейдите в раздел "Шаблоны" и создайте шаблон письма.</p>
+        <img src="https://i.ibb.co/nNWnhzT3/inst4.jpg" alt="Создание шаблона письма" class="w-full h-auto rounded-lg">
+
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №5: Создайте список контактов </h2>
+        <p class="mb-4">Перейдите в раздел "Контакты" и создайте список контактов.</p>
+        <img src="https://i.ibb.co/PZxGf54g/inst5.jpg" alt="Создание списка контактов" class="w-full h-auto rounded-lg">
+        <p class="mb-6">Зайдите в созданный список контактов, чтобы добавить email-адреса получателей.</p>
+        <img src="https://i.ibb.co/bj3SBTkz/inst6.jpg" alt="Добавление email-адресов получателей" class="w-full h-auto rounded-lg">
+
+        <h2 class="text-xl font-semibold text-[#222a38] mb-4">ШАГ №6: Создайте рассылку</h2>
+        <p class="mb-4">Для создания и отправки рассылки перейдите в раздел "Рассылки".</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white pt-12 pb-6 mt-12 border-t border-gray-100">
+    <div class="max-w-7xl mx-auto px-4">
+      <!-- Top row -->
+      <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
+        <!-- Left side - Logo -->
+        <div class="flex items-center mb-4 md:mb-0">
+          <svg width="24" height="24" fill="none" class="mr-2" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="6" width="20" height="12" rx="3" stroke="#1877ff" stroke-width="2"/>
+            <path d="M2 6l10 8L22 6" stroke="#1877ff" stroke-width="2"/>
+          </svg>
+          <span class="text-xl font-bold text-[#222a38]">vashsender</span>
+        </div>
+        <!-- Right side - Links -->
+        <div class="flex flex-wrap gap-6 text-[#6b7a99] text-sm">
+          <a href="/legal/license/" class="hover:text-[#1877ff] transition">Лицензионное соглашение</a>
+          <a href="/legal/privacy/" class="hover:text-[#1877ff] transition">Политика конфиденциальности</a>
+          <a href="/legal/antispam/" class="hover:text-[#1877ff] transition">АнтиСпам соглашение</a>
+        </div>
+      </div>
+      
+      <!-- Bottom row -->
+      <div class="flex flex-col md:flex-row md:justify-between md:items-center text-sm text-[#6b7a99]">
+        <!-- Left side - Email -->
+        <div class="mb-2 md:mb-0">
+          <span>support@vashsender</span>
+        </div>
+        <!-- Right side - Made with love -->
+        <div class="flex items-center gap-1">
+          <span>Сделано с</span>
+          <i class="fa-solid fa-heart text-red-500"></i>
+          <span>любовью и страстью в <a href="https://monocode.studio" target="_blank" class="text-[#6b7a99] hover:text-[#1877ff] transition">monocode</a></span>
+        </div>
+      </div>
+    </div>
+  </footer>
+</body>
+</html> 

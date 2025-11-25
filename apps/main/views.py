@@ -177,6 +177,10 @@ def antispam_page(request):
     """Страница антиспам соглашения"""
     return render(request, 'legal/antispam.html')
 
+def campaigns_page(request):
+    """Публичная инструкция по созданию рассылок"""
+    return render(request, 'campaigns.html')
+
 def download_instruction_file(request):
     """View для скачивания файла инструкции"""
     file_path = os.path.join(settings.BASE_DIR, 'apps', 'main', 'templates', 'legal', 'Инструкция на сайт.docx')

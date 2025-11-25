@@ -1,6 +1,11 @@
 from django.core.management.base import BaseCommand
 from apps.mailer.models import ContactList, ImportTask, Contact
-from apps.mailer.utils import parse_emails, validate_email_production
+from apps.mailer.utils import (
+    parse_emails,
+    validate_email_production,
+    get_contact_quota,
+    format_quota_error,
+)
 from django.utils import timezone
 import time
 import os
@@ -20,6 +25,23 @@ class Command(BaseCommand):
         try:
             # Получаем задачу импорта
             task = ImportTask.objects.get(id=task_id)
+            quota = get_contact_quota(task.contact_list.owner)
+            limit = quota.get('limit') or 0
+            remaining_slots = quota.get('remaining') if limit else None
+            if limit and (remaining_slots is None or remaining_slots <= 0):
+                message = format_quota_error(quota)
+                task.status = ImportTask.COMPLETED
+                task.error_message = message
+                task.total_emails = 0
+                task.processed_emails = 0
+                task.imported_count = 0
+                task.invalid_count = 0
+                task.blacklisted_count = 0
+                task.error_count = 0
+                task.completed_at = timezone.now()
+                task.save()
+                self.stdout.write(self.style.WARNING(message))
+                return
             
             # Проверяем, что файл существует
             if not os.path.exists(file_path):
@@ -52,6 +74,8 @@ class Command(BaseCommand):
             contacts_to_update = []
             processed = 0
 
+            limit_reached = False
+
             for email in emails:
                 try:
                     processed += 1
@@ -64,6 +88,10 @@ class Command(BaseCommand):
                     # Валидируем email
                     validation_result = validate_email_production(email)
                     
+                    if limit and remaining_slots is not None and remaining_slots <= 0:
+                        limit_reached = True
+                        break
+
                     if validation_result['is_valid']:
                         status_code = validation_result['status']
                         
@@ -86,6 +114,8 @@ class Command(BaseCommand):
                             )
                             contacts_to_create.append(new_contact)
                             task.imported_count += 1
+                            if remaining_slots is not None:
+                                remaining_slots -= 1
                             if status_code == Contact.BLACKLIST:
                                 task.blacklisted_count += 1
                     else:
@@ -103,6 +133,8 @@ class Command(BaseCommand):
                             )
                             contacts_to_create.append(new_contact)
                             task.invalid_count += 1
+                            if remaining_slots is not None:
+                                remaining_slots -= 1
                     
                     # Батчинг: сохраняем каждые 50 контактов
                     if len(contacts_to_create) >= 50:
@@ -143,6 +175,8 @@ class Command(BaseCommand):
             task.status = ImportTask.COMPLETED
             task.processed_emails = processed
             task.completed_at = timezone.now()
+            if limit_reached:
+                task.error_message = format_quota_error(quota)
             task.save()
 
             # Удаляем временный файл

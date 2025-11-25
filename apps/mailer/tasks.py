@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 
 from .models import ContactList, Contact, ImportTask
-from .utils import parse_emails, validate_email_production
+from .utils import parse_emails, validate_email_production, get_contact_quota, format_quota_error
 
 
 @shared_task(bind=True)
@@ -28,6 +28,24 @@ def import_contacts_async(self, task_id, file_path):
         # Получаем задачу импорта
         task = ImportTask.objects.get(id=task_id)
         logger.info(f"Found import task: {task.filename}, contact_list: {task.contact_list.id}")
+        owner = task.contact_list.owner
+
+        quota = get_contact_quota(owner)
+        limit = quota.get('limit') or 0
+        remaining_slots = quota.get('remaining') if limit else None
+        if limit and (remaining_slots is None or remaining_slots <= 0):
+            message = format_quota_error(quota)
+            task.status = ImportTask.COMPLETED
+            task.processed_emails = 0
+            task.imported_count = 0
+            task.invalid_count = 0
+            task.blacklisted_count = 0
+            task.error_count = 0
+            task.error_message = message
+            task.completed_at = timezone.now()
+            task.save()
+            logger.warning(f"Task {task_id} aborted: {message}")
+            return True
         
         # Обновляем статус на "обрабатывается"
         task.status = ImportTask.PROCESSING
@@ -78,6 +96,7 @@ def import_contacts_async(self, task_id, file_path):
         error_count = 0
         processed = 0
         skipped_count = 0
+        limit_reached = False
         
         # Батчинг для оптимизации
         contacts_to_create = []
@@ -120,6 +139,10 @@ def import_contacts_async(self, task_id, file_path):
                     skipped_count += 1
                     continue
                 
+                if limit and remaining_slots is not None and remaining_slots <= 0:
+                    limit_reached = True
+                    break
+
                 # Полная валидация email
                 validation_result = validate_email_production(email)
                 
@@ -135,6 +158,8 @@ def import_contacts_async(self, task_id, file_path):
                     contacts_to_create.append(new_contact)
                     # Добавляем email в existing_emails, чтобы избежать дубликатов в батче
                     existing_emails.add(email)
+                    if remaining_slots is not None:
+                        remaining_slots -= 1
                     
                     if status_code == Contact.BLACKLIST:
                         blacklisted_count += 1
@@ -148,6 +173,8 @@ def import_contacts_async(self, task_id, file_path):
                     contacts_to_create.append(new_contact)
                     # Добавляем email в existing_emails, чтобы избежать дубликатов в батче
                     existing_emails.add(email)
+                    if remaining_slots is not None:
+                        remaining_slots -= 1
                     invalid_count += 1
                 
                 # Батчинг: сохраняем каждые batch_size контактов
@@ -228,6 +255,8 @@ def import_contacts_async(self, task_id, file_path):
         task.blacklisted_count = blacklisted_count
         task.error_count = error_count
         task.completed_at = timezone.now()
+        if limit_reached:
+            task.error_message = format_quota_error(quota)
         task.save()
         
         # Удаляем временный файл

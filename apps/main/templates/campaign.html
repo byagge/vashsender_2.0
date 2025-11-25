@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Гайд по созданию рассылки — vashsender</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Montserrat', Arial, sans-serif; }
+    .chip {
+      background: rgba(24, 119, 255, 0.08);
+      border: 1px solid rgba(24, 119, 255, 0.2);
+    }
+    .step-card {
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      transition: all 0.25s ease;
+    }
+    .step-card:hover {
+      border-color: rgba(24, 119, 255, 0.4);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+    }
+    .step-card-link {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      height: 100%;
+    }
+    .placeholder-frame {
+      border: 1px dashed rgba(24, 119, 255, 0.4);
+      border-radius: 16px;
+      background: rgba(24, 119, 255, 0.05);
+    }
+    .section-divider::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(24,119,255,0.08));
+      filter: blur(60px);
+      opacity: 0.7;
+    }
+    .gradient-bg {
+      background: linear-gradient(135deg, #5c5ad6 0%, #1877ff 75%);
+    }
+  </style>
+</head>
+<body class="bg-[#f5f6fa] text-[#222] min-h-screen">
+  <!-- Header -->
+  <header class="flex items-center justify-between px-6 md:px-20 pt-8">
+    <a href="/" class="flex items-center text-2xl font-bold text-[#222] no-underline">
+      <svg width="32" height="32" fill="none" class="mr-3" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="8" width="24" height="16" rx="4" fill="#1877ff"/><path d="M4 8l12 10L28 8" stroke="#fff" stroke-width="2"/></svg>
+      vashsender
+    </a>
+    <nav class="hidden md:flex gap-8 items-center">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="text-[#222] font-medium text-base hover:text-[#1877ff] transition">Вход</a>
+        <a href="/accounts/signup/" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
+    </nav>
+    <button id="mobile-nav-toggle" class="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-md border border-gray-200 text-[#222] hover:bg-gray-50" aria-label="Открыть меню">
+      <svg id="icon-open" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2zm0 4h14a1 1 0 110 2H3a1 1 0 110-2z" clip-rule="evenodd"/></svg>
+      <svg id="icon-close" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </button>
+  </header>
+  <div id="mobile-menu" class="md:hidden px-6 pt-2 pb-4 hidden">
+    <div class="flex flex-col gap-2 bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+      {% if user.is_authenticated %}
+        <a href="/dashboard/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Панель управления</a>
+      {% else %}
+        <a href="/accounts/login/" class="w-full text-center text-[#222] font-medium text-base hover:text-[#1877ff] transition py-2">Вход</a>
+        <a href="/accounts/signup/" class="w-full text-center bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-md px-6 py-2 text-base transition">Регистрация</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Steps overview -->
+  <section id="steps-overview" class="px-6 md:px-20 pb-14 mt-[40px]">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl md:text-4xl font-bold text-[#111827] mb-6">6 шагов до первой отправки</h2>
+      <p class="text-[#6b7a99] text-lg mb-10 max-w-3xl">Каждый шаг — это конкретное действие в панели управления. Отмечайте выполненные пункты и переходите к следующему.</p>
+      <div class="grid md:grid-cols-2 gap-6">
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-1" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 1</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Добавьте домен</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">Зайдите в «Настройки → Адреса отправителей → Домены» и нажмите «Добавить домен». Это база для верификации и настройки SPF/DKIM.</p>
+          </a>
+        </article>
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-2" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 2</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Подтвердите владение</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">Добавьте DNS-записи у своего хостера. Система покажет готовые значения — просто перенесите их в панель домена.</p>
+          </a>
+        </article>
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-3" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 3</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Создайте адрес отправителя</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">Используйте почтовый ящик на подтверждённом домене — например, <span class="font-semibold">news@vashsite.ru</span>.</p>
+          </a>
+        </article>
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-4" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 4</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Подготовьте шаблон письма</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">В разделе «Шаблоны» создайте или импортируйте дизайн письма. Добавьте динамические блоки, CTA и брендовые цвета.</p>
+          </a>
+        </article>
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-5" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 5</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Соберите список контактов</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">В разделе «Контакты» создайте список и импортируйте адреса получателей. При необходимости используйте CSV.</p>
+          </a>
+        </article>
+        <article class="step-card bg-white rounded-2xl p-6">
+          <a href="#detail-step-6" class="step-card-link">
+            <p class="text-sm text-[#6b7a99] mb-2 uppercase tracking-widest">Шаг 6</p>
+            <h3 class="text-xl font-semibold text-[#111827] mb-3">Создайте рассылку</h3>
+            <p class="text-[#4b5563] text-base leading-relaxed">Перейдите в «Рассылки», выберите шаблон и список контактов, отправьте тест и запланируйте запуск.</p>
+          </a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Detailed instructions -->
+  <section class="px-6 md:px-20 pb-16">
+    <div class="max-w-5xl mx-auto space-y-10">
+      <article id="detail-step-1" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">01</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Настройка аутентификации</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Добавьте домен</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">Укажите домен вашей компании (например, <span class="font-semibold">vashsite.ru</span>), чтобы письма проходили проверку SPF, DKIM и DMARC. В настройках доменов система подскажет, какие параметры нужно подтвердить.</p>
+        <ul class="text-[#374151] space-y-2 list-disc list-inside">
+          <li>Откройте «Настройки → Адреса отправителей → Домены».</li>
+          <li>Нажмите «Добавить домен» и введите адрес без https/http.</li>
+          <li>Сохраните — появятся инструкции по DNS.</li>
+        </ul>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для изображения домена
+        </div>
+      </article>
+
+      <article id="detail-step-2" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">02</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Подтверждение владения</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Добавьте DNS-записи</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">Скопируйте TXT-записи и добавьте их в панели управления доменом. Это подтвердит, что вы владеете адресом и можете слать почту от его имени.</p>
+        <ol class="list-decimal list-inside space-y-2 text-[#374151]">
+          <li>Зайдите в панель домена у вашего хостера или регистратора.</li>
+          <li>Создайте TXT-записи с указанными именами и значениями.</li>
+          <li>Подождите 5–30 минут и нажмите «Проверить» в vashsender.</li>
+        </ol>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для скриншота DNS
+        </div>
+      </article>
+
+      <article id="detail-step-3" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">03</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Отправитель</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Создайте адрес</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">Используйте корпоративную почту и создайте ящик на подтверждённом домене. Например, <span class="font-semibold">newsletter@вашдомен.ru</span>.</p>
+        <p class="text-[#4b5563] leading-relaxed">Во вкладке отправителей укажите имя (которое увидят получатели) и адрес. Система свяжет домен и отправителя автоматически.</p>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для создания отправителя
+        </div>
+      </article>
+
+      <article id="detail-step-4" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">04</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Контент</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Создайте шаблон</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">Перейдите в раздел «Шаблоны» и соберите письмо из блоков: заголовок, изображение, текст, кнопки. Используйте фирменные цвета и адаптивный layout.</p>
+        <p class="text-[#4b5563] leading-relaxed">Храните несколько шаблонов: промо, новости, триггеры. Это ускорит запуск новых кампаний.</p>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для конструктора шаблона
+        </div>
+      </article>
+
+      <article id="detail-step-5" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">05</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Аудитория</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Создайте список контактов</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">Зайдите в раздел «Контакты» и создайте новый список. Добавьте email-адреса вручную или импортируйте CSV. Можно разбивать аудиторию по тегам и сегментам.</p>
+        <p class="text-[#4b5563] leading-relaxed">После создания списка откройте его и убедитесь, что все контакты активны.</p>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для списка контактов
+        </div>
+      </article>
+
+      <article id="detail-step-6" class="bg-white rounded-3xl shadow-lg p-8">
+        <div class="flex items-center gap-4 mb-4">
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#e0e7ff] text-[#4c1d95] font-bold text-xl">06</span>
+          <div>
+            <p class="text-sm text-[#6b7a99] uppercase">Запуск кампании</p>
+            <h3 class="text-2xl font-bold text-[#111827]">Настройте и отправьте рассылку</h3>
+          </div>
+        </div>
+        <p class="text-[#4b5563] leading-relaxed mb-4">В разделе «Рассылки» выберите шаблон, отправителя и список. Проверьте тему письма, предпросмотр и отправьте тест себе.</p>
+        <ul class="text-[#374151] list-disc list-inside space-y-2">
+          <li>Планируйте запуск на оптимальное время.</li>
+          <li>Следите за показателями доставки и вовлечения.</li>
+          <li>При необходимости используйте автоповторы и сегментацию.</li>
+        </ul>
+        <div class="placeholder-frame h-44 flex items-center justify-center text-[#1877ff] text-sm font-semibold mt-6">
+          Placeholder для сценария запуска
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="px-6 md:px-20 pb-24">
+    <div class="max-w-5xl mx-auto relative overflow-hidden rounded-3xl gradient-bg text-white px-8 py-12 md:px-16 md:py-16">
+      <div class="absolute inset-0 section-divider"></div>
+      <div class="relative z-10">
+        <p class="text-sm uppercase tracking-widest text-white/80 mb-3">готовы начать?</p>
+        <h2 class="text-3xl md:text-4xl font-semibold mb-4">Создайте рассылку за 15 минут</h2>
+        <p class="text-lg text-white/90 mb-8 max-w-2xl">Регистрация бесплатна — вы получаете 200 подписчиков и неограниченное количество писем, чтобы протестировать платформу.</p>
+        <div class="flex flex-wrap gap-4">
+          <a href="/accounts/signup/" class="bg-white text-[#1877ff] font-semibold rounded-xl px-6 py-3 hover:bg-gray-100 transition">Попробовать бесплатно</a>
+          <a href="/accounts/login/" class="text-white/90 font-semibold flex items-center gap-2 hover:text-white transition">У меня уже есть аккаунт <i class="fa-solid fa-arrow-right-long"></i></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-white pt-12 pb-6 border-t border-gray-100">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-8">
+        <div class="flex items-center mb-4 md:mb-0">
+          <svg width="24" height="24" fill="none" class="mr-2" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="6" width="20" height="12" rx="3" stroke="#1877ff" stroke-width="2"/>
+            <path d="M2 6l10 8L22 6" stroke="#1877ff" stroke-width="2"/>
+          </svg>
+          <span class="text-xl font-bold text-[#222a38]">vashsender</span>
+        </div>
+        <div class="flex flex-wrap gap-6 text-[#6b7a99] text-sm">
+          <a href="/legal/license/" class="hover:text-[#1877ff] transition">Лицензионное соглашение</a>
+          <a href="/legal/privacy/" class="hover:text-[#1877ff] transition">Политика конфиденциальности</a>
+          <a href="/legal/antispam/" class="hover:text-[#1877ff] transition">АнтиСпам соглашение</a>
+        </div>
+      </div>
+      <div class="flex flex-col md:flex-row md:justify-between md:items-center text-sm text-[#6b7a99]">
+        <div class="mb-2 md:mb-0">
+          <a href="mailto:support@vashsender.ru" class="text-[#6b7a99] hover:text-[#1877ff] transition">support@vashsender.ru</a>
+        </div>
+        <div class="flex items-center gap-1">
+          <span>Сделано с</span>
+          <i class="fa-solid fa-heart text-red-500"></i>
+          <span>в <a href="https://monocode.app/" target="_blank" class="text-[#6b7a99] hover:text-[#1877ff] transition">monocode</a></span>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const toggle = document.getElementById('mobile-nav-toggle');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const iconOpen = document.getElementById('icon-open');
+    const iconClose = document.getElementById('icon-close');
+
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const isHidden = mobileMenu.classList.contains('hidden');
+        mobileMenu.classList.toggle('hidden');
+        iconOpen.classList.toggle('hidden');
+        iconClose.classList.toggle('hidden');
+        toggle.setAttribute('aria-label', isHidden ? 'Закрыть меню' : 'Открыть меню');
+      });
+    }
+  </script>
+</body>
+</html>

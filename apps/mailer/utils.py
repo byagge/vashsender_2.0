@@ -2,6 +2,8 @@ import re
 import dns.resolver
 import requests
 import socket
+from typing import Dict, Optional, Tuple
+
 from .models import Contact
 
 # Более строгое регулярное выражение для email
@@ -61,6 +63,56 @@ ALLOWLIST_DOMAINS = {
     'mail-tester.com', 'mail-tester.net', 'mail-tester.org', 'mail-tester.ru',
     'vashsender.ru', 'protonmail.ch', 'tutanota.de', 'tuta.io', 'tutamail.com',
 }
+
+
+def get_contact_quota(user) -> Dict[str, Optional[int]]:
+    """
+    Возвращает информацию о лимите контактов пользователя:
+    - limit: максимально допустимое количество контактов (0 = неограниченно)
+    - total: текущее количество контактов во всех списках пользователя
+    - remaining: сколько контактов можно добавить (None = неограниченно)
+    - plan_title: название тарифа
+    """
+    if not user:
+        return {'limit': 0, 'total': 0, 'remaining': None, 'plan_title': None}
+
+    plan = getattr(user, 'current_plan', None)
+    limit = int(getattr(plan, 'subscribers', 0) or 0)
+    total_contacts = Contact.objects.filter(contact_list__owner=user).count()
+    remaining = None if limit == 0 else max(limit - total_contacts, 0)
+
+    return {
+        'limit': limit,
+        'total': total_contacts,
+        'remaining': remaining,
+        'plan_title': getattr(plan, 'title', None)
+    }
+
+
+def can_add_contacts(user, amount: int = 1) -> Tuple[bool, Dict[str, Optional[int]]]:
+    """
+    Проверяет, можно ли добавить указанное количество контактов.
+    Возвращает (bool, quota_info)
+    """
+    quota = get_contact_quota(user)
+    limit = quota.get('limit') or 0
+    if limit == 0:
+        return True, quota
+
+    remaining = quota.get('remaining') or 0
+    return remaining >= max(amount, 0), quota
+
+
+def format_quota_error(quota: Dict[str, Optional[int]]) -> str:
+    """
+    Возвращает человекочитаемое сообщение об исчерпании лимита контактов.
+    """
+    limit = quota.get('limit') or 0
+    plan_title = quota.get('plan_title') or 'текущего тарифа'
+    base_message = f'Достигнут лимит контактов тарифа "{plan_title}".'
+    if limit:
+        base_message = f'Достигнут лимит контактов ({limit}) тарифа "{plan_title}".'
+    return base_message + ' Удалите лишние контакты или обновите тариф, чтобы продолжить.'
 
 def load_disposable_domains():
     """
