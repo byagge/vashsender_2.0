@@ -280,11 +280,11 @@
             <div class="relative">
               <!-- Filter icon -->
               <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 4h18M6 12h12M10 20h4"/></svg>
-              <select x-model="category" class="pl-12 pr-8 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 shadow-sm appearance-none cursor-pointer">
+              <!-- <select x-model="category" class="pl-12 pr-8 py-4 bg-white border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-gray-700 shadow-sm appearance-none cursor-pointer">
                 <template x-for="cat in ['all', ...new Set(templates.map(t=>t.category))]" :key="cat">
                   <option :value="cat" x-text="cat==='all'?'Категории':cat"></option>
                 </template>
-              </select>
+              </select> -->
             </div>
           </div>
 
@@ -354,7 +354,7 @@
                 <div class="p-6">
                   <div class="flex items-start justify-between mb-3">
                     <h3 class="text-xl font-bold text-gray-800 group-hover:text-blue-600 transition-colors duration-300" x-text="tpl.name"></h3>
-                    <span class="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 text-xs font-semibold rounded-full" x-text="tpl.category"></span>
+                    <!-- <span class="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 text-xs font-semibold rounded-full" x-text="tpl.category"></span> -->
                   </div>
                   <p class="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed" x-text="truncate(tpl.content, 120)"></p>
                   <div class="flex items-center justify-between text-xs text-gray-500">
@@ -646,57 +646,109 @@
         category: 'all',
         saveTimeout: null,
         editorReady: false,
+        editorInitPromise: null,
+        editorScriptPromise: null,
+        editorBootstrapStarted: false,
+        needsEditorSync: true,
         isAdmin: {% if is_admin %}true{% else %}false{% endif %},
         showImageGallery: false,
         userImages: [],
         loadingImages: false,
 
         async init() {
+          this.bootstrapEditor();
           await this.loadTemplates();
           this.$watch('editMode', (value) => {
             if (value === 'visual') {
-              setTimeout(() => {
-                this.initEditor();
-              }, 100);
+              this.needsEditorSync = true;
+              this.syncEditorContentToVisual();
+            } else if (value === 'html' && globalEditor) {
+              this.current.content = globalEditor.getData();
             }
           });
         },
 
-        async initEditor() {
+        bootstrapEditor() {
+          if (this.editorBootstrapStarted) return;
+          this.editorBootstrapStarted = true;
+          this.ensureEditorAssets().catch((err) => console.warn('CKEditor preload failed', err));
+          Promise.resolve()
+            .then(() => this.syncEditorContentToVisual())
+            .catch((err) => console.warn('CKEditor bootstrap sync failed', err));
+        },
+
+        async ensureEditorAssets() {
+          if (window.DecoupledEditor) return;
+          if (!this.editorScriptPromise) {
+            this.editorScriptPromise = this.loadCKEditor().catch((err) => {
+              this.editorScriptPromise = null;
+              throw err;
+            });
+          }
+          await this.editorScriptPromise;
+        },
+
+        async syncEditorContentToVisual(force = false) {
+          if (!this.current) return;
+          if (!force && !this.needsEditorSync && this.editorReady) {
+            return;
+          }
           try {
-            console.log('=== Editor Initialization Start ===');
-            
+            const editor = await this.initEditor({ force });
+            if (!editor) return;
+            const desired = this.current.content || '';
+            if (force || editor.getData() !== desired) {
+              editor.setData(desired);
+            }
+            this.needsEditorSync = false;
+            const previewContainer = document.querySelector('.preview-content');
+            if (previewContainer) {
+              previewContainer.innerHTML = desired;
+            }
+          } catch (err) {
+            console.error('Failed to sync editor content:', err);
+          }
+        },
+
+        async initEditor({ force = false } = {}) {
+          try {
+            await this.ensureEditorAssets();
+            await this.$nextTick();
+
             const editorContainer = document.querySelector('#editor-container');
             const toolbarContainer = document.querySelector('#toolbar-container');
-            
+
             if (!editorContainer || !toolbarContainer) {
               console.error('Editor or toolbar container not found!');
-              return;
+              return null;
             }
 
             if (!window.DecoupledEditor) {
-              console.error('DecoupledEditor not found in window object!');
-              await this.loadCKEditor();
-              if (!window.DecoupledEditor) {
-                throw new Error('Failed to load CKEditor');
-              }
+              throw new Error('CKEditor assets are not available');
             }
 
-            // Уничтожаем существующий редактор если он есть
-            if (globalEditor) {
-              console.log('Destroying existing editor...');
-              await globalEditor.destroy();
+            if (this.editorInitPromise) {
+              await this.editorInitPromise;
+              return globalEditor;
+            }
+
+            if (globalEditor && !force) {
+              return globalEditor;
+            }
+
+            if (globalEditor && force) {
+              try {
+                await globalEditor.destroy();
+              } catch (destroyError) {
+                console.warn('Failed to destroy previous editor instance', destroyError);
+              }
               globalEditor = null;
             }
 
-            // Очищаем контейнеры
             editorContainer.innerHTML = '';
             toolbarContainer.innerHTML = '';
 
-            try {
-              console.log('Creating new editor instance...');
-              
-              // Создаем новый экземпляр редактора
+            const createEditor = async () => {
               globalEditor = await window.DecoupledEditor.create(editorContainer, {
                 toolbar: {
                   items: [
@@ -826,23 +878,13 @@
                 language: 'ru'
               });
 
-              // Перемещаем панель инструментов в нужное место
               toolbarContainer.appendChild(globalEditor.ui.view.toolbar.element);
 
-              console.log('Editor instance created successfully');
-
-              // Устанавливаем начальное содержимое
-              if (this.current && this.current.content) {
-                console.log('Setting initial content...');
-                globalEditor.setData(this.current.content);
-              }
-
-              // Настраиваем обработку контента для превью
               globalEditor.model.document.on('change:data', () => {
                 const data = globalEditor.getData();
                 if (this.current) {
                   this.current.content = data;
-                  // Обновляем превью с правильными стилями
+                  this.needsEditorSync = false;
                   const previewContainer = document.querySelector('.preview-content');
                   if (previewContainer) {
                     previewContainer.innerHTML = data;
@@ -852,14 +894,19 @@
               });
 
               this.editorReady = true;
-              console.log('Editor initialization completed successfully');
-            } catch (error) {
-              console.error('Error creating editor instance:', error);
-              throw error;
+              return globalEditor;
+            };
+
+            this.editorInitPromise = createEditor();
+            try {
+              return await this.editorInitPromise;
+            } finally {
+              this.editorInitPromise = null;
             }
           } catch (error) {
             console.error('Editor initialization failed:', error);
             this.error = 'Ошибка инициализации редактора: ' + error.message;
+            return null;
           }
         },
 
@@ -965,10 +1012,8 @@
             this.view = 'editor';
             this.editMode = 'visual';
             this.loading = false;
-            
-            setTimeout(() => {
-              this.initEditor();
-            }, 100);
+            this.needsEditorSync = true;
+            this.syncEditorContentToVisual();
           } catch (e) {
             this.error = e.message || 'Ошибка при загрузке шаблона';
             this.loading = false;
@@ -998,16 +1043,20 @@
           this.view = 'editor';
           this.editMode = 'visual';
           
-          setTimeout(() => {
-            this.initEditor();
-          }, 100);
+          this.needsEditorSync = true;
+          this.syncEditorContentToVisual();
         },
 
         onChange(field, value) {
-          if (this.current) {
-            this.current[field] = value;
-            this.autoSave();
+          if (!this.current) return;
+          this.current[field] = value;
+          if (field === 'content') {
+            this.needsEditorSync = true;
+            if (this.editMode === 'visual') {
+              this.syncEditorContentToVisual();
+            }
           }
+          this.autoSave();
         },
 
         autoSave() {
