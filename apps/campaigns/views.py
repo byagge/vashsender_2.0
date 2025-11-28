@@ -284,7 +284,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 try:
                     print("Starting Celery task...")
                     task = send_campaign.apply_async(
-                        args=[str(campaign.id)],
+                        args=[campaign.id],
                         kwargs={'skip_moderation': skip_moderation},
                         queue='campaigns',
                         countdown=1,
