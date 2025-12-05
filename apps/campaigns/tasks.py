@@ -53,6 +53,32 @@ def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_
     return progress
 
 
+def mark_contact_as_invalid(contact, reason: str = ''):
+    """
+    Переводит контакт в статус INVALID, чтобы больше не пытаться отправлять на него письма.
+    """
+    try:
+        from apps.mailer.models import Contact as MailerContact
+        if contact.status != MailerContact.INVALID:
+            contact.status = MailerContact.INVALID
+            contact.save(update_fields=['status'])
+            if getattr(settings, 'EMAIL_DEBUG', False):
+                print(f"Contact {contact.email} marked as INVALID. Reason: {reason}")
+    except Exception as exc:
+        print(f"Could not mark contact {getattr(contact, 'email', 'unknown')} as invalid: {exc}")
+
+
+def decrement_campaign_total_if_needed(campaign_id: str):
+    """
+    Уменьшаем общее количество писем в кэше прогресса, если какой-то адрес пришлось исключить.
+    """
+    cache_key = f'campaign_progress_{campaign_id}'
+    progress = cache.get(cache_key)
+    if progress and progress.get('total') is not None:
+        new_total = max(int(progress.get('total', 0)) - 1, 0)
+        update_campaign_progress_cache(campaign_id, total=new_total)
+
+
 class SMTPConnectionPool:
     """Пул SMTP соединений для эффективной отправки писем"""
     
@@ -660,10 +686,12 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             # Проверяем, нужно ли обновить статус на "sent"
             total_sent = CampaignRecipient.objects.filter(
                 campaign_id=campaign_id, 
-                is_sent=True
+                is_sent=True,
+                contact__status=MailerContact.VALID
             ).count()
             total_recipients = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id
+                campaign_id=campaign_id,
+                contact__status=MailerContact.VALID
             ).count()
             
             # Проверяем, сколько батчей еще выполняется
@@ -704,10 +732,12 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             # Финальная проверка статистики
             total_sent = CampaignRecipient.objects.filter(
                 campaign_id=campaign_id, 
-                is_sent=True
+                is_sent=True,
+                contact__status=MailerContact.VALID
             ).count()
             total_recipients = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id
+                campaign_id=campaign_id,
+                contact__status=MailerContact.VALID
             ).count()
             
             print(f"Final statistics after waiting: total_recipients={total_recipients}, total_sent={total_sent}")
@@ -946,14 +976,17 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         # Проверяем статистику по всем получателям кампании
         total_sent = CampaignRecipient.objects.filter(
             campaign_id=campaign_id, 
-            is_sent=True
+            is_sent=True,
+            contact__status=MailerContact.VALID
         ).count()
         total_failed = CampaignRecipient.objects.filter(
             campaign_id=campaign_id, 
-            is_sent=False
+            is_sent=False,
+            contact__status=MailerContact.VALID
         ).count()
         total_recipients = CampaignRecipient.objects.filter(
-            campaign_id=campaign_id
+            campaign_id=campaign_id,
+            contact__status=MailerContact.VALID
         ).count()
         
         print(f"Campaign statistics: total_recipients={total_recipients}, total_sent={total_sent}, total_failed={total_failed}")
@@ -1049,6 +1082,41 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         
         campaign = Campaign.objects.get(id=campaign_id)
         contact = Contact.objects.get(id=contact_id)
+        
+        def record_failure(reason: str = '', mark_invalid: bool = False):
+            """
+            Фиксируем неудачную отправку и при необходимости помечаем контакт как недействительный.
+            """
+            try:
+                with transaction.atomic():
+                    recipient, created = CampaignRecipient.objects.get_or_create(
+                        campaign=campaign,
+                        contact=contact,
+                        defaults={'is_sent': False}
+                    )
+                    if not created and recipient.is_sent:
+                        recipient.is_sent = False
+                        recipient.save(update_fields=['is_sent'])
+                    
+                    tracking, tracking_created = EmailTracking.objects.get_or_create(
+                        campaign=campaign,
+                        contact=contact,
+                        defaults={
+                            'tracking_id': f"{campaign_id}_{contact_id}_{int(time.time())}",
+                            'bounced_at': timezone.now(),
+                            'bounce_reason': reason
+                        }
+                    )
+                    if not tracking_created:
+                        tracking.bounced_at = timezone.now()
+                        tracking.bounce_reason = reason
+                        tracking.save(update_fields=['bounced_at', 'bounce_reason'])
+                
+                if mark_invalid:
+                    mark_contact_as_invalid(contact, reason)
+                    decrement_campaign_total_if_needed(campaign_id)
+            except Exception as exc:
+                print(f"Error recording failed delivery for {getattr(contact, 'email', 'unknown')}: {exc}")
         # Пропускаем невалидные адреса
         try:
             from apps.mailer.models import Contact as MailerContact
@@ -1345,6 +1413,23 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             'execution_time': execution_time
         }
         
+    except (smtplib.SMTPRecipientsRefused, smtplib.SMTPDataError, smtplib.SMTPResponseException) as exc:
+        # Постоянные ошибки адреса - сразу помечаем контакт как недействительный и не ретраим
+        reason = f"SMTP hard failure: {exc}"
+        print(reason)
+        if smtp_connection:
+            try:
+                smtp_pool.return_connection(smtp_connection)
+            except Exception:
+                pass
+        record_failure(reason, mark_invalid=True)
+        return {
+            'success': False,
+            'invalidated': True,
+            'reason': str(exc),
+            'email': contact.email if 'contact' in locals() else None
+        }
+    
     except TimeoutError as e:
         print(f"Timeout error in send_single_email task: {e}")
         # Возвращаем соединение в пул в случае ошибки
@@ -1365,42 +1450,18 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             except:
                 pass
         
-        # Создаем запись об ошибке
-        try:
-            if 'campaign' in locals() and 'contact' in locals():
-                with transaction.atomic():
-                    # Создаем CampaignRecipient
-                    recipient, created = CampaignRecipient.objects.get_or_create(
-                        campaign=campaign,
-                        contact=contact,
-                        defaults={'is_sent': False}
-                    )
-                    
-                    if not created:
-                        recipient.is_sent = False
-                        recipient.save(update_fields=['is_sent'])
-                    
-                    # Создаем EmailTracking для статистики (помечаем как отказ)
-                    tracking, tracking_created = EmailTracking.objects.get_or_create(
-                        campaign=campaign,
-                        contact=contact,
-                        defaults={
-                            'tracking_id': tracking_id if 'tracking_id' in locals() else f"{campaign_id}_{contact_id}_{int(time.time())}",
-                            'bounced_at': timezone.now(),
-                            'bounce_reason': str(exc)
-                        }
-                    )
-                    
-                    if not tracking_created:
-                        # Если запись уже существует, обновляем время отказа
-                        tracking.bounced_at = timezone.now()
-                        tracking.bounce_reason = str(exc)
-                        tracking.save(update_fields=['bounced_at', 'bounce_reason'])
-                
-                print(f"Created CampaignRecipient and EmailTracking: campaign_id={campaign_id}, contact_id={contact_id}, is_sent=False")
-        except Exception as e:
-            print(f"Error creating CampaignRecipient record: {e}")
+        # Если уже несколько попыток сделали — считаем адрес проблемным, помечаем INVALID и не ретраим бесконечно
+        if self.request.retries >= 2:
+            record_failure(str(exc), mark_invalid=True)
+            return {
+                'success': False,
+                'invalidated': True,
+                'reason': str(exc),
+                'email': contact.email if 'contact' in locals() else None
+            }
         
+        # Создаем запись об ошибке и ставим на повтор
+        record_failure(str(exc), mark_invalid=False)
         raise self.retry(exc=exc, countdown=60, max_retries=3)
 
 
@@ -1414,6 +1475,7 @@ def auto_fix_stuck_campaigns(self):
     from datetime import timedelta
     from django.core.cache import cache
     from celery.result import AsyncResult
+    from apps.mailer.models import Contact as MailerContact
     
     print(f"[{timezone.now()}] Starting automatic fix of stuck campaigns...")
     
@@ -1447,10 +1509,14 @@ def auto_fix_stuck_campaigns(self):
             # Проверяем, сколько писем было отправлено
             sent_count = CampaignRecipient.objects.filter(
                 campaign=campaign, 
-                is_sent=True
+                is_sent=True,
+                contact__status=MailerContact.VALID
             ).count()
             
-            total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+            total_count = CampaignRecipient.objects.filter(
+                campaign=campaign,
+                contact__status=MailerContact.VALID
+            ).count()
             
             print(f"  Statistics: {sent_count}/{total_count} emails sent")
             
@@ -1506,6 +1572,7 @@ def cleanup_stuck_campaigns(self):
     from django.utils import timezone
     from datetime import timedelta
     from django.core.cache import cache
+    from apps.mailer.models import Contact as MailerContact
     
     print(f"[{timezone.now()}] Starting automatic cleanup of stuck campaigns...")
     
@@ -1527,10 +1594,14 @@ def cleanup_stuck_campaigns(self):
             # Проверяем, сколько писем было отправлено
             sent_count = CampaignRecipient.objects.filter(
                 campaign=campaign, 
-                is_sent=True
+                is_sent=True,
+                contact__status=MailerContact.VALID
             ).count()
             
-            total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+            total_count = CampaignRecipient.objects.filter(
+                campaign=campaign,
+                contact__status=MailerContact.VALID
+            ).count()
             
             # Определяем финальный статус
             if sent_count > 0:
@@ -1574,6 +1645,7 @@ def monitor_campaign_progress(self):
     from datetime import timedelta
     from django.core.cache import cache
     from celery.result import AsyncResult
+    from apps.mailer.models import Contact as MailerContact
     
     print(f"[{timezone.now()}] Starting campaign progress monitoring...")
     
@@ -1590,9 +1662,13 @@ def monitor_campaign_progress(self):
                 print(f"Campaign {campaign.id} has no task_id, evaluating delivery stats before marking status")
                 sent_count = CampaignRecipient.objects.filter(
                     campaign=campaign,
-                    is_sent=True
+                    is_sent=True,
+                    contact__status=MailerContact.VALID
                 ).count()
-                total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+                total_count = CampaignRecipient.objects.filter(
+                    campaign=campaign,
+                    contact__status=MailerContact.VALID
+                ).count()
                 if sent_count > 0:
                     campaign.status = Campaign.STATUS_SENT
                     campaign.save(update_fields=['status'])
@@ -1612,10 +1688,14 @@ def monitor_campaign_progress(self):
                 # Проверяем количество отправленных писем
                 sent_count = CampaignRecipient.objects.filter(
                     campaign=campaign, 
-                    is_sent=True
+                    is_sent=True,
+                    contact__status=MailerContact.VALID
                 ).count()
         
-                total_count = CampaignRecipient.objects.filter(campaign=campaign).count()
+                total_count = CampaignRecipient.objects.filter(
+                    campaign=campaign,
+                    contact__status=MailerContact.VALID
+                ).count()
                 
                 if sent_count > 0:
                     # Если хоть что-то доставлено/отправлено — это SENT, не FAILED
