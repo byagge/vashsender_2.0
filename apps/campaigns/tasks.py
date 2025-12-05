@@ -993,32 +993,45 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         update_campaign_progress_cache(campaign_id, total=total_recipients or len(contact_ids), sent=total_sent)
         
         # Обновляем статус кампании
-        if total_recipients > 0 and total_sent >= total_recipients:
-            campaign.status = Campaign.STATUS_SENT
-            campaign.sent_at = timezone.now()
-            campaign.celery_task_id = None
-            campaign.failure_reason = None
-            Campaign.objects.filter(id=campaign_id).update(
-                status=campaign.status,
-                sent_at=campaign.sent_at,
-                celery_task_id=None,
-                failure_reason=None
-            )
-            cache.delete(f"campaign_{campaign_id}")
-            print(f"Campaign {campaign_id} marked as SENT ({total_sent}/{total_recipients})")
-        elif total_recipients > 0 and (total_sent + total_failed) >= total_recipients:
-            campaign.status = Campaign.STATUS_FAILED
-            campaign.sent_at = timezone.now()
-            campaign.celery_task_id = None
-            campaign.failure_reason = campaign.failure_reason or 'some recipients failed to send'
-            Campaign.objects.filter(id=campaign_id).update(
-                status=campaign.status,
-                sent_at=campaign.sent_at,
-                celery_task_id=None,
-                failure_reason=campaign.failure_reason
-            )
-            cache.delete(f"campaign_{campaign_id}")
-            print(f"Campaign {campaign_id} marked as FAILED (sent {total_sent}/{total_recipients})")
+        if total_recipients > 0:
+            if total_sent >= total_recipients:
+                campaign.status = Campaign.STATUS_SENT
+                campaign.sent_at = timezone.now()
+                campaign.celery_task_id = None
+                campaign.failure_reason = None
+                Campaign.objects.filter(id=campaign_id).update(
+                    status=campaign.status,
+                    sent_at=campaign.sent_at,
+                    celery_task_id=None,
+                    failure_reason=None
+                )
+                cache.delete(f"campaign_{campaign_id}")
+                print(f"Campaign {campaign_id} marked as SENT ({total_sent}/{total_recipients})")
+            elif total_sent > 0:
+                # Если что-то отправлено, считаем кампанию успешной, даже при частичных ошибках
+                campaign.status = Campaign.STATUS_SENT
+                campaign.sent_at = timezone.now()
+                campaign.celery_task_id = None
+                Campaign.objects.filter(id=campaign_id).update(
+                    status=campaign.status,
+                    sent_at=campaign.sent_at,
+                    celery_task_id=None
+                )
+                cache.delete(f"campaign_{campaign_id}")
+                print(f"Campaign {campaign_id} marked as SENT with partial delivery ({total_sent}/{total_recipients})")
+            else:
+                campaign.status = Campaign.STATUS_FAILED
+                campaign.sent_at = timezone.now()
+                campaign.celery_task_id = None
+                campaign.failure_reason = campaign.failure_reason or 'no emails sent'
+                Campaign.objects.filter(id=campaign_id).update(
+                    status=campaign.status,
+                    sent_at=campaign.sent_at,
+                    celery_task_id=None,
+                    failure_reason=campaign.failure_reason
+                )
+                cache.delete(f"campaign_{campaign_id}")
+                print(f"Campaign {campaign_id} marked as FAILED (no emails sent)")
         else:
             print(f"Not all recipients processed yet: {total_sent + total_failed}/{total_recipients}")
         

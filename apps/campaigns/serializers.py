@@ -10,14 +10,17 @@ from apps.campaigns.models import Campaign as CampaignModel
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
-        fields = ['id', 'email', 'first_name', 'last_name', 'phone', 'created_at']
+        # В модели Contact есть поля email, status, added_date и связь со списком
+        fields = ['id', 'email', 'status', 'added_date', 'contact_list']
+        read_only_fields = ['id', 'added_date', 'contact_list']
 
 class ContactListSerializer(serializers.ModelSerializer):
     contacts_count = serializers.SerializerMethodField()
     
     class Meta:
         model = ContactList
-        fields = ['id', 'name', 'description', 'contacts_count', 'created_at']
+        fields = ['id', 'name', 'contacts_count', 'created_at']
+        read_only_fields = ['id', 'created_at']
     
     def get_contacts_count(self, obj):
         return obj.contacts.count()
