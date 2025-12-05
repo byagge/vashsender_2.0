@@ -35,12 +35,17 @@ except ImportError:
 PROGRESS_CACHE_TIMEOUT = 60 * 60  # 1 hour
 
 
-def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_sent=0):
+def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_sent=0, lock: bool = False, force: bool = False):
     """
     Обновляет кэш прогресса кампании для быстрого отображения на фронте.
     """
     cache_key = f'campaign_progress_{campaign_id}'
-    progress = cache.get(cache_key) or {'total': 0, 'sent': 0}
+    progress = cache.get(cache_key) or {'total': 0, 'sent': 0, 'locked': False}
+
+    # Если кэш зафиксирован (кампания уже завершена), не меняем значения,
+    # кроме случая явного принудительного обновления.
+    if progress.get('locked') and not force:
+        return progress
     
     if total is not None:
         progress['total'] = max(int(total), 0)
@@ -48,6 +53,9 @@ def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_
         progress['sent'] = max(int(sent), 0)
     if delta_sent:
         progress['sent'] = max(progress.get('sent', 0) + int(delta_sent), 0)
+
+    if lock:
+        progress['locked'] = True
     
     cache.set(cache_key, progress, PROGRESS_CACHE_TIMEOUT)
     return progress
@@ -649,129 +657,57 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Продолжаем с другими батчами
                 continue
         
-        # Ждем завершения всех батчей (без жесткого лимита времени)
-        max_wait_time = getattr(settings, 'CAMPAIGN_BATCH_WAIT_TIMEOUT', None)
+        # Короткий контрольный цикл по БД (без ожидания backend результатов)
+        max_wait_time = getattr(settings, 'CAMPAIGN_BATCH_WAIT_TIMEOUT', 120)
         wait_start = time.time()
-        
+
         while True:
-            completed_batches = sum(1 for task in batch_tasks if task.ready())
-            if completed_batches == len(batch_tasks):
-                print(f"All {len(batch_tasks)} batches completed")
-                break
-            
-            print(f"Waiting for batches: {completed_batches}/{len(batch_tasks)} completed")
-            
-            # Обновляем прогресс ожидания
-            self.update_state(
-                state='PROGRESS',
-                meta={
-                    'current': completed_batches,
-                    'total': len(batch_tasks),
-                    'status': f'Ожидание завершения батчей: {completed_batches}/{len(batch_tasks)}',
-                    'timestamp': time.time()
-                }
+            total_sent = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id,
+                is_sent=True,
+                contact__status=MailerContact.VALID
+            ).count()
+            total_recipients = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id,
+                contact__status=MailerContact.VALID
+            ).count()
+
+            update_campaign_progress_cache(
+                campaign_id,
+                total=total_recipients or total_contacts,
+                sent=total_sent
             )
-            
-            time.sleep(10)  # Проверяем каждые 10 секунд
-            
-            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
-                print(f"Reached configured wait timeout ({max_wait_time}s), continuing without waiting for all batches")
+
+            # Если отправили >=50% — сразу помечаем кампанию как SENT
+            if total_recipients > 0 and total_sent >= (total_recipients * 0.5):
+                campaign.refresh_from_db()
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = campaign.sent_at or timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.failure_reason = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+
+                lock_progress = total_sent >= total_recipients
+                update_campaign_progress_cache(
+                    campaign_id,
+                    total=total_recipients or total_contacts,
+                    sent=total_sent,
+                    lock=lock_progress,
+                    force=lock_progress
+                )
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
                 break
-        
-        # Финальная проверка статуса кампании
-        try:
-            campaign.refresh_from_db()
-            print(f"Final campaign status: {campaign.status}")
-            
-            # Проверяем, нужно ли обновить статус на "sent"
-            total_sent = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id, 
-                is_sent=True,
-                contact__status=MailerContact.VALID
-            ).count()
-            total_recipients = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id,
-                contact__status=MailerContact.VALID
-            ).count()
-            
-            # Проверяем, сколько батчей еще выполняется
-            active_batches = 0
-            for batch_task in batch_tasks:
-                try:
-                    if not batch_task.ready():
-                        active_batches += 1
-                except:
-                    pass
-            
-            print(f"Final statistics: total_recipients={total_recipients}, total_sent={total_sent}, active_batches={active_batches}")
-            
-            # Ждем еще немного, если есть активные батчи
-            max_additional_wait = getattr(settings, 'CAMPAIGN_BATCH_ADDITIONAL_WAIT', None)
-            if active_batches > 0 and (max_additional_wait is None or max_additional_wait > 0):
-                print(f"Waiting for {active_batches} active batches to complete...")
-                additional_wait = 0
-                while True:
-                    active_count = sum(1 for task in batch_tasks if not task.ready())
-                    if active_count == 0:
-                        print("All batches completed")
-                        break
-                    time.sleep(10)
-                    additional_wait += 10
-                    
-                    # Обновляем статистику
-                    total_sent = CampaignRecipient.objects.filter(
-                        campaign_id=campaign_id, 
-                        is_sent=True
-                    ).count()
-                    print(f"Progress: {total_sent}/{total_recipients} sent, {active_count} batches still active")
-                    
-                    if max_additional_wait and additional_wait >= max_additional_wait:
-                        print(f"Reached additional wait timeout ({max_additional_wait}s), continuing")
-                        break
-            
-            # Финальная проверка статистики
-            total_sent = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id, 
-                is_sent=True,
-                contact__status=MailerContact.VALID
-            ).count()
-            total_recipients = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id,
-                contact__status=MailerContact.VALID
-            ).count()
-            
-            print(f"Final statistics after waiting: total_recipients={total_recipients}, total_sent={total_sent}")
-            
-            if total_recipients > 0:
-                if total_sent == total_recipients and campaign.status == Campaign.STATUS_SENDING:
-                    print(f"All emails sent, updating campaign status to SENT")
-                    campaign.status = Campaign.STATUS_SENT
-                    campaign.sent_at = timezone.now()
-                    campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
-                elif total_sent > 0 and total_sent < total_recipients:
-                    print(f"Some emails sent: {total_sent}/{total_recipients}, marking as SENT")
-                    campaign.status = Campaign.STATUS_SENT
-                    campaign.sent_at = timezone.now()
-                    campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id'])
-                elif total_sent == 0:
-                    print(f"No emails sent, marking as FAILED")
-                    campaign.status = Campaign.STATUS_FAILED
-                    campaign.failure_reason = campaign.failure_reason or 'no emails sent'
-                    campaign.celery_task_id = None
-                    campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
-            
-            # Очищаем кэш для этой кампании
-            cache_key = f"campaign_{campaign_id}"
-            cache.delete(cache_key)
-            
-        except Exception as e:
-            print(f"Error in final status check: {e}")
-        
+
+            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
+                break
+
+            time.sleep(10)
+
         execution_time = time.time() - start_time
         print(f"Campaign {campaign_id} processing completed in {execution_time:.2f} seconds")
-        
+
         return {
             'campaign_id': campaign_id,
             'total_contacts': total_contacts,
@@ -909,154 +845,113 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 print(f"Ошибка планирования письма для контакта {contact.id}: {str(e)}")
                 continue
         
-        # Ждем завершения всех задач (по умолчанию без таймаута)
-        print(f"Waiting for {len(email_tasks)} email tasks to complete...")
-        max_wait_time = getattr(settings, 'EMAIL_TASK_WAIT_TIMEOUT', None)
+        # Короткий контрольный цикл без зависимости от backend результатов:
+        # измеряем прогресс по БД, а не по AsyncResult, чтобы не застревать.
+        max_wait_time = getattr(settings, 'EMAIL_TASK_WAIT_TIMEOUT', 60)
         wait_start = time.time()
-        completed_tasks = set()
-        
+        total_recipients_cached = update_campaign_progress_cache(
+            campaign_id,
+            total=len(contact_ids),
+            sent=None,
+        ).get('total', len(contact_ids))
+
         while True:
-            # Проверяем статус всех задач
-            for task_result, contact_id in email_tasks:
-                if contact_id in completed_tasks:
-                    continue
-                    
-                try:
-                    if task_result.ready():
-                        completed_tasks.add(contact_id)
-                        try:
-                            result = task_result.get(timeout=1)
-                            if result and isinstance(result, dict) and result.get('success'):
-                                sent_count += 1
-                            else:
-                                failed_count += 1
-                                print(f"Task for contact {contact_id} failed: {result}")
-                        except Exception as e:
-                            failed_count += 1
-                            print(f"Error getting result for contact {contact_id}: {e}")
-                except Exception as e:
-                    print(f"Error checking task status for contact {contact_id}: {e}")
-            
-            # Обновляем прогресс ожидания
-            completed_count = len(completed_tasks)
-            if completed_count % 100 == 0 or completed_count == len(email_tasks):
-                self.update_state(
-                    state='PROGRESS',
-                    meta={
-                        'batch': batch_number,
-                        'total_batches': total_batches,
-                        'current': completed_count,
-                        'total': len(email_tasks),
-                        'status': f'Ожидание завершения: {completed_count}/{len(email_tasks)}',
-                        'sent': sent_count,
-                        'failed': failed_count
-                    }
+            total_sent_db = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id,
+                is_sent=True,
+                contact__status=MailerContact.VALID
+            ).count()
+
+            # Обновляем кэш прогресса (без блокировки)
+            update_campaign_progress_cache(
+                campaign_id,
+                total=total_recipients_cached or len(contact_ids),
+                sent=total_sent_db
+            )
+
+            # Если отправлено >=50% — считаем кампанию успешной
+            if total_recipients_cached > 0 and total_sent_db >= (total_recipients_cached * 0.5):
+                campaign = Campaign.objects.get(id=campaign_id)
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = campaign.sent_at or timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.failure_reason = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+                # При 100% — фиксируем прогресс, чтобы не колебался
+                lock_progress = total_sent_db >= total_recipients_cached
+                update_campaign_progress_cache(
+                    campaign_id,
+                    total=total_recipients_cached,
+                    sent=total_sent_db,
+                    lock=lock_progress,
+                    force=True
                 )
-                print(f"Progress: {completed_count}/{len(email_tasks)} tasks completed, {sent_count} sent, {failed_count} failed")
-            
-            # Если все задачи завершены, выходим
-            if len(completed_tasks) >= len(email_tasks):
-                print(f"All {len(email_tasks)} email tasks completed")
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
                 break
-            
-            time.sleep(5)  # Проверяем каждые 5 секунд
-            
+
+            # Уходим, если время ожидания вышло — задачи продолжат в фоне
             if max_wait_time and (time.time() - wait_start) >= max_wait_time:
-                print(f"Reached configured email task wait timeout ({max_wait_time}s); continuing with remaining tasks in background")
                 break
-        
+
+            time.sleep(5)
+
         # Возвращаем соединение в пул
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
-        
-        # Обновляем статус кампании на основе результатов этого батча
-        campaign = Campaign.objects.get(id=campaign_id)
-        print(f"Current campaign status before update: {campaign.status}")
-        
-        # Проверяем статистику по всем получателям кампании
-        total_sent = CampaignRecipient.objects.filter(
-            campaign_id=campaign_id, 
+
+        # Итоговая статистика по батчу
+        total_sent_final = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
             is_sent=True,
             contact__status=MailerContact.VALID
         ).count()
-        total_failed = CampaignRecipient.objects.filter(
-            campaign_id=campaign_id, 
+        total_failed_final = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
             is_sent=False,
             contact__status=MailerContact.VALID
         ).count()
-        total_recipients = CampaignRecipient.objects.filter(
+        total_recipients_final = CampaignRecipient.objects.filter(
             campaign_id=campaign_id,
             contact__status=MailerContact.VALID
         ).count()
-        
-        print(f"Campaign statistics: total_recipients={total_recipients}, total_sent={total_sent}, total_failed={total_failed}")
-        update_campaign_progress_cache(campaign_id, total=total_recipients or len(contact_ids), sent=total_sent)
-        
-        # Обновляем статус кампании
-        if total_recipients > 0:
-            if total_sent >= total_recipients:
+
+        # Фиксируем прогресс, если достигли 100%
+        lock_progress = total_recipients_final > 0 and total_sent_final >= total_recipients_final
+        update_campaign_progress_cache(
+            campaign_id,
+            total=total_recipients_final or len(contact_ids),
+            sent=total_sent_final,
+            lock=lock_progress,
+            force=lock_progress
+        )
+
+        # Финальное обновление статуса кампании (только улучшение, без понижения)
+        campaign = Campaign.objects.get(id=campaign_id)
+        if campaign.status != Campaign.STATUS_SENT:
+            if total_recipients_final > 0 and total_sent_final >= (total_recipients_final * 0.5):
                 campaign.status = Campaign.STATUS_SENT
-                campaign.sent_at = timezone.now()
+                campaign.sent_at = campaign.sent_at or timezone.now()
                 campaign.celery_task_id = None
                 campaign.failure_reason = None
-                Campaign.objects.filter(id=campaign_id).update(
-                    status=campaign.status,
-                    sent_at=campaign.sent_at,
-                    celery_task_id=None,
-                    failure_reason=None
-                )
-                cache.delete(f"campaign_{campaign_id}")
-                print(f"Campaign {campaign_id} marked as SENT ({total_sent}/{total_recipients})")
-            elif total_sent > 0:
-                # Если что-то отправлено, считаем кампанию успешной, даже при частичных ошибках
-                campaign.status = Campaign.STATUS_SENT
-                campaign.sent_at = timezone.now()
-                campaign.celery_task_id = None
-                Campaign.objects.filter(id=campaign_id).update(
-                    status=campaign.status,
-                    sent_at=campaign.sent_at,
-                    celery_task_id=None
-                )
-                cache.delete(f"campaign_{campaign_id}")
-                print(f"Campaign {campaign_id} marked as SENT with partial delivery ({total_sent}/{total_recipients})")
-            else:
+                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
+            elif total_recipients_final == 0:
                 campaign.status = Campaign.STATUS_FAILED
-                campaign.sent_at = timezone.now()
+                campaign.failure_reason = campaign.failure_reason or 'no valid recipients'
                 campaign.celery_task_id = None
-                campaign.failure_reason = campaign.failure_reason or 'no emails sent'
-                Campaign.objects.filter(id=campaign_id).update(
-                    status=campaign.status,
-                    sent_at=campaign.sent_at,
-                    celery_task_id=None,
-                    failure_reason=campaign.failure_reason
-                )
-                cache.delete(f"campaign_{campaign_id}")
-                print(f"Campaign {campaign_id} marked as FAILED (no emails sent)")
-        else:
-            print(f"Not all recipients processed yet: {total_sent + total_failed}/{total_recipients}")
-        
-        print(f"Batch {batch_number} completed: {sent_count} sent, {failed_count} failed")
-        
-        # Финальная проверка и обновление статуса кампании
-        try:
-            campaign = Campaign.objects.get(id=campaign_id)
-            print(f"Final campaign status after batch {batch_number}: {campaign.status}")
-            
-            # Очищаем кэш для этой кампании
-            cache_key = f"campaign_{campaign_id}"
-            cache.delete(cache_key)
-            
-        except Exception as e:
-            print(f"Error in final campaign status check: {e}")
-        
+                campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
+
         execution_time = time.time() - start_time
-        print(f"Batch {batch_number} processing completed in {execution_time:.2f} seconds")
-        
+        print(f"Batch {batch_number} processing completed in {execution_time:.2f} seconds; total_sent={total_sent_final}/{total_recipients_final}")
+
         return {
             'batch_number': batch_number,
-            'sent': sent_count,
-            'failed': failed_count,
-            'total': len(contacts),
+            'sent': total_sent_final,
+            'failed': total_failed_final,
+            'total': total_recipients_final,
             'execution_time': execution_time
         }
         
@@ -1505,6 +1400,8 @@ def auto_fix_stuck_campaigns(self):
     fixed_count = 0
     for campaign in stuck_campaigns:
         try:
+            if campaign.status == Campaign.STATUS_SENT:
+                continue
             print(f"Fixing stuck campaign: {campaign.name} (ID: {campaign.id})")
             
             # Проверяем task_id
@@ -1602,6 +1499,8 @@ def cleanup_stuck_campaigns(self):
     cleaned_count = 0
     for campaign in stuck_campaigns:
         try:
+            if campaign.status == Campaign.STATUS_SENT:
+                continue
             print(f"Cleaning up stuck campaign: {campaign.name} (ID: {campaign.id})")
             
             # Проверяем, сколько писем было отправлено
@@ -1669,6 +1568,8 @@ def monitor_campaign_progress(self):
     for campaign in sending_campaigns:
         try:
             monitored_count += 1
+            if campaign.status == Campaign.STATUS_SENT:
+                continue
             
             # Проверяем task_id. Не помечаем как failed, если есть отправленные письма
             if not campaign.celery_task_id:

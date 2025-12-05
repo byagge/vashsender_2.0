@@ -8,11 +8,25 @@ from apps.campaigns.models import Campaign, CampaignStats, EmailTracking, Campai
 from apps.campaigns.models import Campaign as CampaignModel
 
 class ContactSerializer(serializers.ModelSerializer):
+    # Дополнительные поля нужны для совместимости со старыми данными/клиентом,
+    # в модели их может не быть — возвращаем их как None и не валимся.
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
-        # В модели Contact есть поля email, status, added_date и связь со списком
-        fields = ['id', 'email', 'status', 'added_date', 'contact_list']
-        read_only_fields = ['id', 'added_date', 'contact_list']
+        fields = ['id', 'email', 'status', 'added_date', 'contact_list', 'first_name', 'last_name', 'phone']
+        read_only_fields = ['id', 'added_date', 'contact_list', 'first_name', 'last_name', 'phone']
+
+    def get_first_name(self, obj):
+        return getattr(obj, 'first_name', None)
+
+    def get_last_name(self, obj):
+        return getattr(obj, 'last_name', None)
+
+    def get_phone(self, obj):
+        return getattr(obj, 'phone', None)
 
 class ContactListSerializer(serializers.ModelSerializer):
     contacts_count = serializers.SerializerMethodField()
