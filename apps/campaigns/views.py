@@ -18,7 +18,7 @@ from django.db import transaction
 from .models import Campaign, CampaignStats, EmailTracking, CampaignRecipient
 from .serializers import CampaignSerializer, CampaignListSerializer
 from apps.billing.models import Plan
-from apps.campaigns.tasks import send_campaign
+from apps.campaigns.tasks import send_campaign, CAMPAIGN_QUEUE
 from django.conf import settings
 
 
@@ -286,7 +286,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                     task = send_campaign.apply_async(
                         args=[campaign.id],
                         kwargs={'skip_moderation': skip_moderation},
-                        queue='campaigns',
+                        queue=CAMPAIGN_QUEUE,
                         countdown=1,
                         expires=1800,
                         retry=True,

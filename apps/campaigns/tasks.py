@@ -22,6 +22,10 @@ from apps.mailer.models import Contact
 from apps.mail_templates.models import EmailTemplate
 from apps.emails.models import SenderEmail
 
+# Centralized queue names with safe fallbacks.
+CAMPAIGN_QUEUE = getattr(settings, 'CAMPAIGN_QUEUE', 'default')
+EMAIL_QUEUE = getattr(settings, 'EMAIL_QUEUE', 'default')
+
 # Добавляем импорт для DKIM подписи
 try:
     import dkim
@@ -369,7 +373,7 @@ def test_celery():
         print("Test Celery task is running!")
     return "Test task completed successfully"
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue='campaigns')
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, queue=CAMPAIGN_QUEUE)
 def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict[str, Any]:
     """
     Основная задача для отправки кампании
@@ -626,7 +630,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 
                 result = send_email_batch.apply_async(
                     args=[campaign_id, [int(c_id) for c_id in batch], i + 1, len(batches)],
-                    queue='email',
+                    queue=EMAIL_QUEUE,
                     countdown=0,
                     expires=1800,  # 30 минут
                     retry=True,
@@ -768,7 +772,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         raise self.retry(exc=exc, countdown=120, max_retries=3)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email')
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue=EMAIL_QUEUE)
 def send_email_batch(self, campaign_id: str, contact_ids: List[int], 
                     batch_number: int, total_batches: int) -> Dict[str, Any]:
     """
@@ -823,7 +827,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 task_result = send_single_email.apply_async(
                     args=[campaign_id, contact.id], 
                     countdown=countdown,
-                    queue='email'
+                    queue=EMAIL_QUEUE
                 )
                 email_tasks.append((task_result, contact.id))
                 
