@@ -1118,7 +1118,8 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             plain_text += f"\n\nС уважением,\n{sender_name}"
         
         # Добавляем блок отписки в текстовую версию
-        plain_text += f"\n\nЕсли вы больше не хотите получать письма, вы можете отписаться по ссылке: {unsubscribe_url}"
+        # ВРЕМЕННО ОТКЛЮЧЕНО
+        # plain_text += f"\n\nЕсли вы больше не хотите получать письма, вы можете отписаться по ссылке: {unsubscribe_url}"
 
         # Ограничиваем длину текста (без удаления блока отписки)
         if len(plain_text) > 2000:
@@ -1244,16 +1245,17 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             """
         
         # Добавляем блок отписки в HTML низ письма
-        unsubscribe_block = f"""
-        <div style=\"margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280;\">
-            Если вы больше не хотите получать подобные письма, 
-            <a href=\"{unsubscribe_url}\" style=\"color:#2563eb;\">отпишитесь по ссылке</a>.
-        </div>
-        """
-        if '</body>' in html_content:
-            html_content = html_content.replace('</body>', f'{unsubscribe_block}</body>')
-        else:
-            html_content += unsubscribe_block
+        # ВРЕМЕННО ОТКЛЮЧЕНО
+        # unsubscribe_block = f"""
+        # <div style=\"margin-top:24px; padding-top:12px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280;\">
+        #     Если вы больше не хотите получать подобные письма, 
+        #     <a href=\"{unsubscribe_url}\" style=\"color:#2563eb;\">отпишитесь по ссылке</a>.
+        # </div>
+        # """
+        # if '</body>' in html_content:
+        #     html_content = html_content.replace('</body>', f'{unsubscribe_block}</body>')
+        # else:
+        #     html_content += unsubscribe_block
 
         html_part = MIMEText(html_content, 'html', 'utf-8')
         msg.attach(html_part)
