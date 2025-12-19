@@ -750,11 +750,17 @@
                         <i data-lucide="alert-circle" class="w-5 h-5 text-blue-600 mr-2"></i>
                         <h4 class="font-semibold text-blue-800">SPF-запись</h4>
                     </div>
-                    <p class="text-sm text-blue-700 mb-3">Добавьте эту TXT-запись в свой DNS:</p>
+                    <p class="text-sm text-blue-700 mb-2">
+                        Добавьте TXT-запись SPF для домена, который вы подключаете к vashsender:
+                    </p>
+                    <p class="text-xs text-blue-700 mb-3">
+                        Имя (host): <span class="font-mono">@</span><br>
+                        Значение:
+                    </p>
                     <div class="bg-white p-3 rounded border flex items-center justify-between">
-                        <code class="text-sm">v=spf1 include:vashsender.ru ~all</code>
+                        <code class="text-sm">v=spf1 include:spf.vashsender.ru ~all</code>
                         <button
-                            @click="copyToClipboard('v=spf1 include:vashsender.ru ~all')"
+                            @click="copyToClipboard('v=spf1 include:spf.vashsender.ru ~all')"
                             class="text-blue-600 hover:text-blue-700"
                             aria-label="Скопировать"
                             title="Скопировать"
@@ -765,6 +771,14 @@
                             </svg>
                         </button>
                     </div>
+                    <p class="text-xs text-blue-600 mt-2">
+                        Для системного домена <span class="font-mono">vashsender.ru</span> в своей DNS-зоне также создайте
+                        TXT-запись <span class="font-mono">spf.vashsender.ru</span> со значением
+                        <span class="font-mono">v=spf1 ip4:146.185.196.123 -all</span>, а для корня
+                        <span class="font-mono">@</span> можно использовать либо
+                        <span class="font-mono">v=spf1 ip4:146.185.196.123 -all</span>, либо
+                        <span class="font-mono">v=spf1 include:spf.vashsender.ru -all</span>.
+                    </p>
                 </div>
                 <div class="bg-green-50 p-4 rounded-lg">
                     <div class="flex items-center justify-between mb-2">
