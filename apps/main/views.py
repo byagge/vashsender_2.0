@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse, FileResponse
+from django.http import JsonResponse, FileResponse, HttpResponseBadRequest
 from django.conf import settings
 import os
+from django.core.mail import send_mail
 from apps.billing.models import Plan, PlanType
 
 # Create your views here.
@@ -47,6 +48,10 @@ def landing_page(request):
         'monocode_css': css_code
     }
     return render(request, 'landing.html', context)
+
+def consultation_page(request):
+    """Публичная страница консультации с дизайном consultation.html"""
+    return render(request, 'consultation.html')
 
 
 def pricing_page(request):
@@ -168,6 +173,27 @@ def purchase_success(request):
 def license_page(request):
     """Страница лицензионного соглашения"""
     return render(request, 'legal/license.html')
+
+def consultation_request(request):
+    """AJAX endpoint: receives JSON {name, phone, email} and emails it to support@vashsender.com"""
+    if request.method != 'POST':
+        return HttpResponseBadRequest('Invalid method')
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        name = data.get('name', '').strip()
+        phone = data.get('phone', '').strip()
+        email_addr = data.get('email', '').strip()
+        if not (name and phone and email_addr):
+            return HttpResponseBadRequest('Missing fields')
+        subject = 'Новая заявка на консультацию'
+        message = f"Имя: {name}\nТелефон: {phone}\nEmail: {email_addr}"
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, ['support@vashsender.com'])
+        return JsonResponse({'success': True})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 def privacy_page(request):
     """Страница политики конфиденциальности"""
