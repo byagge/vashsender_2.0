@@ -241,8 +241,14 @@
           <span>Я соглашаюсь с <a href="/privacy-policy/" class="text-[#1877ff] underline">политикой конфиденциальности</a></span>
         </label>
         <button type="submit" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg px-6 py-3 transition">Отправить</button>
-        <p id="consult-success" class="hidden text-green-600 text-center font-medium">Спасибо! Мы свяжемся с вами в ближайшее время.</p>
       </form>
+      <!-- Success state -->
+      <div id="consult-success-state" class="hidden flex flex-col items-center gap-4 py-12">
+        <i class="fa-solid fa-circle-check text-green-600 text-5xl"></i>
+        <p class="text-xl font-semibold text-[#222a38]">Заявка отправлена!</p>
+        <p class="text-[#6b7a99]">Мы свяжемся с вами в ближайшее время.</p>
+        <button id="close-success" class="bg-[#1877ff] hover:bg-[#125fd1] text-white font-bold rounded-lg px-6 py-3 transition">Закрыть</button>
+      </div>
     </div>
   </div>
 
@@ -943,13 +949,21 @@
         });
         if (res.ok) {
           form.reset();
-          successEl.classList.remove('hidden');
+          form.classList.add('hidden');
+          successState.classList.remove('hidden');
         } else {
           alert('Ошибка отправки. Попробуйте позже.');
         }
       } catch (err) {
         alert('Сетевая ошибка. Попробуйте позже.');
       }
+    });
+
+    // Закрытие успешного состояния
+    closeSuccessBtn.addEventListener('click', () => {
+      successState.classList.add('hidden');
+      form.classList.remove('hidden');
+      close();
     });
   });
 </script>
