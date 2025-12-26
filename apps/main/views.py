@@ -4,7 +4,8 @@ from django.contrib import messages
 from django.http import JsonResponse, FileResponse, HttpResponseBadRequest
 from django.conf import settings
 import os
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from apps.emails.tasks import send_plain_notification_sync, send_plain_notification
 from apps.billing.models import Plan, PlanType
 
 # Create your views here.
@@ -188,7 +189,32 @@ def consultation_request(request):
             return HttpResponseBadRequest('Missing fields')
         subject = 'Новая заявка на консультацию'
         message = f"Имя: {name}\nТелефон: {phone}\nEmail: {email_addr}"
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, ['contact.arix@proton.me'])
+        support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+        sent_ok = False
+        try:
+            send_plain_notification_sync(
+                to_email=support_email,
+                subject=subject,
+                plain_text=message,
+            )
+            sent_ok = True
+        except Exception:
+            try:
+                msg = EmailMultiAlternatives(
+                    subject=subject,
+                    body=message,
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    to=[support_email]
+                )
+                msg.send(fail_silently=False)
+                sent_ok = True
+            except Exception:
+                pass
+        if not sent_ok:
+            try:
+                send_plain_notification.apply_async(args=[support_email, subject, message], queue='email')
+            except Exception:
+                pass
         return JsonResponse({'success': True})
     except Exception as e:
         import traceback; traceback.print_exc()
