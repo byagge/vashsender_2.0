@@ -189,7 +189,7 @@ def consultation_request(request):
             return HttpResponseBadRequest('Missing fields')
         subject = 'Новая заявка на консультацию'
         message = f"Имя: {name}\nТелефон: {phone}\nEmail: {email_addr}"
-        support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+        support_email = getattr(settings, 'SUPPORT_NOTIFICATIONS_EMAIL', 'contact.arix@proton.me')
         sent_ok = False
         try:
             send_plain_notification_sync(
