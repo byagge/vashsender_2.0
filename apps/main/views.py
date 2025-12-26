@@ -188,7 +188,7 @@ def consultation_request(request):
             return HttpResponseBadRequest('Missing fields')
         subject = 'Новая заявка на консультацию'
         message = f"Имя: {name}\nТелефон: {phone}\nEmail: {email_addr}"
-        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, ['support@vashsender.com'])
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, ['contact.arix@proton.me'])
         return JsonResponse({'success': True})
     except Exception as e:
         import traceback; traceback.print_exc()
