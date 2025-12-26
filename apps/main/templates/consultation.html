@@ -917,13 +917,18 @@
     const openBtns = document.querySelectorAll('.open-consult-btn');
     const closeBtn = document.getElementById('close-consult');
     const form = document.getElementById('consult-form');
-    const successEl = document.getElementById('consult-success');
+    const successState = document.getElementById('consult-success-state');
+    const closeSuccessBtn = document.getElementById('close-success');
 
-    function open() { modal.classList.remove('hidden'); }
+    function open() {
+      form.classList.remove('hidden');
+      successState.classList.add('hidden');
+      modal.classList.remove('hidden');
+    }
     function close() { modal.classList.add('hidden'); }
 
     openBtns.forEach(b => b.addEventListener('click', open));
-    closeBtn.addEventListener('click', close);
+    if (closeBtn) closeBtn.addEventListener('click', close);
     modal.addEventListener('click', e => { if (e.target === modal) close(); });
 
     function getCookie(name) {
@@ -960,7 +965,7 @@
     });
 
     // Закрытие успешного состояния
-    closeSuccessBtn.addEventListener('click', () => {
+    if (closeSuccessBtn) closeSuccessBtn.addEventListener('click', () => {
       successState.classList.add('hidden');
       form.classList.remove('hidden');
       close();

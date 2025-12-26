@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, FileResponse, HttpResponseBadRequest
 from django.conf import settings
 import os
@@ -175,6 +176,7 @@ def license_page(request):
     """Страница лицензионного соглашения"""
     return render(request, 'legal/license.html')
 
+@csrf_exempt
 def consultation_request(request):
     """AJAX endpoint: receives JSON {name, phone, email} and emails it to support@vashsender.com"""
     if request.method != 'POST':
