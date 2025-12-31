@@ -187,11 +187,19 @@ def consultation_request(request):
         name = data.get('name', '').strip()
         phone = data.get('phone', '').strip()
         email_addr = data.get('email', '').strip()
-        if not (name and phone and email_addr):
-            return HttpResponseBadRequest('Missing fields')
-        subject = 'Новая заявка на консультацию'
-        message = f"Имя: {name}\nТелефон: {phone}\nEmail: {email_addr}"
-        support_email = 'contact.arix@proton.me'
+        comment = data.get('comment', '').strip()
+        if not name:
+            return HttpResponseBadRequest('Missing name')
+        subject = 'Заказать рассылку'
+        message_parts = [f"Имя: {name}"]
+        if phone:
+            message_parts.append(f"Телефон: {phone}")
+        if email_addr:
+            message_parts.append(f"Email: {email_addr}")
+        if comment:
+            message_parts.append(f"Комментарий: {comment}")
+        message = "\n".join(message_parts)
+        support_email = 'support@vashsender.ru'
         sent_ok = False
         try:
             send_plain_notification_sync(
