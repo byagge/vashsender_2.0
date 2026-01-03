@@ -5,7 +5,7 @@ app_name = 'main'
 
 urlpatterns = [
     path('', views.landing_page, name='landing'),
-    path('consultation/', views.consultation_page, name='consultation'),
+    path('email-marketing/', views.consultation_page, name='consultation'),
     path('pricing/', views.pricing_page, name='pricing'),
     path('api/plans/', views.get_plans_api, name='get_plans_api'),
     path('purchase/confirm/', views.purchase_confirmation_page, name='purchase_confirmation'),
