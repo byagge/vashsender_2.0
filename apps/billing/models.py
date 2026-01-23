@@ -1,7 +1,9 @@
 from django.db import models
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 
 
 class PlanType(models.Model):
@@ -194,9 +196,137 @@ class BillingSettings(models.Model):
     @classmethod
     def get_settings(cls):
         """Получить настройки (создать если не существуют)"""
-        settings, created = cls.objects.get_or_create(pk=1)
-        return settings
-    
+        try:
+            settings_obj, _ = cls.objects.get_or_create(pk=1)
+            return settings_obj
+        except (OperationalError, ProgrammingError):
+            # Таблица ещё не создана (например, во время makemigrations/migrate)
+            # или база в недоступном состоянии. Возвращаем несохранённый
+            # объект с дефолтными значениями, чтобы не ломать импорт модулей.
+            return cls()
+
     class Meta:
         verbose_name = _("Настройка биллинга")
         verbose_name_plural = _("Настройки биллинга")
+
+
+class PromoCode(models.Model):
+    """Промокоды для выдачи тарифов пользователям"""
+
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name=_("Промокод"),
+        help_text=_("Код, который вводит пользователь (регистр не важен)"),
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Описание"),
+    )
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='promo_codes',
+        verbose_name=_("Тариф"),
+        help_text=_("Тариф, который будет выдан пользователю при активации промокода"),
+    )
+    max_activations = models.PositiveIntegerField(
+        default=1,
+        verbose_name=_("Количество активаций"),
+        help_text=_("Сколько раз промокод можно использовать суммарно"),
+    )
+    used_activations = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Уже использовано"),
+        help_text=_("Сколько раз промокод уже был активирован"),
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Срок действия"),
+        help_text=_("До какой даты и времени действует промокод. Если не заполнено — бессрочный."),
+    )
+    duration_days = models.PositiveIntegerField(
+        default=30,
+        verbose_name=_("Длительность тарифа в днях"),
+        help_text=_(
+            "На сколько дней выдать тариф пользователю. "
+            "0 — практически бессрочно (20 лет)."
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_("Активен"),
+        help_text=_("Можно ли сейчас использовать этот промокод"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Создан"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Обновлён"))
+
+    class Meta:
+        verbose_name = _("Промокод")
+        verbose_name_plural = _("Промокоды")
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.code
+
+    def save(self, *args, **kwargs):
+        # Храним код в верхнем регистре для удобства
+        if self.code:
+            self.code = self.code.strip().upper()
+        super().save(*args, **kwargs)
+
+    @property
+    def remaining_activations(self):
+        return max(0, self.max_activations - self.used_activations)
+
+    def is_expired(self):
+        return bool(self.expires_at and timezone.now() > self.expires_at)
+
+    def can_be_used(self):
+        """Проверить, можно ли использовать промокод прямо сейчас"""
+        if not self.is_active:
+            return False
+        if self.is_expired():
+            return False
+        if self.remaining_activations <= 0:
+            return False
+        return True
+
+
+class PromoCodeActivation(models.Model):
+    """Журнал активаций промокодов пользователями"""
+
+    promo_code = models.ForeignKey(
+        PromoCode,
+        on_delete=models.CASCADE,
+        related_name='activations',
+        verbose_name=_("Промокод"),
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='promo_code_activations',
+        verbose_name=_("Пользователь"),
+    )
+    purchased_plan = models.ForeignKey(
+        PurchasedPlan,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='promo_code_activations',
+        verbose_name=_("Выданный тариф"),
+    )
+    activated_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Дата активации"),
+    )
+
+    class Meta:
+        verbose_name = _("Активация промокода")
+        verbose_name_plural = _("Активации промокодов")
+        ordering = ['-activated_at']
+
+    def __str__(self):
+        return f"{self.promo_code.code} → {self.user.email}"

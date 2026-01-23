@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from .models import PlanType, Plan, PurchasedPlan, BillingSettings
+from .models import PlanType, Plan, PurchasedPlan, BillingSettings, PromoCode, PromoCodeActivation
 
 
 @admin.register(PlanType)
@@ -125,3 +125,30 @@ class BillingSettingsAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Запретить удаление настроек"""
         return False
+
+
+@admin.register(PromoCode)
+class PromoCodeAdmin(admin.ModelAdmin):
+    list_display = [
+        'code',
+        'plan',
+        'max_activations',
+        'used_activations',
+        'remaining_activations',
+        'expires_at',
+        'duration_days',
+        'is_active',
+        'created_at',
+    ]
+    list_filter = ['is_active', 'expires_at', 'plan__plan_type']
+    search_fields = ['code', 'description', 'plan__title']
+    readonly_fields = ['used_activations', 'created_at', 'updated_at']
+    ordering = ['-created_at']
+
+
+@admin.register(PromoCodeActivation)
+class PromoCodeActivationAdmin(admin.ModelAdmin):
+    list_display = ['promo_code', 'user', 'purchased_plan', 'activated_at']
+    list_filter = ['activated_at', 'promo_code__code', 'promo_code__plan']
+    search_fields = ['promo_code__code', 'user__email', 'user__full_name']
+    date_hierarchy = 'activated_at'

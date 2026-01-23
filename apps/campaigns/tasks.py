@@ -134,7 +134,7 @@ class SMTPConnectionPool:
                             connection = smtplib.SMTP(host=host, port=port, timeout=timeout, source_address=bind_source) if bind_source else smtplib.SMTP(host=host, port=port, timeout=timeout)
 
                         # Устанавливаем правильный HELO/EHLO
-                        helo_domain = primary_host if primary_host != 'localhost' else 'vashsender.ru'
+                        helo_domain = primary_host if primary_host != 'localhost' else 'regvshsndr.ru'
                         try:
                             connection.helo(helo_domain)
                             connection.ehlo(helo_domain)
@@ -203,7 +203,7 @@ class SMTPConnectionPool:
             try:
                 # Используем реальный домен вместо localhost
                 helo_domain = getattr(settings, 'EMAIL_HOST', 'localhost')
-                helo_domain = helo_domain if helo_domain != 'localhost' else 'vashsender.ru'
+                helo_domain = helo_domain if helo_domain != 'localhost' else 'regvshsndr.ru'
                 connection.helo(helo_domain)
                 if getattr(settings, 'EMAIL_DEBUG', False):
                     print(f"SMTP HELO set to: {helo_domain}")
@@ -233,7 +233,7 @@ class SMTPConnectionPool:
                     connection.starttls()
                     # Повторяем HELO и EHLO после STARTTLS для лучшей доставляемости
                     try:
-                        helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
+                        helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'regvshsndr.ru'
                         connection.helo(helo_domain)
                         connection.ehlo(helo_domain)
                         if getattr(settings, 'EMAIL_DEBUG', False):
@@ -448,7 +448,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@regvshsndr.ru'),
                     to=[support_email]
                 )
                 msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
@@ -1053,7 +1053,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             html_content = html_content.replace('{{content}}', campaign.content)
         
         # Добавляем трекинг-пиксель для отслеживания открытий
-        tracking_pixel = f'<img src="https://vashsender.ru/campaigns/{campaign_id}/track-open/?tracking_id={tracking_id}" width="1" height="1" style="display:none;" alt="" />'
+        tracking_pixel = f'<img src="https://regvshsndr.ru/campaigns/{campaign_id}/track-open/?tracking_id={tracking_id}" width="1" height="1" style="display:none;" alt="" />'
         html_content += tracking_pixel
         
         # Обрабатываем ссылки для отслеживания кликов
@@ -1061,13 +1061,13 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         def replace_links(match):
             original_url = match.group(1)
             # Заменяем ссылки на трекинг-ссылки с полным доменом
-            return f'href="https://vashsender.ru/campaigns/{campaign_id}/track-click/?tracking_id={tracking_id}&url={original_url}"'
+            return f'href="https://regvshsndr.ru/campaigns/{campaign_id}/track-click/?tracking_id={tracking_id}&url={original_url}"'
         
         # Заменяем все href в ссылках
         html_content = re.sub(r'href="([^"]*)"', replace_links, html_content)
 
         # Формируем ссылку для отписки
-        unsubscribe_url = f"https://vashsender.ru/campaigns/{campaign_id}/unsubscribe/?tracking_id={tracking_id}"
+        unsubscribe_url = f"https://regvshsndr.ru/campaigns/{campaign_id}/unsubscribe/?tracking_id={tracking_id}"
         
         # Подготавливаем отправителя - используем имя из кампании
         sender_name = campaign.sender_name
@@ -1180,7 +1180,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         # Создаем уникальный Message-ID с временной меткой для лучшей доставляемости
         timestamp = int(time.time())
         unique_id = str(uuid.uuid4()).replace('-', '')[:16]
-        domain = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+        domain = from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru'
         msg['Message-ID'] = f"<{timestamp}.{unique_id}@{domain}>"
         
         # Правильное форматирование даты для лучшей совместимости
@@ -1188,7 +1188,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         msg['MIME-Version'] = '1.0'
         
         # Заголовки для улучшения доставляемости
-        msg['X-Mailer'] = 'VashSender Mailer 1.0'  # Реальный X-Mailer сервиса
+        msg['X-Mailer'] = 'Vash Sender Mailer 1.0'  # Реальный X-Mailer сервиса
         msg['X-Priority'] = '3'
         msg['X-MSMail-Priority'] = 'Normal'
         msg['Importance'] = 'normal'
@@ -1197,13 +1197,13 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         msg['Content-Type'] = 'multipart/alternative; boundary="boundary"'
         
         # Добавляем заголовки для предотвращения спама и улучшения доставляемости
-        msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}>'
+        msg['List-Unsubscribe'] = f'<mailto:unsubscribe@{from_email.split("@")[1] if "@" in from_email else "regvshsndr.ru"}>'
         msg['Precedence'] = 'bulk'
         
         # Дополнительные заголовки для улучшения доставляемости
         msg['X-Auto-Response-Suppress'] = 'OOF, AutoReply'
         msg['Auto-Submitted'] = 'auto-generated'
-        msg['X-Report-Abuse'] = f'Please report abuse here: abuse@{from_email.split("@")[1] if "@" in from_email else "vashsender.ru"}'
+        msg['X-Report-Abuse'] = f'Please report abuse here: abuse@{from_email.split("@")[1] if "@" in from_email else "regvshsndr.ru"}'
         
         # Заголовки для лучшей совместимости с почтовыми сервисами
         msg['X-Originating-IP'] = '146.185.196.52'  # Указываем реальный IP сервера
@@ -1261,7 +1261,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         msg.attach(html_part)
         
         # ВКЛЮЧАЕМ DKIM подпись для улучшения доставляемости в Mail.ru и Yandex
-        domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+        domain_name = from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru'
         msg = sign_email_with_dkim(msg, domain_name)
         
         # Отправляем письмо

@@ -2,7 +2,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, F
 from django.db import transaction
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -12,7 +12,15 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from datetime import timedelta
 import json
-from .models import PlanType, Plan, PurchasedPlan, BillingSettings, CloudPaymentsTransaction
+from .models import (
+    PlanType,
+    Plan,
+    PurchasedPlan,
+    BillingSettings,
+    CloudPaymentsTransaction,
+    PromoCode,
+    PromoCodeActivation,
+)
 from .serializers import (
     PlanTypeSerializer, PlanSerializer, PurchasedPlanSerializer,
     BillingSettingsSerializer, UserPlanInfoSerializer
@@ -639,3 +647,112 @@ def activate_payment(request):
             'success': False,
             'error': f'Не удалось проверить статус транзакции. Пожалуйста, обратитесь в поддержку. Ошибка: {str(e)}'
         }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def apply_promo_code(request):
+    """Активация промокода и выдача тарифа пользователю
+
+    Ожидает JSON: {"code": "<ПРОМОКОД>"}
+    """
+    try:
+        try:
+            data = json.loads(request.body or '{}')
+        except json.JSONDecodeError:
+            data = request.POST
+
+        raw_code = (data.get('code') or '').strip()
+        if not raw_code:
+            return JsonResponse(
+                {'success': False, 'error': 'Введите промокод.'},
+                status=400,
+            )
+
+        code = raw_code.upper()
+
+        try:
+            promo = PromoCode.objects.select_related('plan').get(code__iexact=code)
+        except PromoCode.DoesNotExist:
+            return JsonResponse(
+                {'success': False, 'error': 'Промокод не найден.'},
+                status=404,
+            )
+
+        if not promo.can_be_used():
+            if promo.is_expired():
+                error = 'Срок действия промокода истёк.'
+            elif promo.remaining_activations <= 0:
+                error = 'Лимит активаций промокода исчерпан.'
+            else:
+                error = 'Промокод недоступен для использования.'
+            return JsonResponse({'success': False, 'error': error}, status=400)
+
+        user = request.user
+
+        # Проверяем, не активировал ли этот пользователь уже данный промокод
+        if PromoCodeActivation.objects.filter(promo_code=promo, user=user).exists():
+            return JsonResponse(
+                {
+                    'success': False,
+                    'error': 'Вы уже использовали этот промокод.',
+                },
+                status=400,
+            )
+
+        # Вычисляем срок действия выданного тарифа
+        if promo.duration_days == 0:
+            # Практически бессрочный тариф — 20 лет
+            end_date = timezone.now() + timedelta(days=365 * 20)
+        else:
+            end_date = timezone.now() + timedelta(days=promo.duration_days)
+
+        with transaction.atomic():
+            purchased_plan = PurchasedPlan.objects.create(
+                user=user,
+                plan=promo.plan,
+                start_date=timezone.now(),
+                end_date=end_date,
+                is_active=True,
+                amount_paid=0,
+                payment_method='promo',
+                transaction_id=f'promo_{promo.code}_{timezone.now().strftime("%Y%m%d_%H%M%S")}',
+            )
+
+            # Обновляем текущий план пользователя
+            user.current_plan = promo.plan
+            user.plan_expiry = purchased_plan.end_date
+            user.save(update_fields=['current_plan', 'plan_expiry'])
+
+            # Обновляем статистику по промокоду
+            promo.used_activations = F('used_activations') + 1
+            promo.save(update_fields=['used_activations'])
+            promo.refresh_from_db(fields=['used_activations'])
+
+            PromoCodeActivation.objects.create(
+                promo_code=promo,
+                user=user,
+                purchased_plan=purchased_plan,
+            )
+
+        return JsonResponse(
+            {
+                'success': True,
+                'message': f'Промокод применён! Тариф "{promo.plan.title}" активирован.',
+                'plan': {
+                    'id': promo.plan.id,
+                    'title': promo.plan.title,
+                    'price': float(promo.plan.get_final_price()),
+                    'duration_days': promo.duration_days,
+                    'end_date': end_date.isoformat(),
+                },
+            }
+        )
+    except Exception as e:
+        return JsonResponse(
+            {
+                'success': False,
+                'error': f'Не удалось применить промокод. Пожалуйста, попробуйте позже. Ошибка: {str(e)}',
+            },
+            status=500,
+        )

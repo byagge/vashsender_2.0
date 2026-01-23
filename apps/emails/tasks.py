@@ -22,7 +22,7 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
     else:
         msg['Subject'] = subject
 
-    display_name = 'VashSender'
+    display_name = 'Vash Sender'
     msg['From'] = formataddr((str(Header(display_name, 'utf-8')), from_email))
     msg['To'] = to_email
     msg['Reply-To'] = from_email
@@ -32,8 +32,8 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
 
     # Standard headers
     msg['Date'] = formatdate(localtime=True)
-    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[1] if '@' in from_email else 'vashsender.ru')
-    msg['X-Mailer'] = 'VashSender Notifications 1.0'
+    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru')
+    msg['X-Mailer'] = 'Vash Sender Notifications 1.0'
 
     # Parts
     text_part = MIMEText(plain_text or '', 'plain', 'utf-8')
@@ -43,7 +43,7 @@ def _build_verification_message(to_email: str, subject: str, plain_text: str, ht
         msg.attach(html_part)
 
     # DKIM: if OpenDKIM mode is enabled, signing will happen in MTA; otherwise call in-app
-    domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+    domain_name = from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru'
     msg = sign_email_with_dkim(msg, domain_name)
     return msg
 
@@ -56,19 +56,19 @@ def _build_plain_text_message(to_email: str, subject: str, plain_text: str, from
     else:
         msg['Subject'] = subject
 
-    display_name = 'VashSender'
+    display_name = 'Vash Sender'
     msg['From'] = formataddr((str(Header(display_name, 'utf-8')), from_email))
     msg['To'] = to_email
     msg['Reply-To'] = from_email
 
     msg['Date'] = formatdate(localtime=True)
-    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[1] if '@' in from_email else 'vashsender.ru')
-    msg['X-Mailer'] = 'VashSender Notifications 1.0'
+    msg['Message-ID'] = make_msgid(domain=from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru')
+    msg['X-Mailer'] = 'Vash Sender Notifications 1.0'
 
     text_part = MIMEText(plain_text or '', 'plain', 'utf-8')
     msg.attach(text_part)
 
-    domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
+    domain_name = from_email.split('@')[1] if '@' in from_email else 'regvshsndr.ru'
     msg = sign_email_with_dkim(msg, domain_name)
     return msg
 
@@ -81,7 +81,7 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
     smtp_connection = None
     # Choose a verified/system sender similar to campaigns
     configured_from = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None)
-    default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    default_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru')
     from_email = configured_from or default_from
 
     # Only derive reply-to if we have a SenderEmail record for the chosen from_email
@@ -130,7 +130,7 @@ def send_verification_email_sync(to_email: str, subject: str, plain_text: str, h
 def send_plain_notification_sync(to_email: str, subject: str, plain_text: str) -> None:
     """Synchronous plain-text sender via the shared SMTP pool (DKIM-aware)."""
     smtp_connection = None
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru')
     msg = _build_plain_text_message(to_email, subject, plain_text, from_email)
     logger.debug(f"Sending plain notification to={to_email} subject={subject}")
     smtp_connection = smtp_pool.get_connection()
@@ -153,7 +153,7 @@ def send_plain_notification(self, to_email: str, subject: str, plain_text: str):
     """
     smtp_connection = None
     try:
-        from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+        from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru')
         msg = _build_plain_text_message(to_email, subject, plain_text, from_email)
         logger.debug(f"[celery] Sending plain notification to={to_email} subject={subject}")
         smtp_connection = smtp_pool.get_connection()
@@ -175,7 +175,7 @@ def send_plain_notification(self, to_email: str, subject: str, plain_text: str):
 
     try:
         connection = get_connection(fail_silently=False)
-        email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru'), to=[to_email], connection=connection)
+        email = EmailMultiAlternatives(subject=subject, body=plain_text or '', from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru'), to=[to_email], connection=connection)
         email.send()
         logger.info(f"[celery] Plain notification sent to={to_email} via Django EmailBackend")
         return {'success': True, 'transport': 'django_backend'}
@@ -191,7 +191,7 @@ def send_verification_email(self, to_email: str, subject: str, plain_text: str, 
     with DKIM, matching campaign SMTP behavior.
     """
     smtp_connection = None
-    from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@vashsender.ru')
+    from_email = getattr(settings, 'VERIFICATION_SENDER_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru')
     msg = _build_verification_message(to_email, subject, plain_text, html, from_email)
     logger.debug(f"[celery] Sending verification email to={to_email} subject={subject}")
     # Try SMTP pool first

@@ -33,6 +33,42 @@ def reverse_conversion(apps, schema_editor):
         sender.save(update_fields=['verification_token'])
 
 
+def alter_column_to_uuid(apps, schema_editor):
+    """
+    Меняет тип столбца на UUID только там, где это поддерживается (PostgreSQL).
+
+    Для SQLite (и других БД без такого ALTER) ничего не делает, так как
+    существующие текстовые значения совместимы с UUIDField в Django.
+    """
+    vendor = schema_editor.connection.vendor
+    if vendor != 'postgresql':
+        # Для sqlite, mysql и т.п. пропускаем низкоуровневый ALTER
+        return
+
+    schema_editor.execute(
+        """
+        ALTER TABLE emails_senderemail
+        ALTER COLUMN verification_token
+        TYPE UUID
+        USING verification_token::uuid;
+        """
+    )
+
+
+def reverse_alter_column_to_uuid(apps, schema_editor):
+    vendor = schema_editor.connection.vendor
+    if vendor != 'postgresql':
+        return
+
+    schema_editor.execute(
+        """
+        ALTER TABLE emails_senderemail
+        ALTER COLUMN verification_token
+        TYPE TEXT;
+        """
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -42,10 +78,7 @@ class Migration(migrations.Migration):
     operations = [
         # Шаг 1: Преобразуем существующие данные
         migrations.RunPython(convert_text_to_uuid, reverse_conversion),
-        
-        # Шаг 2: Изменяем тип поля с использованием USING для приведения типов
-        migrations.RunSQL(
-            sql='ALTER TABLE emails_senderemail ALTER COLUMN verification_token TYPE UUID USING verification_token::uuid;',
-            reverse_sql='ALTER TABLE emails_senderemail ALTER COLUMN verification_token TYPE TEXT;'
-        ),
+
+        # Шаг 2: Меняем тип колонки только на PostgreSQL, для SQLite — no-op.
+        migrations.RunPython(alter_column_to_uuid, reverse_alter_column_to_uuid),
     ]

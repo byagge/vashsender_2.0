@@ -403,6 +403,16 @@
                       <i data-lucide="eye" class="w-4 h-4"></i>
                       Просмотр
                     </button>
+                    <template x-if="campaign.status === 'sent' || campaign.status === 'failed'">
+                      <button 
+                        @click="downloadCampaignReport(campaign)"
+                        class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                        :disabled="isDownloadingReport"
+                      >
+                        <i data-lucide="download" class="w-4 h-4" :class="{'animate-spin': isDownloadingReport}"></i>
+                        <span x-text="isDownloadingReport ? 'Скачивание...' : 'Скачать отчет'"></span>
+                      </button>
+                    </template>
                     <template x-if="campaign.status === 'failed'">
                       <button 
                         @click="retryCampaign(campaign)"
@@ -822,6 +832,7 @@
         statsPollingDelay: 4000,
         progressCache: {},
         isRetrying: false,
+        isDownloadingReport: false,
         exportFormat: 'xlsx',
         showExportModal: false,
         exportStatuses: [],
@@ -1237,6 +1248,42 @@
             alert('Ошибка при повторной отправке рассылки');
           } finally {
             this.isRetrying = false;
+          }
+        },
+
+        async downloadCampaignReport(campaign) {
+          if (this.isDownloadingReport) return;
+          
+          this.isDownloadingReport = true;
+          try {
+            const url = `/campaigns/api/campaigns/${campaign.id}/export-report/?format=xlsx`;
+            const response = await fetch(url, {
+              method: 'GET',
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'X-CSRFToken': getCSRFToken()
+              }
+            });
+
+            if (!response.ok) {
+              throw new Error('Не удалось скачать отчет');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `campaign_report_${campaign.id}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+          } catch (error) {
+            console.error('Error downloading campaign report:', error);
+            alert('Ошибка при скачивании отчета: ' + error.message);
+          } finally {
+            this.isDownloadingReport = false;
           }
         },
 

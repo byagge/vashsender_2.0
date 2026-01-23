@@ -103,7 +103,7 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
 EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@vashsender.ru')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@regvshsndr.ru')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Дополнительные настройки SMTP для обхода проблем с SSL
@@ -271,7 +271,7 @@ SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 
 # Настройки для email
-EMAIL_SUBJECT_PREFIX = '[VashSender] '
+EMAIL_SUBJECT_PREFIX = '[Vash Sender] '
 EMAIL_USE_LOCALTIME = True
 
 # Настройки для Celery

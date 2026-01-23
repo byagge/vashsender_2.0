@@ -20,6 +20,7 @@ urlpatterns = [
     path('activate-payment/', views.activate_payment, name='activate_payment'),
     path('history/', views.plan_history, name='plan_history'),
     path('check-auth/', views.check_auth_status, name='check_auth_status'),
+    path('apply-promo/', views.apply_promo_code, name='apply_promo_code'),
     # Webhook для CloudPayments
     path('webhook/cloudpayments/', views.cloudpayments_webhook, name='cloudpayments_webhook'),
 ] 

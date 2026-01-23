@@ -790,50 +790,166 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 it['total_sent'], it['opens'], it['clicks'], it['unsubscribed'], it['sent_at'] or ''
             ])
         return response
-    @action(detail=True, methods=['get'], url_path='export')
+    @action(detail=True, methods=['get'], url_path='export-report')
     def export_report(self, request, pk=None):
-        """Экспорт отчета по кампании в CSV со счетчиками открытий, кликов и отписок."""
-        campaign = self.get_object()
+        """
+        Экспорт отчета по кампании.
+        
+        Поддерживаемые форматы:
+        - CSV (по умолчанию)
+        - XLSX (?format=xlsx) — общая статистика + список адресов со статусами.
+        """
+        # Используем прямой поиск по pk, чтобы избежать неожиданных 404 из-за фильтрации queryset по пользователю
+        try:
+            campaign = Campaign.objects.get(pk=pk)
+        except Campaign.DoesNotExist:
+            return HttpResponse(status=404)
+        export_format = (request.query_params.get('format') or 'csv').lower()
+
         # Собираем агрегаты
         total_sent = EmailTracking.objects.filter(campaign=campaign).count()
+        delivered = EmailTracking.objects.filter(campaign=campaign, delivered_at__isnull=False).count()
         opens = EmailTracking.objects.filter(campaign=campaign, opened_at__isnull=False).count()
         clicks = EmailTracking.objects.filter(campaign=campaign, clicked_at__isnull=False).count()
         from apps.mailer.models import Contact as MailerContact
+        base_tracking_qs = EmailTracking.objects.filter(campaign=campaign)
         unsubscribed = MailerContact.objects.filter(
-            id__in=EmailTracking.objects.filter(campaign=campaign).values_list('contact_id', flat=True),
+            id__in=base_tracking_qs.values_list('contact_id', flat=True),
             status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))
         ).count()
 
+        # По каждому получателю
+        trackings = base_tracking_qs.select_related('contact')
+        unsubscribed_ids = set(
+            MailerContact.objects.filter(
+                id__in=trackings.values_list('contact_id', flat=True),
+                status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))
+            ).values_list('id', flat=True)
+        )
+        sender_mailbox = campaign.sender_email.email if campaign.sender_email else ''
+
+        if export_format == 'xlsx':
+            # Экспорт в Excel
+            try:
+                from openpyxl import Workbook
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                from io import BytesIO
+            except ImportError:
+                # Если нет openpyxl — фолбэк в CSV
+                export_format = 'csv'
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = 'Campaign report'
+
+                thin = Side(border_style='thin', color='E5E7EB')
+
+                # Заголовок кампании
+                ws.append(['Кампания', campaign.name or str(campaign.id)])
+                ws.append(['Тема', campaign.subject or ''])
+                ws.append(['Отправитель', f"{campaign.sender_name} <{sender_mailbox}>"])
+                ws.append([])
+
+                # Общая статистика
+                ws.append(['Общая статистика'])
+                ws.append(['Всего отправлено', total_sent])
+                ws.append(['Доставлено', delivered])
+                ws.append(['Открыто (кол-во)', opens])
+                ws.append(['Клики (кол-во)', clicks])
+                ws.append(['Отписались (кол-во)', unsubscribed])
+                ws.append([])
+
+                # Шапка таблицы получателей
+                header_row_idx = ws.max_row + 1
+                headers = [
+                    'Email',
+                    'Отправитель',
+                    'Отправлено',
+                    'Доставлено',
+                    'Открыто',
+                    'Клик',
+                    'Отписан',
+                ]
+                ws.append(headers)
+
+                header_fill = PatternFill(start_color='EEF2FF', end_color='EEF2FF', fill_type='solid')
+                header_font = Font(bold=True, color='1E40AF')
+                for col_idx, _ in enumerate(headers, start=1):
+                    cell = ws.cell(row=header_row_idx, column=col_idx)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+
+                # Данные по каждому получателю
+                for t in trackings:
+                    ws.append([
+                        t.contact.email,
+                        sender_mailbox,
+                        1 if t.sent_at else 0,
+                        1 if t.delivered_at else 0,
+                        1 if t.opened_at else 0,
+                        1 if t.clicked_at else 0,
+                        1 if t.contact_id in unsubscribed_ids else 0,
+                    ])
+
+                # Стили строк (зебра + границы)
+                stripe_fill = PatternFill(start_color='F9FAFB', end_color='F9FAFB', fill_type='solid')
+                for r in range(header_row_idx + 1, ws.max_row + 1):
+                    if r % 2 == 0:
+                        for c in range(1, ws.max_column + 1):
+                            ws.cell(row=r, column=c).fill = stripe_fill
+                    for c in range(1, ws.max_column + 1):
+                        cell = ws.cell(row=r, column=c)
+                        cell.border = Border(top=thin, left=thin, right=thin, bottom=thin)
+                        if c >= 3:
+                            cell.alignment = Alignment(horizontal='center')
+
+                # Авто-ширина колонок
+                for column_cells in ws.columns:
+                    length = max(len(str(column_cells[0].value or '')), *(len(str(cell.value or '')) for cell in column_cells))
+                    adjusted = min(max(12, length + 2), 60)
+                    ws.column_dimensions[column_cells[0].column_letter].width = adjusted
+
+                # Заморозка шапки получателей
+                ws.freeze_panes = f"A{header_row_idx + 1}"
+
+                buf = BytesIO()
+                wb.save(buf)
+                buf.seek(0)
+                response = HttpResponse(
+                    buf.getvalue(),
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="campaign_report_{campaign.id}.xlsx"'
+                return response
+
+        # CSV по умолчанию
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="campaign_report_{campaign.id}.csv"'
 
         writer = csv.writer(response)
         writer.writerow(['Кампания', campaign.name or str(campaign.id)])
         writer.writerow(['Тема', campaign.subject or ''])
-        writer.writerow(['Отправитель', f"{campaign.sender_name} <{campaign.sender_email.email if campaign.sender_email else ''}>"])
+        writer.writerow(['Отправитель', f"{campaign.sender_name} <{sender_mailbox}>"])
         writer.writerow([])
         writer.writerow(['Всего отправлено', total_sent])
+        writer.writerow(['Доставлено', delivered])
         writer.writerow(['Открыли (кол-во)', opens])
         writer.writerow(['Кликнули (кол-во)', clicks])
         writer.writerow(['Отписались (кол-во)', unsubscribed])
         writer.writerow([])
-        writer.writerow(['Email', 'Отправитель', 'Открыто', 'Кликов', 'Отписан'])
+        writer.writerow(['Email', 'Отправитель', 'Отправлено', 'Доставлено', 'Открыто', 'Кликов', 'Отписан'])
 
-        # По каждому получателю
-        trackings = EmailTracking.objects.filter(campaign=campaign).select_related('contact')
-        unsubscribed_ids = set(MailerContact.objects.filter(
-            id__in=trackings.values_list('contact_id', flat=True),
-            status=getattr(MailerContact, 'UNSUBSCRIBED', getattr(MailerContact, 'BLACKLIST', 'blacklist'))
-        ).values_list('id', flat=True))
-
-        sender_mailbox = campaign.sender_email.email if campaign.sender_email else ''
         for t in trackings:
             writer.writerow([
                 t.contact.email,
                 sender_mailbox,
+                1 if t.sent_at else 0,
+                1 if t.delivered_at else 0,
                 1 if t.opened_at else 0,
                 1 if t.clicked_at else 0,
-                1 if t.contact_id in unsubscribed_ids else 0
+                1 if t.contact_id in unsubscribed_ids else 0,
             ])
 
         return response
