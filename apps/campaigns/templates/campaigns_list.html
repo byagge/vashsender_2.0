@@ -1261,13 +1261,14 @@
               method: 'GET',
               credentials: 'same-origin',
               headers: {
-                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'X-CSRFToken': getCSRFToken()
+                'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
               }
             });
 
             if (!response.ok) {
-              throw new Error('Не удалось скачать отчет');
+              const errorText = await response.text();
+              console.error('Export error response:', response.status, errorText);
+              throw new Error(`Не удалось скачать отчет (${response.status})`);
             }
 
             const blob = await response.blob();
