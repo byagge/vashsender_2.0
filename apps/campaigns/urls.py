@@ -20,5 +20,6 @@ urlpatterns = [
     path('<uuid:campaign_id>/track-open/', views.track_email_open, name='track_email_open'),
     path('<uuid:campaign_id>/track-click/', views.track_email_click, name='track_email_click'),
     path('<uuid:campaign_id>/unsubscribe/', views.unsubscribe, name='campaign_unsubscribe'),
+    path('api/campaigns/<uuid:campaign_id>/export-report/', views.export_campaign_report, name='export_campaign_report'),
     path('', include(router.urls)),
 ]
