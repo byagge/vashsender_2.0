@@ -1232,10 +1232,19 @@ def export_campaign_report(request, campaign_id):
                 row_idx += 1
 
             # Автоподбор ширины колонок
-            for column_cells in ws.columns:
-                length = max(len(str(column_cells[0].value or '')), *(len(str(cell.value or '')) for cell in column_cells))
-                adjusted = min(max(12, length + 2), 60)
-                ws.column_dimensions[column_cells[0].column_letter].width = adjusted
+            from openpyxl.utils import get_column_letter
+            max_col = ws.max_column
+            for col_idx in range(1, max_col + 1):
+                max_length = 0
+                for row in ws.iter_rows(min_col=col_idx, max_col=col_idx):
+                    for cell in row:
+                        if cell.value:
+                            cell_length = len(str(cell.value))
+                            if cell_length > max_length:
+                                max_length = cell_length
+                adjusted = min(max(12, max_length + 2), 60)
+                col_letter = get_column_letter(col_idx)
+                ws.column_dimensions[col_letter].width = adjusted
 
             # Заморозка шапки получателей
             ws.freeze_panes = f"A{header_row_idx + 1}"
