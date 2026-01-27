@@ -104,7 +104,7 @@ class SMTPConnectionPool:
         with self.lock:
             if self.connections:
                 return self.connections.pop()
-            
+
             # Подготовка кандидатов для подключения (failover)
             primary_host = getattr(settings, 'EMAIL_HOST', 'localhost')
             fallback_hosts = list(getattr(settings, 'EMAIL_FALLBACK_HOSTS', []))
@@ -128,10 +128,18 @@ class SMTPConnectionPool:
                 # Пытаемся с привязкой исходящего IP
                 for bind_source in [(source_ip, 0), None]:
                     try:
+                        connect_start = time.time()
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            print(f"[SMTP] connect start host={host} ssl={use_ssl} tls={use_tls} bind={bind_source}")
+
                         if use_ssl:
                             connection = smtplib.SMTP_SSL(host=host, port=port, timeout=timeout)
                         else:
                             connection = smtplib.SMTP(host=host, port=port, timeout=timeout, source_address=bind_source) if bind_source else smtplib.SMTP(host=host, port=port, timeout=timeout)
+
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            connect_duration = time.time() - connect_start
+                            print(f"[SMTP] connect end host={host} duration={connect_duration:.3f}s")
 
                         # Устанавливаем правильный HELO/EHLO
                         helo_domain = primary_host if primary_host != 'localhost' else 'vashsender.ru'
@@ -153,7 +161,14 @@ class SMTPConnectionPool:
                                 except Exception:
                                     supports_starttls = False
                                 if supports_starttls:
+                                    tls_start = time.time()
+                                    if getattr(settings, 'EMAIL_DEBUG', False):
+                                        print(f"[SMTP] TLS start host={host}")
                                     connection.starttls()
+                                    if getattr(settings, 'EMAIL_DEBUG', False):
+                                        tls_duration = time.time() - tls_start
+                                        print(f"[SMTP] TLS end host={host} duration={tls_duration:.3f}s")
+
                                     # Повторяем HELO/EHLO после STARTTLS
                                     try:
                                         connection.helo(helo_domain)
@@ -170,6 +185,8 @@ class SMTPConnectionPool:
                             except Exception as e:
                                 last_error = e
                                 try:
+                                    if getattr(settings, 'EMAIL_DEBUG', False):
+                                        print(f"[SMTP] TLS error on host={host}: {e}")
                                     connection.quit()
                                 except Exception:
                                     pass
@@ -230,7 +247,14 @@ class SMTPConnectionPool:
                 except Exception:
                     supports_starttls = False
                 if supports_starttls:
+                    tls_start = time.time()
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        print(f"[SMTP] TLS start (post-connect) host={host}")
                     connection.starttls()
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        tls_duration = time.time() - tls_start
+                        print(f"[SMTP] TLS end (post-connect) host={host} duration={tls_duration:.3f}s")
+
                     # Повторяем HELO и EHLO после STARTTLS для лучшей доставляемости
                     try:
                         helo_domain = settings.EMAIL_HOST if settings.EMAIL_HOST != 'localhost' else 'vashsender.ru'
@@ -253,7 +277,13 @@ class SMTPConnectionPool:
                         print("STARTTLS not supported by server — continuing without TLS")
             
             if settings.EMAIL_HOST_USER and settings.EMAIL_HOST_PASSWORD:
+                auth_start = time.time()
+                if getattr(settings, 'EMAIL_DEBUG', False):
+                    print(f"[SMTP] AUTH start user={settings.EMAIL_HOST_USER}")
                 connection.login(settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD)
+                if getattr(settings, 'EMAIL_DEBUG', False):
+                    auth_duration = time.time() - auth_start
+                    print(f"[SMTP] AUTH end user={settings.EMAIL_HOST_USER} duration={auth_duration:.3f}s")
             
             return connection
     
@@ -268,7 +298,13 @@ class SMTPConnectionPool:
                 except:
                     # Соединение мертво, закрыть его
                     try:
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            quit_start = time.time()
+                            print("[SMTP] quit start (dead connection)")
                         connection.quit()
+                        if getattr(settings, 'EMAIL_DEBUG', False):
+                            quit_duration = time.time() - quit_start
+                            print(f"[SMTP] quit end (dead connection) duration={quit_duration:.3f}s")
                     except:
                         pass
     
@@ -277,7 +313,13 @@ class SMTPConnectionPool:
         with self.lock:
             for connection in self.connections:
                 try:
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        quit_start = time.time()
+                        print("[SMTP] quit start (close_all)")
                     connection.quit()
+                    if getattr(settings, 'EMAIL_DEBUG', False):
+                        quit_duration = time.time() - quit_start
+                        print(f"[SMTP] quit end (close_all) duration={quit_duration:.3f}s")
                 except:
                     pass
             self.connections.clear()
@@ -557,56 +599,9 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         )
         
         # Для небольших рассылок отправляем синхронно в рамках этой задачи,
-        # чтобы не зависеть от очереди 'email'
-        if total_contacts <= 50:
-            print(f"Small campaign optimization: sending {total_contacts} emails synchronously")
-            sent_ok = 0
-            for idx, contact_id in enumerate(contacts_list, start=1):
-                try:
-                    # Пропускаем, если уже отправляли успешно
-                    already_sent = CampaignRecipient.objects.filter(campaign_id=campaign_id, contact_id=int(contact_id), is_sent=True).exists()
-                    if already_sent:
-                        continue
-                    # Выполняем задачу локально, без постановки в очередь
-                    res = send_single_email.apply(args=[str(campaign_id), int(contact_id)])
-                    if res and isinstance(res.result, dict) and res.result.get('success'):
-                        sent_ok += 1
-                except Exception as e:
-                    print(f"Error sending to contact {contact_id}: {e}")
-                # Обновление прогресса
-                self.update_state(
-                    state='PROGRESS',
-                    meta={
-                        'current': idx,
-                        'total': total_contacts,
-                        'status': f'Sent {idx}/{total_contacts} synchronously',
-                        'timestamp': time.time()
-                    }
-                )
-            print(f"Synchronous sending completed: {sent_ok}/{total_contacts}")
-            # Завершение статуса кампании
-            try:
-                campaign.refresh_from_db()
-                total_sent = CampaignRecipient.objects.filter(campaign_id=campaign_id, is_sent=True).count()
-                if total_sent > 0:
-                    campaign.status = Campaign.STATUS_SENT
-                    campaign.sent_at = timezone.now()
-                else:
-                    campaign.status = Campaign.STATUS_FAILED
-                    campaign.failure_reason = campaign.failure_reason or 'no emails sent'
-                campaign.celery_task_id = None
-                campaign.save(update_fields=['status', 'failure_reason', 'sent_at', 'celery_task_id'])
-                update_campaign_progress_cache(campaign_id, sent=total_sent)
-            except Exception:
-                pass
-            execution_time = time.time() - start_time
-            return {
-                'campaign_id': campaign_id,
-                'total_contacts': total_contacts,
-                'status': 'sent_synchronously',
-                'execution_time': execution_time,
-                'worker': self.request.hostname
-            }
+        # чтобы не зависеть от очереди 'email'.
+        # Важно: даже для маленьких кампаний мы больше НЕ выполняем отправку синхронно,
+        # а только ставим подзадачи в очередь, чтобы оркестратор не блокировал воркер.
 
         # Разбиваем на батчи для больших объемов
         # Для больших кампаний разбиваем на батчи по 1000 контактов для лучшей обработки
@@ -661,54 +656,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 # Продолжаем с другими батчами
                 continue
         
-        # Короткий контрольный цикл по БД (без ожидания backend результатов)
-        max_wait_time = getattr(settings, 'CAMPAIGN_BATCH_WAIT_TIMEOUT', 120)
-        wait_start = time.time()
-
-        while True:
-            total_sent = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id,
-                is_sent=True,
-                contact__status=MailerContact.VALID
-            ).count()
-            total_recipients = CampaignRecipient.objects.filter(
-                campaign_id=campaign_id,
-                contact__status=MailerContact.VALID
-            ).count()
-
-            update_campaign_progress_cache(
-                campaign_id,
-                total=total_recipients or total_contacts,
-                sent=total_sent
-            )
-
-            # Если отправили >=50% — сразу помечаем кампанию как SENT
-            if total_recipients > 0 and total_sent >= (total_recipients * 0.5):
-                campaign.refresh_from_db()
-                if campaign.status != Campaign.STATUS_SENT:
-                    campaign.status = Campaign.STATUS_SENT
-                    campaign.sent_at = campaign.sent_at or timezone.now()
-                    campaign.celery_task_id = None
-                    campaign.failure_reason = None
-                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
-
-                lock_progress = total_sent >= total_recipients
-                update_campaign_progress_cache(
-                    campaign_id,
-                    total=total_recipients or total_contacts,
-                    sent=total_sent,
-                    lock=lock_progress,
-                    force=lock_progress
-                )
-                if lock_progress:
-                    cache.delete(f"campaign_{campaign_id}")
-                break
-
-            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
-                break
-
-            time.sleep(10)
-
         execution_time = time.time() - start_time
         print(f"Campaign {campaign_id} processing completed in {execution_time:.2f} seconds")
 
@@ -743,22 +690,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         import traceback
         traceback.print_exc()
         
-        # Проверяем, является ли ошибка SoftTimeLimitExceeded
-        from celery.exceptions import SoftTimeLimitExceeded
-        
-        # SoftTimeLimitExceeded - это нормальная ситуация для больших рассылок
-        # Не устанавливаем статус FAILED в этом случае
-        if isinstance(exc, SoftTimeLimitExceeded):
-            print(f"Кампания {campaign_id} достигла мягкого лимита времени, но это не ошибка")
-            print(f"Рассылка продолжит работу и завершится автоматически")
-            # Не меняем статус кампании, она продолжит работать
-            return {
-                'campaign_id': campaign_id,
-                'status': 'soft_time_limit_reached',
-                'message': 'Campaign reached soft time limit but will continue processing'
-            }
-        
-        # Для всех остальных ошибок обновляем статус кампании на failed
+        # Для всех ошибок, включая SoftTimeLimitExceeded, обновляем статус кампании на failed
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             campaign.status = Campaign.STATUS_FAILED
@@ -1146,7 +1078,11 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         print(f"From email: '{from_email}'")
         
         # Получаем SMTP соединение
+        connect_stage_start = time.time()
+        print(f"[SMTP] connect (pool.get_connection) start for {contact.email}")
         smtp_connection = smtp_pool.get_connection()
+        connect_stage_duration = time.time() - connect_stage_start
+        print(f"[SMTP] connect (pool.get_connection) end for {contact.email} duration={connect_stage_duration:.3f}s")
         
         # Создаем максимально простое сообщение как обычное письмо
         msg = MIMEMultipart('alternative')
@@ -1264,11 +1200,17 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         domain_name = from_email.split('@')[1] if '@' in from_email else 'vashsender.ru'
         msg = sign_email_with_dkim(msg, domain_name)
         
-        # Отправляем письмо
+        # Отправляем письмо (SMTP DATA)
+        data_start = time.time()
+        print(f"[SMTP] sendmail (DATA) start to {contact.email}")
         smtp_connection.send_message(msg)
+        data_duration = time.time() - data_start
+        print(f"[SMTP] sendmail (DATA) end to {contact.email} duration={data_duration:.3f}s")
         print(f"Email sent successfully to {contact.email}")
         
-        # Создаем запись получателя и tracking с транзакцией
+        # Создаем запись получателя и tracking с транзакцией (DB update)
+        db_start = time.time()
+        print(f"[DB] update start for campaign_id={campaign_id}, contact_id={contact_id}")
         increment_progress = False
         with transaction.atomic():
             # Создаем CampaignRecipient
@@ -1301,6 +1243,8 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                 # Если запись уже существует, обновляем время доставки
                 tracking.delivered_at = timezone.now()
                 tracking.save(update_fields=['delivered_at'])
+        db_duration = time.time() - db_start
+        print(f"[DB] update end for campaign_id={campaign_id}, contact_id={contact_id} duration={db_duration:.3f}s")
         
         if increment_progress:
             update_campaign_progress_cache(campaign_id, delta_sent=1)
@@ -1315,8 +1259,12 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         except Exception as e:
             print(f"Error updating email count: {e}")
         
-        # Возвращаем соединение в пул
+        # Возвращаем соединение в пул (может вызвать NOOP/QUIT)
+        quit_stage_start = time.time()
+        print(f"[SMTP] quit/return start for {contact.email}")
         smtp_pool.return_connection(smtp_connection)
+        quit_stage_duration = time.time() - quit_stage_start
+        print(f"[SMTP] quit/return end for {contact.email} duration={quit_stage_duration:.3f}s")
         
         execution_time = time.time() - start_time
         print(f"Single email to {contact.email} completed in {execution_time:.2f} seconds")
