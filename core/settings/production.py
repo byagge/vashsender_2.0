@@ -25,6 +25,13 @@ CSRF_TRUSTED_ORIGINS = [
     'https://admin.vashsender.ru',
     'https://146.185.196.123',
     'https://146.185.196.52',
+    "regvshsndr.ru",
+    "www.regvshsndr.ru",
+    "api.regvshsndr.ru",
+    "admin.regvshsndr.ru",
+    "127.0.0.1",
+    "146.185.196.123",
+    "146.185.196.52",
 ]
 
 # Безопасные куки (обязательно при HTTPS)
