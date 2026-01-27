@@ -230,7 +230,7 @@ EMAIL_USE_TLS = False  # Обычно локальный Postfix не требу
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'noreply@regvshsndr.ru'
+DEFAULT_FROM_EMAIL = 'noreply@vashsender.ru'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL  # от этого адреса Django шлёт системные письма
 
 # Email debug and notification targets
