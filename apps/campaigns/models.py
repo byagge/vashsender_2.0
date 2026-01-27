@@ -63,8 +63,8 @@ class Campaign(models.Model):
 
     @property
     def emails_sent(self):
-        """Общее количество успешно отправленных писем (точно по CampaignRecipient)."""
-        return CampaignRecipient.objects.filter(campaign=self, is_sent=True).count()
+        """Общее количество отправленных писем"""
+        return EmailTracking.objects.filter(campaign=self).count()
 
     @property
     def open_rate(self):
@@ -87,30 +87,24 @@ class Campaign(models.Model):
     @property
     def bounce_rate(self):
         """Процент отказов"""
-        # Отказы считаем от общего числа обработанных (sent + bounced),
-        # чтобы метрика не "ломалась" при 0 успешных отправках.
-        processed = EmailTracking.objects.filter(campaign=self).count()
-        if processed == 0:
+        total_sent = self.emails_sent
+        if total_sent == 0:
             return 0
         total_bounces = EmailTracking.objects.filter(campaign=self, bounced_at__isnull=False).count()
-        return (total_bounces / processed * 100)
+        return (total_bounces / total_sent * 100)
 
     @property
     def delivered_emails(self):
-        """
-        Количество успешно доставленных/отправленных писем.
-        В текущей реализации delivered_at проставляется на успешной отправке,
-        но для точности UI используем CampaignRecipient.
-        """
-        return self.emails_sent
+        """Количество успешно доставленных писем"""
+        return EmailTracking.objects.filter(campaign=self, delivered_at__isnull=False).count()
 
     @property
     def delivery_rate(self):
         """Процент доставленных писем"""
-        processed = EmailTracking.objects.filter(campaign=self).count()
-        if processed == 0:
+        total_sent = self.emails_sent
+        if total_sent == 0:
             return 0
-        return (self.delivered_emails / processed * 100)
+        return (self.delivered_emails / total_sent * 100)
 
     class Meta:
         ordering = ['-created_at']

@@ -23,15 +23,8 @@ from apps.mail_templates.models import EmailTemplate
 from apps.emails.models import SenderEmail
 
 # Centralized queue names with safe fallbacks.
-# По умолчанию используем одну и ту же очередь для всех задач кампаний,
-# чтобы не было ситуации, когда воркер слушает только campaigns, а задачи
-# отправки писем попадают в default/email и "висят" в PENDING.
-CAMPAIGN_QUEUE = getattr(settings, 'CAMPAIGN_QUEUE', 'campaigns')
-EMAIL_QUEUE = getattr(
-    settings,
-    'EMAIL_QUEUE',
-    CAMPAIGN_QUEUE,  # если EMAIL_QUEUE не задан, используем ту же очередь, что и для кампаний
-)
+CAMPAIGN_QUEUE = getattr(settings, 'CAMPAIGN_QUEUE', 'default')
+EMAIL_QUEUE = getattr(settings, 'EMAIL_QUEUE', 'default')
 
 # Добавляем импорт для DKIM подписи
 try:
@@ -44,50 +37,6 @@ except ImportError:
 
 
 PROGRESS_CACHE_TIMEOUT = 60 * 60  # 1 hour
-
-
-def maybe_finalize_campaign(campaign_id: str) -> None:
-    """
-    Финализируем кампанию, когда обработаны все получатели.
-    Обработан = есть запись EmailTracking (delivered или bounced).
-    total берём из CampaignRecipient, который заранее создаётся для всех recipients.
-    """
-    lock_key = f"campaign_finalize_lock_{campaign_id}"
-    if not cache.add(lock_key, "1", timeout=30):
-        return
-    try:
-        campaign = Campaign.objects.filter(id=campaign_id).first()
-        if not campaign:
-            return
-
-        total = CampaignRecipient.objects.filter(campaign=campaign).count()
-        if total <= 0:
-            return
-
-        processed = EmailTracking.objects.filter(campaign=campaign).count()
-        sent = CampaignRecipient.objects.filter(campaign=campaign, is_sent=True).count()
-
-        update_campaign_progress_cache(campaign_id, total=total, sent=sent)
-
-        if processed < total:
-            return
-
-        # Все обработаны: выставляем финальный статус
-        if sent > 0:
-            campaign.status = Campaign.STATUS_SENT
-            campaign.sent_at = campaign.sent_at or timezone.now()
-            campaign.failure_reason = None
-        else:
-            campaign.status = Campaign.STATUS_FAILED
-            campaign.failure_reason = campaign.failure_reason or "no emails sent"
-
-        campaign.celery_task_id = None
-        campaign.save(update_fields=["status", "sent_at", "failure_reason", "celery_task_id", "updated_at"])
-
-        update_campaign_progress_cache(campaign_id, total=total, sent=sent, lock=True, force=True)
-        cache.delete(f"campaign_{campaign_id}")
-    finally:
-        cache.delete(lock_key)
 
 
 def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_sent=0, lock: bool = False, force: bool = False):
@@ -542,19 +491,10 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
             raise self.retry(countdown=60, max_retries=2)
         
-        # Заранее создаём CampaignRecipient для всех получателей, чтобы:
-        # - прогресс/total считался корректно (в т.ч. на фронте через /progress/)
-        # - мы могли финализировать кампанию, когда обработаны все адреса
-        try:
-            recipient_rows = [
-                CampaignRecipient(campaign_id=campaign_id, contact_id=int(cid))
-                for cid in contacts_list
-            ]
-            CampaignRecipient.objects.bulk_create(recipient_rows, ignore_conflicts=True, batch_size=2000)
-        except Exception as e:
-            print(f"Warning: failed to precreate CampaignRecipient rows: {e}")
-
-        existing_sent = CampaignRecipient.objects.filter(campaign_id=campaign_id, is_sent=True).count()
+        existing_sent = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
+            is_sent=True
+        ).count()
         update_campaign_progress_cache(
             campaign_id,
             total=total_contacts,
@@ -742,10 +682,26 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 sent=total_sent
             )
 
-            # Финализируем только при 100% обработке (отправлено/ошибка)
-            processed = EmailTracking.objects.filter(campaign_id=campaign_id).count()
-            if total_recipients > 0 and processed >= total_recipients:
-                maybe_finalize_campaign(str(campaign_id))
+            # Если отправили >=50% — сразу помечаем кампанию как SENT
+            if total_recipients > 0 and total_sent >= (total_recipients * 0.5):
+                campaign.refresh_from_db()
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = campaign.sent_at or timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.failure_reason = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+
+                lock_progress = total_sent >= total_recipients
+                update_campaign_progress_cache(
+                    campaign_id,
+                    total=total_recipients or total_contacts,
+                    sent=total_sent,
+                    lock=lock_progress,
+                    force=lock_progress
+                )
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
                 break
 
             if max_wait_time and (time.time() - wait_start) >= max_wait_time:
@@ -917,10 +873,26 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 sent=total_sent_db
             )
 
-            # Финализируем только при 100% обработке (отправлено/ошибка)
-            processed = EmailTracking.objects.filter(campaign_id=campaign_id).count()
-            if total_recipients_cached > 0 and processed >= total_recipients_cached:
-                maybe_finalize_campaign(str(campaign_id))
+            # Если отправлено >=50% — считаем кампанию успешной
+            if total_recipients_cached > 0 and total_sent_db >= (total_recipients_cached * 0.5):
+                campaign = Campaign.objects.get(id=campaign_id)
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = campaign.sent_at or timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.failure_reason = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+                # При 100% — фиксируем прогресс, чтобы не колебался
+                lock_progress = total_sent_db >= total_recipients_cached
+                update_campaign_progress_cache(
+                    campaign_id,
+                    total=total_recipients_cached,
+                    sent=total_sent_db,
+                    lock=lock_progress,
+                    force=True
+                )
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
                 break
 
             # Уходим, если время ожидания вышло — задачи продолжат в фоне
@@ -959,15 +931,22 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
             force=lock_progress
         )
 
-        # Финальная попытка финализации кампании (если все обработаны)
-        if total_recipients_final > 0:
-            maybe_finalize_campaign(str(campaign_id))
-        elif total_recipients_final == 0:
-            campaign = Campaign.objects.get(id=campaign_id)
-            campaign.status = Campaign.STATUS_FAILED
-            campaign.failure_reason = campaign.failure_reason or 'no valid recipients'
-            campaign.celery_task_id = None
-            campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
+        # Финальное обновление статуса кампании (только улучшение, без понижения)
+        campaign = Campaign.objects.get(id=campaign_id)
+        if campaign.status != Campaign.STATUS_SENT:
+            if total_recipients_final > 0 and total_sent_final >= (total_recipients_final * 0.5):
+                campaign.status = Campaign.STATUS_SENT
+                campaign.sent_at = campaign.sent_at or timezone.now()
+                campaign.celery_task_id = None
+                campaign.failure_reason = None
+                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
+            elif total_recipients_final == 0:
+                campaign.status = Campaign.STATUS_FAILED
+                campaign.failure_reason = campaign.failure_reason or 'no valid recipients'
+                campaign.celery_task_id = None
+                campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
 
         execution_time = time.time() - start_time
         print(f"Batch {batch_number} processing completed in {execution_time:.2f} seconds; total_sent={total_sent_final}/{total_recipients_final}")
@@ -1002,7 +981,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         raise self.retry(exc=exc, countdown=60, max_retries=3)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue=EMAIL_QUEUE)
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email')
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
@@ -1054,9 +1033,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         try:
             from apps.mailer.models import Contact as MailerContact
             if contact.status != MailerContact.VALID:
-                # Важно: фиксируем как "обработано" для финализации кампании и точной статистики.
-                record_failure("invalid_contact", mark_invalid=False)
-                maybe_finalize_campaign(str(campaign_id))
+                
                 return {
                     'success': False,
                     'skipped': True,
@@ -1340,9 +1317,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         
         # Возвращаем соединение в пул
         smtp_pool.return_connection(smtp_connection)
-
-        # Пробуем финализировать кампанию, если это было последнее письмо/ошибка
-        maybe_finalize_campaign(str(campaign_id))
         
         execution_time = time.time() - start_time
         print(f"Single email to {contact.email} completed in {execution_time:.2f} seconds")
@@ -1363,7 +1337,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             except Exception:
                 pass
         record_failure(reason, mark_invalid=True)
-        maybe_finalize_campaign(str(campaign_id))
         return {
             'success': False,
             'invalidated': True,
@@ -1394,7 +1367,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         # Если уже несколько попыток сделали — считаем адрес проблемным, помечаем INVALID и не ретраим бесконечно
         if self.request.retries >= 2:
             record_failure(str(exc), mark_invalid=True)
-            maybe_finalize_campaign(str(campaign_id))
             return {
                 'success': False,
                 'invalidated': True,
