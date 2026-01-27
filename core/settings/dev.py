@@ -11,6 +11,10 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'vashsender.ru', 'www.vashsender.ru',
 CSRF_TRUSTED_ORIGINS = [
     'https://vashsender.ru',
     'https://www.vashsender.ru',
+    'https://regvshsndr.ru',
+    'https://www.regvshsndr.ru',
+    'https://api.regvshsndr.ru',
+    'https://admin.regvshsndr.ru',
 ]
 
 # Безопасные куки (рекомендуется при HTTPS)
