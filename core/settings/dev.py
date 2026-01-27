@@ -5,7 +5,7 @@ import os
 SECRET_KEY = 'django-insecure-change-this-in-production'
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'vashsender.ru', 'www.vashsender.ru', '146.185.196.52']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'vashsender.ru', 'regvshsndr.ru', 'www.vashsender.ru', 'www.regvshsndr.ru', '146.185.196.52']
 
 # Надёжные источники для CSRF-проверки
 CSRF_TRUSTED_ORIGINS = [
