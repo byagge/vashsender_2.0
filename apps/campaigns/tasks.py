@@ -930,17 +930,28 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         def record_failure(reason: str = '', mark_invalid: bool = False):
             """
             Фиксируем неудачную отправку и при необходимости помечаем контакт как недействительный.
+            ВАЖНО: попытка отправки считается выполненной (для прогресса кампании),
+            даже если произошла ошибка доставки (bounce / hard fail).
             """
             try:
                 with transaction.atomic():
                     recipient, created = CampaignRecipient.objects.get_or_create(
                         campaign=campaign,
                         contact=contact,
-                        defaults={'is_sent': False}
+                        # Даже при ошибке помечаем как "отправлено" для прогресса кампании
+                        defaults={'is_sent': True, 'sent_at': timezone.now()}
                     )
-                    if not created and recipient.is_sent:
-                        recipient.is_sent = False
-                        recipient.save(update_fields=['is_sent'])
+                    increment_progress = False
+                    if not created:
+                        # Если по этому контакту ещё не было успешной/неуспешной отправки,
+                        # или он помечен как неотправленный — фиксируем факт попытки.
+                        if not recipient.is_sent or recipient.sent_at is None:
+                            recipient.is_sent = True
+                            recipient.sent_at = timezone.now()
+                            recipient.save(update_fields=['is_sent', 'sent_at'])
+                            increment_progress = True
+                    else:
+                        increment_progress = True
                     
                     tracking, tracking_created = EmailTracking.objects.get_or_create(
                         campaign=campaign,
@@ -956,9 +967,13 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                         tracking.bounce_reason = reason
                         tracking.save(update_fields=['bounced_at', 'bounce_reason'])
                 
+                # Обновляем прогресс кампании: увеличиваем счётчик "sent",
+                # чтобы такие контакты учитывались как обработанные.
+                if increment_progress:
+                    update_campaign_progress_cache(str(campaign.id), delta_sent=1)
+                
                 if mark_invalid:
                     mark_contact_as_invalid(contact, reason)
-                    decrement_campaign_total_if_needed(campaign_id)
             except Exception as exc:
                 print(f"Error recording failed delivery for {getattr(contact, 'email', 'unknown')}: {exc}")
         # Пропускаем невалидные адреса
