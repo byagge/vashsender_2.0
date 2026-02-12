@@ -139,8 +139,6 @@
             const btn = document.querySelector('button');
             const resendText = document.getElementById('resendText');
             const icon = btn.querySelector('i');
-            const debugBox = document.getElementById('debugBox');
-            const debugContent = document.getElementById('debugContent');
             
             // Show loading state
             btn.disabled = true;
@@ -159,13 +157,9 @@
             })
             .then(async (response) => {
                 const rawText = await response.text();
-                // Try parse JSON, else show raw text/HTML in debug
+                // Пытаемся распарсить JSON, но не ломаемся, если пришёл HTML/текст
                 let parsed;
                 try { parsed = JSON.parse(rawText); } catch (_) { parsed = null; }
-
-                // Show debug
-                debugBox.classList.remove('hidden');
-                debugContent.textContent = parsed ? JSON.stringify(parsed, null, 2) : rawText;
 
                 if (response.ok && (parsed?.success === true || !parsed)) {
                     // Show success state
@@ -199,13 +193,10 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                // Show error state
+                // Показать ошибку отправки в интерфейсе
                 btn.style.background = '#EF4444';
                 resendText.textContent = 'Ошибка отправки';
                 icon.className = 'fa-solid fa-exclamation-triangle';
-                // Debug error
-                debugBox.classList.remove('hidden');
-                debugContent.textContent = String(error);
                 
                 setTimeout(() => {
                     // Reset to original state
