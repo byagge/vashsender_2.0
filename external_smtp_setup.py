@@ -142,8 +142,8 @@ EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = 'apikey'
 EMAIL_HOST_PASSWORD = 'your-sendgrid-api-key'
-DEFAULT_FROM_EMAIL = 'noreply@vashsender.ru'
-SERVER_EMAIL = 'noreply@vashsender.ru'
+DEFAULT_FROM_EMAIL = 'noreply@regvshsndr.ru'
+SERVER_EMAIL = 'noreply@regvshsndr.ru'
 
 # Настройки для доставляемости
 EMAIL_BATCH_SIZE = 100

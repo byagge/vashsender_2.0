@@ -230,12 +230,12 @@ EMAIL_USE_TLS = False  # Обычно локальный Postfix не требу
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'noreply@vashsender.ru'
+DEFAULT_FROM_EMAIL = 'noreply@regvshsndr.ru'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL  # от этого адреса Django шлёт системные письма
 
 # Email debug and notification targets
 EMAIL_DEBUG = os.environ.get('EMAIL_DEBUG', '0') in ('1', 'true', 'True')
-SUPPORT_NOTIFICATIONS_EMAIL = os.environ.get('SUPPORT_NOTIFICATIONS_EMAIL', 'support@vashsender.ru')
+SUPPORT_NOTIFICATIONS_EMAIL = os.environ.get('SUPPORT_NOTIFICATIONS_EMAIL', 'support@regvshsndr.ru')
 
 # Дополнительные настройки для улучшения доставляемости
 EMAIL_TIMEOUT = 30  # Timeout для отправки письма

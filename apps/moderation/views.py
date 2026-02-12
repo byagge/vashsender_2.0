@@ -62,7 +62,7 @@ def moderation_dashboard(request):
                             msg = EmailMultiAlternatives(
                                 subject=subject,
                                 body=text_body,
-                                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@regvshsndr.ru'),
                                 to=[support_email]
                             )
                             msg.send(fail_silently=False)

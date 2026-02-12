@@ -213,7 +213,7 @@ def consultation_request(request):
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=message,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru'),
                     to=[support_email]
                 )
                 msg.send(fail_silently=False)

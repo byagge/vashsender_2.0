@@ -84,16 +84,18 @@ class RegisterView(View):
         # Генерируем токен и отправляем письмо (после login, чтобы токен был валиден)
         uid   = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        link  = request.build_absolute_uri(
-            reverse('accounts:activate', args=[uid, token])
-        )
+        # Ссылку активации в письме всегда ведём на домен regvshsndr.ru (логика и URL-путь остаются теми же)
+        activation_path = reverse('accounts:activate', args=[uid, token])
+        activation_domain = getattr(settings, 'ACCOUNT_ACTIVATION_DOMAIN', 'regvshsndr.ru')
+        activation_protocol = 'https'
+        link = f"{activation_protocol}://{activation_domain}{activation_path}"
         # Рендерим красивый HTML шаблон
         from django.template.loader import render_to_string
         html_message = render_to_string('email_verification.html', {
             'user': user,
             'activation_link': link,
-            'protocol': 'https' if request.is_secure() else 'http',
-            'domain': request.get_host(),
+            'protocol': activation_protocol,
+            'domain': activation_domain,
         })
         
         # Отправляем через Celery и общий SMTP пул
@@ -171,9 +173,10 @@ class ResendEmailView(LoginRequiredMixin, View):
         # Генерируем новый токен и отправляем письмо
         uid   = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        link  = request.build_absolute_uri(
-            reverse('accounts:activate', args=[uid, token])
-        )
+        activation_path = reverse('accounts:activate', args=[uid, token])
+        activation_domain = getattr(settings, 'ACCOUNT_ACTIVATION_DOMAIN', 'regvshsndr.ru')
+        activation_protocol = 'https'
+        link = f"{activation_protocol}://{activation_domain}{activation_path}"
         
         try:
             # Рендерим красивый HTML шаблон
@@ -181,8 +184,8 @@ class ResendEmailView(LoginRequiredMixin, View):
             html_message = render_to_string('email_verification.html', {
                 'user': user,
                 'activation_link': link,
-                'protocol': 'https' if request.is_secure() else 'http',
-                'domain': request.get_host(),
+                'protocol': activation_protocol,
+                'domain': activation_domain,
             })
             
             from apps.emails.tasks import send_verification_email, send_verification_email_sync

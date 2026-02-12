@@ -104,7 +104,7 @@ def test_smtp_connection():
             print("✅ Аутентификация успешна")
         
         # Тестируем отправку
-        from_email = config('DEFAULT_FROM_EMAIL', default='noreply@vashsender.ru')
+        from_email = config('DEFAULT_FROM_EMAIL', default='noreply@regvshsndr.ru')
         to_email = 'test@example.com'  # Тестовый адрес
         
         msg = MIMEMultipart()

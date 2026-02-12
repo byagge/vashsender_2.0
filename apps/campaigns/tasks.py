@@ -490,7 +490,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru'),
                     to=[support_email]
                 )
                 msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))

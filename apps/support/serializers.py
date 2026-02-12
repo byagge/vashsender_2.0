@@ -49,7 +49,7 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=text_body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru'),
                     to=[support_email]
                 )
                 msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))
@@ -125,7 +125,7 @@ class SupportMessageCreateSerializer(serializers.ModelSerializer):
                 msg = EmailMultiAlternatives(
                     subject=subject,
                     body=text_body,
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@regvshsndr.ru'),
                     to=[support_email]
                 )
                 msg.send(fail_silently=not getattr(settings, 'EMAIL_DEBUG', False))

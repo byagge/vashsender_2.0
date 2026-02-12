@@ -252,7 +252,7 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
                     msg = EmailMultiAlternatives(
                         subject="Подтверждение отправителя",
                         body=f"Пожалуйста, подтвердите ваш адрес: {confirm_url}",
-                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@regvshsndr.ru'),
                         to=[email_addr]
                     )
                     try:
@@ -314,7 +314,7 @@ class SenderEmailViewSet(viewsets.ModelViewSet):
                 msg = EmailMultiAlternatives(
                     subject="Подтверждение отправителя (повторное)",
                     body=f"Пожалуйста, подтвердите ваш адрес по ссылке:\n\n{confirm_url}",
-                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@vashsender.ru'),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@regvshsndr.ru'),
                     to=[sender.email]
                 )
                 try:

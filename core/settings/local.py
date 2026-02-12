@@ -10,5 +10,5 @@ EMAIL_USE_TLS = False
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''  # Add your SMTP username if needed
 EMAIL_HOST_PASSWORD = ''  # Add your SMTP password if needed
-DEFAULT_FROM_EMAIL = 'noreply@vashsender.ru'
+DEFAULT_FROM_EMAIL = 'noreply@regvshsndr.ru'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
