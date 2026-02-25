@@ -76,7 +76,11 @@ def finalize_campaign_if_complete(campaign_id: str) -> None:
         total = int(progress.get('total') or 0)
         sent = int(progress.get('sent') or 0)
 
-        if total <= 0 or sent < total:
+        if total <= 0:
+            return
+
+        completion_ratio = sent / total if total else 0
+        if sent < total and completion_ratio <= 0.8:
             return
 
         with transaction.atomic():
@@ -88,12 +92,13 @@ def finalize_campaign_if_complete(campaign_id: str) -> None:
                 campaign.failure_reason = None
                 campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
 
+        lock_progress = sent >= total
         update_campaign_progress_cache(
             campaign_id,
             total=total,
             sent=sent,
-            lock=True,
-            force=True
+            lock=lock_progress,
+            force=lock_progress
         )
         cache.delete(f"campaign_{campaign_id}")
     except Exception as exc:
@@ -520,7 +525,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             )
             
             # Обновляем статус кампании на pending
-            campaign.status = Campaign.STATUS_PENDING
+            if campaign.status != Campaign.STATUS_SENT:
+                campaign.status = Campaign.STATUS_PENDING
             campaign.save(update_fields=['status'])
 
             # Уведомляем поддержку о новой кампании на модерации
@@ -567,14 +573,16 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             
             if total_contacts == 0:
                 print(f"Нет контактов для кампании {campaign.name}")
-                campaign.status = Campaign.STATUS_FAILED
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_FAILED
                 campaign.failure_reason = campaign.failure_reason or 'no contacts in selected lists'
                 campaign.celery_task_id = None
                 campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
                 return {'error': 'No contacts found'}
         except Exception as e:
             print(f"Error getting contacts for campaign {campaign_id}: {e}")
-            campaign.status = Campaign.STATUS_FAILED
+            if campaign.status != Campaign.STATUS_SENT:
+                campaign.status = Campaign.STATUS_FAILED
             campaign.failure_reason = campaign.failure_reason or f'error retrieving contacts: {e}'
             campaign.celery_task_id = None
             campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
@@ -598,7 +606,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             if plan_info['has_plan'] and plan_info['plan_type'] == 'Letters':
                 # Для тарифов с письмами проверяем остаток
                 if not can_user_send_emails(user, total_contacts):
-                    campaign.status = Campaign.STATUS_FAILED
+                    if campaign.status != Campaign.STATUS_SENT:
+                        campaign.status = Campaign.STATUS_FAILED
                     campaign.failure_reason = campaign.failure_reason or 'recipients exceed plan limits'
                     campaign.celery_task_id = None
                     campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
@@ -608,7 +617,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             elif plan_info['has_plan'] and plan_info['plan_type'] == 'Subscribers':
                 # Для тарифов с подписчиками проверяем только срок действия
                 if plan_info['is_expired']:
-                    campaign.status = Campaign.STATUS_FAILED
+                    if campaign.status != Campaign.STATUS_SENT:
+                        campaign.status = Campaign.STATUS_FAILED
                     campaign.failure_reason = campaign.failure_reason or 'plan expired'
                     campaign.celery_task_id = None
                     campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
@@ -620,7 +630,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             # Продолжаем отправку, если не удалось проверить лимиты
         
         # Обновляем статус кампании на отправляется
-        campaign.status = Campaign.STATUS_SENDING
+        if campaign.status != Campaign.STATUS_SENT:
+            campaign.status = Campaign.STATUS_SENDING
         campaign.celery_task_id = self.request.id
         campaign.save(update_fields=['status', 'celery_task_id'])
         
@@ -720,7 +731,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         # Обновляем статус кампании на failed при таймауте
         try:
             campaign = Campaign.objects.get(id=campaign_id)
-            campaign.status = Campaign.STATUS_FAILED
+            if campaign.status != Campaign.STATUS_SENT:
+                campaign.status = Campaign.STATUS_FAILED
             campaign.failure_reason = campaign.failure_reason or 'send_campaign timeout'
             campaign.celery_task_id = None
             campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
@@ -740,7 +752,8 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         # Для всех ошибок, включая SoftTimeLimitExceeded, обновляем статус кампании на failed
         try:
             campaign = Campaign.objects.get(id=campaign_id)
-            campaign.status = Campaign.STATUS_FAILED
+            if campaign.status != Campaign.STATUS_SENT:
+                campaign.status = Campaign.STATUS_FAILED
             campaign.failure_reason = campaign.failure_reason or f'send_campaign exception: {exc}'
             campaign.celery_task_id = None
             campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
