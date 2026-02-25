@@ -65,42 +65,6 @@ def update_campaign_progress_cache(campaign_id, *, total=None, sent=None, delta_
     return progress
 
 
-def finalize_campaign_if_complete(campaign_id: str) -> None:
-    """
-    Финализирует кампанию, если прогресс в кэше достиг total.
-    Вызывается из send_single_email, чтобы не держать долгоживущие оркестраторы.
-    """
-    try:
-        cache_key = f'campaign_progress_{campaign_id}'
-        progress = cache.get(cache_key) or {}
-        total = int(progress.get('total') or 0)
-        sent = int(progress.get('sent') or 0)
-
-        if total <= 0 or sent < total:
-            return
-
-        with transaction.atomic():
-            campaign = Campaign.objects.select_for_update().get(id=campaign_id)
-            if campaign.status != Campaign.STATUS_SENT:
-                campaign.status = Campaign.STATUS_SENT
-                campaign.sent_at = campaign.sent_at or timezone.now()
-                campaign.celery_task_id = None
-                campaign.failure_reason = None
-                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
-
-        update_campaign_progress_cache(
-            campaign_id,
-            total=total,
-            sent=sent,
-            lock=True,
-            force=True
-        )
-        cache.delete(f"campaign_{campaign_id}")
-    except Exception as exc:
-        # не валим отправку из-за проблем финализации
-        print(f"finalize_campaign_if_complete({campaign_id}) failed: {exc}")
-
-
 def mark_contact_as_invalid(contact, reason: str = ''):
     """
     Переводит контакт в статус INVALID, чтобы больше не пытаться отправлять на него письма.
@@ -478,14 +442,6 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             print(f"Found campaign: {campaign.name}, status: {campaign.status}")
-
-        # Сбрасываем прогресс в кэше: иначе возможны "залипания" (locked) при повторных запусках
-        try:
-            cache.delete(f'campaign_progress_{campaign_id}')
-            cache.delete(f'campaign_{campaign_id}')
-        except Exception:
-            pass
-
         except Campaign.DoesNotExist:
             print(f"Campaign {campaign_id} not found in database - likely deleted by user")
             # Не ретраим если кампания удалена - это нормальная ситуация
@@ -752,99 +708,165 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
 def send_email_batch(self, campaign_id: str, contact_ids: List[int], 
                     batch_number: int, total_batches: int) -> Dict[str, Any]:
     """
-    Планирует отправку батча писем.
-
-    ВАЖНО:
-    - Никаких долгих while/sleep циклов тут быть не должно (иначе ловите SoftTimeLimitExceeded и "зависания").
-    - Прогресс/финализацию делает send_single_email через кэш (sent/total) и finalize_campaign_if_complete().
+    Отправка батча писем с rate limiting и retry механизмом
     """
     start_time = time.time()
-
+    smtp_connection = None
+    
     try:
         print(f"Starting send_email_batch for campaign {campaign_id}, batch {batch_number}/{total_batches}")
-
-        try:
-            Campaign.objects.get(id=campaign_id)
-        except Campaign.DoesNotExist:
-            print(f"Campaign {campaign_id} not found - batch skipped")
-            return {'success': False, 'skipped': True, 'reason': 'campaign_deleted', 'campaign_id': str(campaign_id)}
-
+        
+        campaign = Campaign.objects.get(id=campaign_id)
         # Отправляем только валидным контактам
         from apps.mailer.models import Contact as MailerContact
-        contacts_qs = Contact.objects.filter(
-            id__in=contact_ids,
-            status=MailerContact.VALID
-        ).only('id').order_by('id')
+        contacts = Contact.objects.filter(id__in=contact_ids, status=MailerContact.VALID)
+        
+        # Проверяем, что все контакты найдены
+        found_contact_ids = set(contacts.values_list('id', flat=True))
+        requested_contact_ids = set(contact_ids)
+        missing_contact_ids = requested_contact_ids - found_contact_ids
+        
+        if missing_contact_ids:
+            print(f"Warning: {len(missing_contact_ids)} contacts not found or not valid: {list(missing_contact_ids)[:10]}")
+        
+        print(f"Processing {len(contacts)} contacts out of {len(contact_ids)} requested")
+        
+        # Получаем SMTP соединение из пула
+        smtp_connection = smtp_pool.get_connection()
+        print("Got SMTP connection")
+        
+        sent_count = 0
+        failed_count = 0
+        # Без искусственного rate limiting — все письма планируются сразу
+         
+        # Рассчитываем шаг задержки на основе настраиваемой скорости
+        delay_step_seconds = 0
+        try:
+            from .models import SendingSettings
+            emails_per_minute = SendingSettings.get_current_rate()
+            if emails_per_minute and emails_per_minute > 0:
+                delay_step_seconds = 60.0 / float(emails_per_minute)
+        except Exception:
+            delay_step_seconds = 0
 
-        # Не планируем повторно тем, кого уже обработали (is_sent=True у нас означает "попытка завершена")
-        already_done = set(
-            CampaignRecipient.objects.filter(
-                campaign_id=campaign_id,
-                contact_id__in=contact_ids,
-                is_sent=True
-            ).values_list('contact_id', flat=True)
-        )
-
-        # Убедимся, что total в кэше есть (и не уменьшаем его здесь)
-        progress = cache.get(f'campaign_progress_{campaign_id}') or {}
-        total_existing = int(progress.get('total') or 0)
-        if total_existing <= 0:
-            update_campaign_progress_cache(campaign_id, total=len(contact_ids), sent=int(progress.get('sent') or 0))
-
-        scheduled = 0
-        skipped = 0
-        errors = 0
-        total_candidates = contacts_qs.count()
-
-        for contact in contacts_qs.iterator(chunk_size=500):
-            if contact.id in already_done:
-                skipped += 1
-                continue
-
+        # Список задач для отслеживания
+        email_tasks = []
+        
+        for i, contact in enumerate(contacts):
             try:
-                send_single_email.apply_async(
-                    args=[campaign_id, int(contact.id)],
-                    queue=EMAIL_QUEUE,
-                    countdown=0
+                # Планируем отправку письма с учётом настраиваемой скорости
+                countdown = int(i * delay_step_seconds) if delay_step_seconds > 0 else 0
+                task_result = send_single_email.apply_async(
+                    args=[campaign_id, contact.id], 
+                    countdown=countdown,
+                    queue=EMAIL_QUEUE
                 )
-                scheduled += 1
-            except Exception as e:
-                errors += 1
-                print(f"Ошибка планирования письма для контакта {contact.id}: {e}")
-
-            # минимальный state update, чтобы не убивать Redis/backend
-            if scheduled and (scheduled % 250 == 0):
+                email_tasks.append((task_result, contact.id))
+                
+                # Обновляем прогресс планирования
                 self.update_state(
                     state='PROGRESS',
                     meta={
-                        'campaign_id': campaign_id,
                         'batch': batch_number,
                         'total_batches': total_batches,
-                        'scheduled': scheduled,
-                        'skipped': skipped,
-                        'errors': errors,
-                        'total_candidates': total_candidates
+                        'current': i + 1,
+                        'total': len(contacts),
+                        'status': f'Запланировано {i + 1}/{len(contacts)} писем',
+                        'sent': sent_count,
+                        'failed': failed_count
                     }
                 )
+            except Exception as e:
+                failed_count += 1
+                print(f"Ошибка планирования письма для контакта {contact.id}: {str(e)}")
+                continue
+        # Короткий контрольный цикл без зависимости от backend результатов:
+        # измеряем прогресс по БД, а не по AsyncResult, чтобы не застревать.
+        max_wait_time = getattr(settings, 'EMAIL_TASK_WAIT_TIMEOUT', 60)
+        wait_start = time.time()
+
+        # Не затираем общий total размером батча
+        progress = cache.get(f'campaign_progress_{campaign_id}') or {}
+        total_expected = int(progress.get('total') or len(contact_ids))
+
+        total_sent_db = 0
+        while True:
+            total_sent_db = CampaignRecipient.objects.filter(
+                campaign_id=campaign_id,
+                is_sent=True,
+                contact__status=MailerContact.VALID
+            ).count()
+
+            update_campaign_progress_cache(
+                campaign_id,
+                total=total_expected,
+                sent=total_sent_db
+            )
+
+            # Завершаем кампанию только при 100% обработанных получателей
+            if total_expected > 0 and total_sent_db >= total_expected:
+                campaign = Campaign.objects.get(id=campaign_id)
+                if campaign.status != Campaign.STATUS_SENT:
+                    campaign.status = Campaign.STATUS_SENT
+                    campaign.sent_at = campaign.sent_at or timezone.now()
+                    campaign.celery_task_id = None
+                    campaign.failure_reason = None
+                    campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+
+                update_campaign_progress_cache(
+                    campaign_id,
+                    total=total_expected,
+                    sent=total_sent_db,
+                    lock=True,
+                    force=True
+                )
+                cache.delete(f"campaign_{campaign_id}")
+                break
+
+            if max_wait_time and (time.time() - wait_start) >= max_wait_time:
+                break
+
+            time.sleep(5)
+
+        # Возвращаем соединение в пул
+        if smtp_connection:
+            smtp_pool.return_connection(smtp_connection)
 
         execution_time = time.time() - start_time
-        print(f"Batch {batch_number} scheduled in {execution_time:.2f}s; scheduled={scheduled}, skipped={skipped}, errors={errors}")
+        print(f"Batch {batch_number} scheduling completed in {execution_time:.2f}s; sent_so_far={total_sent_db}/{total_expected}")
 
         return {
             'success': True,
             'campaign_id': campaign_id,
             'batch_number': batch_number,
-            'total_batches': total_batches,
-            'scheduled': scheduled,
-            'skipped': skipped,
-            'errors': errors,
+            'scheduled': len(contacts),
+            'sent_so_far': total_sent_db,
+            'total_expected': total_expected,
             'execution_time': execution_time,
             'worker': self.request.hostname
         }
-
+        
+    except TimeoutError as e:
+        print(f"Timeout error in send_email_batch task: {e}")
+        # Возвращаем соединение в пул в случае ошибки
+        if smtp_connection:
+            try:
+                smtp_pool.return_connection(smtp_connection)
+            except:
+                pass
+        raise self.retry(countdown=60, max_retries=2)
+        
     except Exception as exc:
         print(f"Error in send_email_batch task: {exc}")
+        # Возвращаем соединение в пул в случае ошибки
+        if smtp_connection:
+            try:
+                smtp_pool.return_connection(smtp_connection)
+            except:
+                pass
+        
         raise self.retry(exc=exc, countdown=60, max_retries=3)
+
 
 @shared_task(bind=True, max_retries=10, default_retry_delay=60, queue=EMAIL_QUEUE)
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
@@ -904,8 +926,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                 # чтобы такие контакты учитывались как обработанные.
                 if increment_progress:
                     update_campaign_progress_cache(str(campaign.id), delta_sent=1)
-
-                finalize_campaign_if_complete(str(campaign.id))
                 
                 if mark_invalid:
                     mark_contact_as_invalid(contact, reason)
@@ -1199,8 +1219,6 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         if increment_progress:
             update_campaign_progress_cache(campaign_id, delta_sent=1)
         
-        finalize_campaign_if_complete(campaign_id)
-
         print(f"Created CampaignRecipient and EmailTracking: campaign_id={campaign_id}, contact_id={contact_id}, is_sent=True")
         
         # Обновляем счётчик отправленных писем в тарифе
