@@ -627,7 +627,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
                     args=[campaign_id, [int(c_id) for c_id in batch], i + 1, len(batches)],
                     queue=EMAIL_QUEUE,
                     countdown=0,
-                    expires=getattr(settings, 'CAMPAIGN_BATCH_TASK_EXPIRES', 6 * 60 * 60),  # default 6 hours
+                    expires=1800,  # 30 минут
                     retry=True,
                     retry_policy={
                         'max_retries': 3,
@@ -667,7 +667,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
             'execution_time': execution_time,
             'worker': self.request.hostname
         }
-
+        
     except TimeoutError as e:
         print(f"Timeout error in send_campaign task: {e}")
         # Обновляем статус кампании на failed при таймауте
@@ -780,16 +780,17 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 failed_count += 1
                 print(f"Ошибка планирования письма для контакта {contact.id}: {str(e)}")
                 continue
+        
         # Короткий контрольный цикл без зависимости от backend результатов:
         # измеряем прогресс по БД, а не по AsyncResult, чтобы не застревать.
         max_wait_time = getattr(settings, 'EMAIL_TASK_WAIT_TIMEOUT', 60)
         wait_start = time.time()
+        total_recipients_cached = update_campaign_progress_cache(
+            campaign_id,
+            total=len(contact_ids),
+            sent=None,
+        ).get('total', len(contact_ids))
 
-        # Не затираем общий total размером батча
-        progress = cache.get(f'campaign_progress_{campaign_id}') or {}
-        total_expected = int(progress.get('total') or len(contact_ids))
-
-        total_sent_db = 0
         while True:
             total_sent_db = CampaignRecipient.objects.filter(
                 campaign_id=campaign_id,
@@ -797,14 +798,15 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                 contact__status=MailerContact.VALID
             ).count()
 
+            # Обновляем кэш прогресса (без блокировки)
             update_campaign_progress_cache(
                 campaign_id,
-                total=total_expected,
+                total=total_recipients_cached or len(contact_ids),
                 sent=total_sent_db
             )
 
-            # Завершаем кампанию только при 100% обработанных получателей
-            if total_expected > 0 and total_sent_db >= total_expected:
+            # Если отправлено >=50% — считаем кампанию успешной
+            if total_recipients_cached > 0 and total_sent_db >= (total_recipients_cached * 0.5):
                 campaign = Campaign.objects.get(id=campaign_id)
                 if campaign.status != Campaign.STATUS_SENT:
                     campaign.status = Campaign.STATUS_SENT
@@ -812,17 +814,20 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
                     campaign.celery_task_id = None
                     campaign.failure_reason = None
                     campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
-
+                # При 100% — фиксируем прогресс, чтобы не колебался
+                lock_progress = total_sent_db >= total_recipients_cached
                 update_campaign_progress_cache(
                     campaign_id,
-                    total=total_expected,
+                    total=total_recipients_cached,
                     sent=total_sent_db,
-                    lock=True,
+                    lock=lock_progress,
                     force=True
                 )
-                cache.delete(f"campaign_{campaign_id}")
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
                 break
 
+            # Уходим, если время ожидания вышло — задачи продолжат в фоне
             if max_wait_time and (time.time() - wait_start) >= max_wait_time:
                 break
 
@@ -832,18 +837,58 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         if smtp_connection:
             smtp_pool.return_connection(smtp_connection)
 
+        # Итоговая статистика по батчу
+        total_sent_final = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
+            is_sent=True,
+            contact__status=MailerContact.VALID
+        ).count()
+        total_failed_final = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
+            is_sent=False,
+            contact__status=MailerContact.VALID
+        ).count()
+        total_recipients_final = CampaignRecipient.objects.filter(
+            campaign_id=campaign_id,
+            contact__status=MailerContact.VALID
+        ).count()
+
+        # Фиксируем прогресс, если достигли 100%
+        lock_progress = total_recipients_final > 0 and total_sent_final >= total_recipients_final
+        update_campaign_progress_cache(
+            campaign_id,
+            total=total_recipients_final or len(contact_ids),
+            sent=total_sent_final,
+            lock=lock_progress,
+            force=lock_progress
+        )
+
+        # Финальное обновление статуса кампании (только улучшение, без понижения)
+        campaign = Campaign.objects.get(id=campaign_id)
+        if campaign.status != Campaign.STATUS_SENT:
+            if total_recipients_final > 0 and total_sent_final >= (total_recipients_final * 0.5):
+                campaign.status = Campaign.STATUS_SENT
+                campaign.sent_at = campaign.sent_at or timezone.now()
+                campaign.celery_task_id = None
+                campaign.failure_reason = None
+                campaign.save(update_fields=['status', 'sent_at', 'celery_task_id', 'failure_reason'])
+                if lock_progress:
+                    cache.delete(f"campaign_{campaign_id}")
+            elif total_recipients_final == 0:
+                campaign.status = Campaign.STATUS_FAILED
+                campaign.failure_reason = campaign.failure_reason or 'no valid recipients'
+                campaign.celery_task_id = None
+                campaign.save(update_fields=['status', 'failure_reason', 'celery_task_id'])
+
         execution_time = time.time() - start_time
-        print(f"Batch {batch_number} scheduling completed in {execution_time:.2f}s; sent_so_far={total_sent_db}/{total_expected}")
+        print(f"Batch {batch_number} processing completed in {execution_time:.2f} seconds; total_sent={total_sent_final}/{total_recipients_final}")
 
         return {
-            'success': True,
-            'campaign_id': campaign_id,
             'batch_number': batch_number,
-            'scheduled': len(contacts),
-            'sent_so_far': total_sent_db,
-            'total_expected': total_expected,
-            'execution_time': execution_time,
-            'worker': self.request.hostname
+            'sent': total_sent_final,
+            'failed': total_failed_final,
+            'total': total_recipients_final,
+            'execution_time': execution_time
         }
         
     except TimeoutError as e:
@@ -868,7 +913,7 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
         raise self.retry(exc=exc, countdown=60, max_retries=3)
 
 
-@shared_task(bind=True, max_retries=10, default_retry_delay=60, queue=EMAIL_QUEUE)
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, queue='email')
 def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]:
     """
     Отправка одного письма с полным retry механизмом
@@ -1245,42 +1290,15 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             'execution_time': execution_time
         }
         
-    except smtplib.SMTPRecipientsRefused as exc:
-        # Может быть как временная (4xx), так и постоянная (5xx) ошибка.
-        code = None
-        try:
-            recips = getattr(exc, 'recipients', None) or {}
-            info = next(iter(recips.values())) if recips else None
-            if isinstance(info, (tuple, list)) and len(info) >= 1:
-                code = int(info[0])
-        except Exception:
-            code = None
-
-        reason = f"SMTP recipients refused ({code}): {exc}"
+    except (smtplib.SMTPRecipientsRefused, smtplib.SMTPDataError, smtplib.SMTPResponseException) as exc:
+        # Постоянные ошибки адреса - сразу помечаем контакт как недействительный и не ретраим
+        reason = f"SMTP hard failure: {exc}"
         print(reason)
-
         if smtp_connection:
             try:
                 smtp_pool.return_connection(smtp_connection)
             except Exception:
                 pass
-
-        # 4xx (или неизвестно) — считаем временным и ретраим.
-        if (code is None) or (400 <= code < 500):
-            from celery.exceptions import MaxRetriesExceededError
-            countdown = min(600, 30 * (2 ** self.request.retries))
-            try:
-                raise self.retry(exc=exc, countdown=countdown)
-            except MaxRetriesExceededError:
-                record_failure(reason, mark_invalid=False)
-                return {
-                    'success': False,
-                    'retry_exhausted': True,
-                    'reason': str(exc),
-                    'email': contact.email if 'contact' in locals() else None
-                }
-
-        # 5xx — постоянная ошибка, помечаем INVALID и не ретраим.
         record_failure(reason, mark_invalid=True)
         return {
             'success': False,
@@ -1288,121 +1306,40 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
             'reason': str(exc),
             'email': contact.email if 'contact' in locals() else None
         }
-
-    except (smtplib.SMTPDataError, smtplib.SMTPResponseException) as exc:
-        # SMTPDataError/SMTPResponseException содержат smtp_code/smtp_error.
-        code = None
-        try:
-            code = int(getattr(exc, 'smtp_code', None))
-        except Exception:
-            code = None
-
-        reason = f"SMTP response error ({code}): {exc}"
-        print(reason)
-
+    
+    except TimeoutError as e:
+        print(f"Timeout error in send_single_email task: {e}")
+        # Возвращаем соединение в пул в случае ошибки
         if smtp_connection:
             try:
                 smtp_pool.return_connection(smtp_connection)
-            except Exception:
+            except:
                 pass
-
-        # 4xx (например 421/450/451/452) — временно, нужен retry/backoff.
-        if (code is None) or (400 <= code < 500):
-            from celery.exceptions import MaxRetriesExceededError
-            countdown = min(900, 30 * (2 ** self.request.retries))
+        raise self.retry(countdown=30, max_retries=2)
+        
+    except Exception as exc:
+        print(f"Error sending email to {contact.email if 'contact' in locals() else 'unknown'}: {exc}")
+        
+        # Возвращаем соединение в пул в случае ошибки
+        if smtp_connection:
             try:
-                raise self.retry(exc=exc, countdown=countdown)
-            except MaxRetriesExceededError:
-                record_failure(reason, mark_invalid=False)
-                return {
-                    'success': False,
-                    'retry_exhausted': True,
-                    'reason': str(exc),
-                    'email': contact.email if 'contact' in locals() else None
-                }
-
-        # 5xx — постоянная ошибка, помечаем INVALID.
-        if 500 <= (code or 0) < 600:
-            record_failure(reason, mark_invalid=True)
+                smtp_pool.return_connection(smtp_connection)
+            except:
+                pass
+        
+        # Если уже несколько попыток сделали — считаем адрес проблемным, помечаем INVALID и не ретраим бесконечно
+        if self.request.retries >= 2:
+            record_failure(str(exc), mark_invalid=True)
             return {
                 'success': False,
                 'invalidated': True,
                 'reason': str(exc),
                 'email': contact.email if 'contact' in locals() else None
             }
-
-        # Всё остальное — ретраим как временное.
-        from celery.exceptions import MaxRetriesExceededError
-        countdown = min(900, 30 * (2 ** self.request.retries))
-        try:
-            raise self.retry(exc=exc, countdown=countdown)
-        except MaxRetriesExceededError:
-            record_failure(reason, mark_invalid=False)
-            return {
-                'success': False,
-                'retry_exhausted': True,
-                'reason': str(exc),
-                'email': contact.email if 'contact' in locals() else None
-            }
-
-    except (Campaign.DoesNotExist, Contact.DoesNotExist) as exc:
-        # Кампания или контакт удалены/не существуют — ретраи бессмысленны.
-        print(f"send_single_email skipped: {exc}")
-        return {
-            'success': False,
-            'skipped': True,
-            'reason': 'object_not_found',
-            'details': str(exc),
-            'campaign_id': campaign_id,
-            'contact_id': contact_id
-        }
-
-    except TimeoutError as e:
-        print(f"Timeout error in send_single_email task: {e}")
-        if smtp_connection:
-            try:
-                smtp_pool.return_connection(smtp_connection)
-            except Exception:
-                pass
-
-        from celery.exceptions import MaxRetriesExceededError
-        countdown = min(900, 30 * (2 ** self.request.retries))
-        try:
-            raise self.retry(exc=e, countdown=countdown)
-        except MaxRetriesExceededError:
-            record_failure(f"Timeout: {e}", mark_invalid=False)
-            return {
-                'success': False,
-                'retry_exhausted': True,
-                'reason': str(e),
-                'email': contact.email if 'contact' in locals() else None
-            }
-
-    except Exception as exc:
-        print(f"Error sending email to {contact.email if 'contact' in locals() else 'unknown'}: {exc}")
-
-        # Возвращаем соединение в пул в случае ошибки
-        if smtp_connection:
-            try:
-                smtp_pool.return_connection(smtp_connection)
-            except Exception:
-                pass
-
-        # По умолчанию считаем ошибку временной: делаем retry/backoff.
-        # Контакт НЕ помечаем INVALID на сетевых/SMTP transient ошибках.
-        from celery.exceptions import MaxRetriesExceededError
-        countdown = min(900, 30 * (2 ** self.request.retries))
-        try:
-            raise self.retry(exc=exc, countdown=countdown)
-        except MaxRetriesExceededError:
-            # Ретраи исчерпаны — фиксируем финальный фейл, но не инвалидируем контакт.
-            record_failure(str(exc), mark_invalid=False)
-            return {
-                'success': False,
-                'retry_exhausted': True,
-                'reason': str(exc),
-                'email': contact.email if 'contact' in locals() else None
-            }
+        
+        # Создаем запись об ошибке и ставим на повтор
+        record_failure(str(exc), mark_invalid=False)
+        raise self.retry(exc=exc, countdown=60, max_retries=3)
 
 
 @shared_task(bind=True, time_limit=300, soft_time_limit=240)
