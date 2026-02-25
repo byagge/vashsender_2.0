@@ -26,7 +26,6 @@ from apps.emails.models import SenderEmail
 CAMPAIGN_QUEUE = getattr(settings, 'CAMPAIGN_QUEUE', 'default')
 EMAIL_QUEUE = getattr(settings, 'EMAIL_QUEUE', 'default')
 
-
 # Добавляем импорт для DKIM подписи
 try:
     import dkim

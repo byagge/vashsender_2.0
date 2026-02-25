@@ -788,31 +788,16 @@ def send_email_batch(self, campaign_id: str, contact_ids: List[int],
             ).values_list('contact_id', flat=True)
         )
 
-        # Adjust total for contacts that turned invalid or disappeared before scheduling.
-        total_ids = len(set(contact_ids))
-        total_candidates = contacts_qs.count()
-        excluded_count = max(total_ids - total_candidates, 0)
-
         # Убедимся, что total в кэше есть (и не уменьшаем его здесь)
         progress = cache.get(f'campaign_progress_{campaign_id}') or {}
         total_existing = int(progress.get('total') or 0)
         if total_existing <= 0:
-            update_campaign_progress_cache(
-                campaign_id,
-                total=total_ids,
-                sent=int(progress.get('sent') or 0)
-            )
-            total_existing = total_ids
-
-        if excluded_count and total_existing > 0:
-            adjusted_total = max(total_existing - excluded_count, 0)
-            if adjusted_total != total_existing:
-                update_campaign_progress_cache(campaign_id, total=adjusted_total)
-                total_existing = adjusted_total
+            update_campaign_progress_cache(campaign_id, total=len(contact_ids), sent=int(progress.get('sent') or 0))
 
         scheduled = 0
         skipped = 0
         errors = 0
+        total_candidates = contacts_qs.count()
 
         for contact in contacts_qs.iterator(chunk_size=500):
             if contact.id in already_done:
@@ -933,8 +918,7 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
         try:
             from apps.mailer.models import Contact as MailerContact
             if contact.status != MailerContact.VALID:
-                decrement_campaign_total_if_needed(campaign_id)
-                finalize_campaign_if_complete(campaign_id)
+                
                 return {
                     'success': False,
                     'skipped': True,
@@ -1346,26 +1330,13 @@ def send_single_email(self, campaign_id: str, contact_id: int) -> Dict[str, Any]
                 'email': contact.email if 'contact' in locals() else None
             }
 
-    except Campaign.DoesNotExist as exc:
-        # Campaign deleted during send; nothing to process.
+    except (Campaign.DoesNotExist, Contact.DoesNotExist) as exc:
+        # Кампания или контакт удалены/не существуют — ретраи бессмысленны.
         print(f"send_single_email skipped: {exc}")
         return {
             'success': False,
             'skipped': True,
-            'reason': 'campaign_not_found',
-            'details': str(exc),
-            'campaign_id': campaign_id,
-            'contact_id': contact_id
-        }
-
-    except Contact.DoesNotExist as exc:
-        print(f"send_single_email skipped: {exc}")
-        decrement_campaign_total_if_needed(campaign_id)
-        finalize_campaign_if_complete(campaign_id)
-        return {
-            'success': False,
-            'skipped': True,
-            'reason': 'contact_not_found',
+            'reason': 'object_not_found',
             'details': str(exc),
             'campaign_id': campaign_id,
             'contact_id': contact_id

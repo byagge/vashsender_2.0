@@ -26,6 +26,45 @@ from apps.emails.models import SenderEmail
 CAMPAIGN_QUEUE = getattr(settings, 'CAMPAIGN_QUEUE', 'default')
 EMAIL_QUEUE = getattr(settings, 'EMAIL_QUEUE', 'default')
 
+import smtplib
+import threading
+from queue import Queue
+
+class SMTPConnectionPool:
+    def __init__(self, host="localhost", port=25, max_connections=10):
+        self.host = host
+        self.port = port
+        self.pool = Queue(max_connections)
+        self.lock = threading.Lock()
+        self.max_connections = max_connections
+        self.created = 0
+
+    def get_connection(self):
+        try:
+            return self.pool.get_nowait()
+        except:
+            with self.lock:
+                if self.created < self.max_connections:
+                    conn = smtplib.SMTP(self.host, self.port, timeout=30)
+                    conn.ehlo()
+                    self.created += 1
+                    return conn
+            return self.pool.get()
+
+    def release(self, conn):
+        try:
+            self.pool.put_nowait(conn)
+        except:
+            try:
+                conn.quit()
+            except:
+                pass
+
+smtp_pool = SMTPConnectionPool(
+    host="localhost",
+    port=25,
+    max_connections=20
+)
 
 # Добавляем импорт для DKIM подписи
 try:
