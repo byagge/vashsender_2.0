@@ -163,7 +163,7 @@ def mark_contact_as_invalid(contact, reason: str = ''):
                 print(f"Contact {contact.email} marked as INVALID. Reason: {reason}")
     
     except Exception as exc:
-        print(f"Error marking contact {getattr(contact, 'email', 'unknown')} as invalid: {exc}")
+    print(f"Error sending email to {contact.email if 'contact' in locals() else 'unknown'}: {exc}")
 
     if smtp_connection:
         try:
