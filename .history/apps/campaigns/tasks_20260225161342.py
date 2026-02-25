@@ -478,9 +478,7 @@ def send_campaign(self, campaign_id: str, skip_moderation: bool = False) -> Dict
         try:
             campaign = Campaign.objects.get(id=campaign_id)
             print(f"Found campaign: {campaign.name}, status: {campaign.status}")
-        except Exception as e:
-            print(f"Error getting campaign {campaign_id}: {e}")
-            raise self.retry(countdown=120, max_retries=3)
+        exce
 
         # Сбрасываем прогресс в кэше: иначе возможны "залипания" (locked) при повторных запусках
         try:
