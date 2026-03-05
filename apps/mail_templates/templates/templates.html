@@ -669,24 +669,35 @@
                 } catch (e) {
                   // Игнорируем ошибки уничтожения - редактор может быть уже частично уничтожен
                 }
-                // Теперь очищаем контейнеры
-                const editorContainer = document.querySelector('#editor-container');
-                const toolbarContainer = document.querySelector('#toolbar-container');
-                if (editorContainer) {
-                  editorContainer.innerHTML = '';
-                  // Удаляем все атрибуты CKEditor
-                  editorContainer.removeAttribute('data-ck-editor');
-                  editorContainer.removeAttribute('contenteditable');
-                }
-                if (toolbarContainer) {
-                  toolbarContainer.innerHTML = '';
-                }
                 globalEditor = null;
                 this.editorReady = false;
                 this.editorInitPromise = null;
-                // Даем время для полной очистки
-                await new Promise(resolve => setTimeout(resolve, 100));
               }
+              
+              // Всегда заменяем контейнер при переключении из HTML в визуальный режим
+              // чтобы избежать ошибки "editor-source-element-already-used"
+              await this.$nextTick();
+              const editorContainer = document.querySelector('#editor-container');
+              const toolbarContainer = document.querySelector('#toolbar-container');
+              
+              if (editorContainer) {
+                const parent = editorContainer.parentNode;
+                if (parent) {
+                  const className = editorContainer.className;
+                  const newContainer = document.createElement('div');
+                  newContainer.id = 'editor-container';
+                  newContainer.className = className;
+                  parent.replaceChild(newContainer, editorContainer);
+                }
+              }
+              
+              if (toolbarContainer) {
+                toolbarContainer.innerHTML = '';
+              }
+              
+              // Даем время для полной очистки DOM
+              await new Promise(resolve => setTimeout(resolve, 150));
+              
               // Ждем, пока Alpine обновит DOM и контейнер станет видимым
               await this.$nextTick();
               // Даем небольшую задержку для рендеринга
@@ -801,16 +812,41 @@
               await new Promise(resolve => setTimeout(resolve, 100));
             }
 
-            // Проверяем, использовался ли контейнер CKEditor (проверяем ДО очистки)
+            // Проверяем, использовался ли контейнер CKEditor
             editorContainer = document.querySelector('#editor-container');
-            const wasUsed = editorContainer && (
-              editorContainer.hasAttribute('data-ck-editor') || 
-              editorContainer.querySelector('.ck-editor') ||
-              editorContainer.querySelector('.ck-content')
-            );
+            
+            // Более тщательная проверка на использование контейнера CKEditor
+            let wasUsed = false;
+            if (editorContainer) {
+              // Проверяем атрибуты
+              wasUsed = editorContainer.hasAttribute('data-ck-editor') || 
+                        editorContainer.hasAttribute('contenteditable');
+              
+              // Проверяем наличие дочерних элементов CKEditor
+              if (!wasUsed) {
+                wasUsed = !!(
+                  editorContainer.querySelector('.ck-editor') ||
+                  editorContainer.querySelector('.ck-content') ||
+                  editorContainer.querySelector('[class*="ck-"]')
+                );
+              }
+              
+              // Проверяем классы контейнера
+              if (!wasUsed) {
+                wasUsed = editorContainer.classList.contains('ck') ||
+                          Array.from(editorContainer.classList).some(cls => cls.startsWith('ck-'));
+              }
+              
+              // Проверяем наличие data-ck-* атрибутов
+              if (!wasUsed) {
+                wasUsed = Array.from(editorContainer.attributes).some(attr => 
+                  attr.name.startsWith('data-ck-')
+                );
+              }
+            }
 
             // Если контейнер уже использовался CKEditor, создаем новый элемент
-            if (wasUsed && editorContainer) {
+            if (wasUsed && editorContainer && editorContainer.parentNode) {
               const parent = editorContainer.parentNode;
               const className = editorContainer.className;
               const newContainer = document.createElement('div');
@@ -831,11 +867,24 @@
             toolbarContainer.innerHTML = '';
             
             // Удаляем все атрибуты, которые мог оставить CKEditor
+            // Удаляем все data-ck-* атрибуты
+            Array.from(editorContainer.attributes).forEach(attr => {
+              if (attr.name.startsWith('data-ck-')) {
+                editorContainer.removeAttribute(attr.name);
+              }
+            });
             editorContainer.removeAttribute('data-ck-editor');
             editorContainer.removeAttribute('contenteditable');
             
+            // Удаляем все классы, связанные с CKEditor
+            Array.from(editorContainer.classList).forEach(cls => {
+              if (cls.startsWith('ck-') || cls === 'ck') {
+                editorContainer.classList.remove(cls);
+              }
+            });
+            
             // Даем время для полной очистки DOM
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 150));
 
             const createEditor = async () => {
               // Дополнительная проверка - убеждаемся, что контейнер действительно пуст
@@ -844,7 +893,8 @@
                 await new Promise(resolve => setTimeout(resolve, 50));
               }
               
-              globalEditor = await window.DecoupledEditor.create(editorContainer, {
+              try {
+                globalEditor = await window.DecoupledEditor.create(editorContainer, {
                 toolbar: {
                   items: [
                     'heading',
@@ -956,23 +1006,185 @@
                 language: 'ru'
               });
 
-              toolbarContainer.appendChild(globalEditor.ui.view.toolbar.element);
+                toolbarContainer.appendChild(globalEditor.ui.view.toolbar.element);
 
-              globalEditor.model.document.on('change:data', () => {
-                const data = globalEditor.getData();
-                if (this.current) {
-                  this.current.content = data;
-                  this.needsEditorSync = false;
-                  const previewContainer = document.querySelector('.preview-content');
-                  if (previewContainer) {
-                    previewContainer.innerHTML = data;
+                globalEditor.model.document.on('change:data', () => {
+                  const data = globalEditor.getData();
+                  if (this.current) {
+                    this.current.content = data;
+                    this.needsEditorSync = false;
+                    const previewContainer = document.querySelector('.preview-content');
+                    if (previewContainer) {
+                      previewContainer.innerHTML = data;
+                    }
+                    this.autoSave();
                   }
-                  this.autoSave();
-                }
-              });
+                });
 
-              this.editorReady = true;
-              return globalEditor;
+                this.editorReady = true;
+                return globalEditor;
+              } catch (createError) {
+                // Если возникла ошибка "editor-source-element-already-used", 
+                // заменяем контейнер и пробуем еще раз
+                const errorMessage = createError.message || createError.toString() || '';
+                const isEditorSourceError = errorMessage.includes('editor-source-element-already-used') ||
+                                          errorMessage.includes('source-element-already-used') ||
+                                          (createError.name && createError.name.includes('CKEditorError'));
+                
+                if (isEditorSourceError) {
+                  
+                  // Заменяем контейнер на новый
+                  if (editorContainer && editorContainer.parentNode) {
+                    const parent = editorContainer.parentNode;
+                    const className = editorContainer.className;
+                    const newContainer = document.createElement('div');
+                    newContainer.id = 'editor-container';
+                    newContainer.className = className;
+                    parent.replaceChild(newContainer, editorContainer);
+                    editorContainer = newContainer;
+                    
+                    // Очищаем toolbar
+                    toolbarContainer.innerHTML = '';
+                    
+                    // Даем время для полной очистки
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Пробуем создать редактор еще раз с новым контейнером
+                    globalEditor = await window.DecoupledEditor.create(editorContainer, {
+                      toolbar: {
+                        items: [
+                          'heading',
+                          '|',
+                          'fontSize',
+                          'fontFamily',
+                          'fontColor',
+                          'fontBackgroundColor',
+                          '|',
+                          'bold',
+                          'italic',
+                          'underline',
+                          'strikethrough',
+                          'subscript',
+                          'superscript',
+                          '|',
+                          'alignment',
+                          '|',
+                          'numberedList',
+                          'bulletedList',
+                          '|',
+                          'outdent',
+                          'indent',
+                          '|',
+                          'link',
+                          'blockQuote',
+                          'insertTable',
+                          'mediaEmbed',
+                          '|',
+                          'horizontalLine',
+                          'pageBreak',
+                          '|',
+                          'code',
+                          'codeBlock',
+                          '|',
+                          'specialCharacters',
+                          '|',
+                          'sourceEditing',
+                          '|',
+                          'undo',
+                          'redo',
+                          '|',
+                          'findAndReplace',
+                          '|',
+                          'removeFormat',
+                          '|',
+                          'highlight',
+                          '|',
+                          'textPartLanguage',
+                          '|',
+                          'restrictedEditing',
+                          '|',
+                          'tableColumn',
+                          'tableRow',
+                          'mergeTableCells',
+                          'tableProperties',
+                          'tableCellProperties',
+                          '|',
+                          'imageStyle:inline',
+                          'imageStyle:block',
+                          'imageStyle:side',
+                          'toggleImageCaption',
+                          'imageTextAlternative',
+                          'linkImage'
+                        ],
+                        shouldNotGroupWhenFull: true
+                      },
+                      image: {
+                        upload: {
+                          types: ['jpeg', 'png', 'gif', 'webp'],
+                          url: '/templates/api/upload-image/',
+                          headers: {
+                            'X-CSRFToken': document.cookie
+                              .split(';')
+                              .map(c => c.trim())
+                              .find(c => c.startsWith('csrftoken='))
+                              ?.split('=')[1] || ''
+                          }
+                        },
+                        toolbar: [
+                          'imageStyle:inline',
+                          'imageStyle:block',
+                          'imageStyle:side',
+                          '|',
+                          'toggleImageCaption',
+                          'imageTextAlternative',
+                          '|',
+                          'linkImage'
+                        ],
+                        styles: [
+                          'full',
+                          'side',
+                          'alignLeft',
+                          'alignCenter',
+                          'alignRight'
+                        ]
+                      },
+                      table: {
+                        contentToolbar: [
+                          'tableColumn',
+                          'tableRow',
+                          'mergeTableCells',
+                          'tableProperties',
+                          'tableCellProperties'
+                        ]
+                      },
+                      placeholder: 'Начните писать ваше письмо здесь...',
+                      language: 'ru'
+                    });
+
+                    toolbarContainer.appendChild(globalEditor.ui.view.toolbar.element);
+
+                    globalEditor.model.document.on('change:data', () => {
+                      const data = globalEditor.getData();
+                      if (this.current) {
+                        this.current.content = data;
+                        this.needsEditorSync = false;
+                        const previewContainer = document.querySelector('.preview-content');
+                        if (previewContainer) {
+                          previewContainer.innerHTML = data;
+                        }
+                        this.autoSave();
+                      }
+                    });
+
+                    this.editorReady = true;
+                    return globalEditor;
+                  } else {
+                    throw createError;
+                  }
+                } else {
+                  throw createError;
+                }
+              }
             };
 
             this.editorInitPromise = createEditor();
@@ -983,7 +1195,13 @@
             }
           } catch (error) {
             console.error('Editor initialization failed:', error);
-            this.error = 'Ошибка инициализации редактора: ' + error.message;
+            // Не показываем пользователю ошибку "editor-source-element-already-used",
+            // так как она обрабатывается автоматически
+            const errorMessage = error.message || error.toString() || '';
+            if (!errorMessage.includes('editor-source-element-already-used') && 
+                !errorMessage.includes('source-element-already-used')) {
+              this.error = 'Ошибка инициализации редактора: ' + error.message;
+            }
             return null;
           }
         },
