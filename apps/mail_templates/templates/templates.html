@@ -661,15 +661,35 @@
           await this.loadTemplates();
           this.$watch('editMode', async (value) => {
             if (value === 'visual') {
+              // Если переключаемся в визуальный режим, уничтожаем старый редактор если он есть
+              if (globalEditor) {
+                try {
+                  const editorContainer = document.querySelector('#editor-container');
+                  const toolbarContainer = document.querySelector('#toolbar-container');
+                  if (editorContainer) editorContainer.innerHTML = '';
+                  if (toolbarContainer) toolbarContainer.innerHTML = '';
+                  await globalEditor.destroy();
+                } catch (e) {
+                  console.warn('Error destroying editor on mode switch:', e);
+                }
+                globalEditor = null;
+                this.editorReady = false;
+                this.editorInitPromise = null;
+              }
               // Ждем, пока Alpine обновит DOM и контейнер станет видимым
               await this.$nextTick();
               // Даем небольшую задержку для рендеринга
               setTimeout(() => {
                 this.needsEditorSync = true;
                 this.syncEditorContentToVisual(true);
-              }, 100);
+              }, 150);
             } else if (value === 'html' && globalEditor) {
-              this.current.content = globalEditor.getData();
+              // Сохраняем контент из редактора перед переключением
+              try {
+                this.current.content = globalEditor.getData();
+              } catch (e) {
+                console.warn('Error getting editor data:', e);
+              }
             }
           });
         },
@@ -758,18 +778,42 @@
 
             if (globalEditor && force) {
               try {
+                // Сначала очищаем контейнеры, чтобы отвязать DOM элементы
+                editorContainer.innerHTML = '';
+                toolbarContainer.innerHTML = '';
+                // Затем уничтожаем редактор
                 await globalEditor.destroy();
               } catch (destroyError) {
+                // Если уничтожение не удалось, все равно очищаем контейнеры
+                editorContainer.innerHTML = '';
+                toolbarContainer.innerHTML = '';
                 console.warn('Failed to destroy previous editor instance', destroyError);
               }
               globalEditor = null;
               this.editorReady = false;
+              this.editorInitPromise = null;
+              // Даем время для полной очистки
+              await new Promise(resolve => setTimeout(resolve, 50));
             }
 
+            // Очищаем контейнеры перед созданием нового редактора
             editorContainer.innerHTML = '';
             toolbarContainer.innerHTML = '';
+            
+            // Удаляем все атрибуты, которые мог оставить CKEditor
+            editorContainer.removeAttribute('data-ck-editor');
+            editorContainer.removeAttribute('contenteditable');
+            
+            // Даем время для полной очистки DOM
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             const createEditor = async () => {
+              // Дополнительная проверка - убеждаемся, что контейнер действительно пуст
+              if (editorContainer.innerHTML.trim() !== '') {
+                editorContainer.innerHTML = '';
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+              
               globalEditor = await window.DecoupledEditor.create(editorContainer, {
                 toolbar: {
                   items: [
@@ -823,35 +867,18 @@
                     '|',
                     'restrictedEditing',
                     '|',
-                    'tableProperties',
-                    'tableCellProperties',
-                    '|',
-                    'toggleImageCaption',
-                    'imageTextAlternative',
-                    '|',
-                    'insertTemplate',
-                    '|',
-                    'insertTable',
-                    '|',
                     'tableColumn',
                     'tableRow',
                     'mergeTableCells',
+                    'tableProperties',
+                    'tableCellProperties',
                     '|',
                     'imageStyle:inline',
                     'imageStyle:block',
                     'imageStyle:side',
-                    '|',
-                    'linkImage',
-                    '|',
-                    'insertTable',
-                    '|',
-                    'tableProperties',
-                    'tableCellProperties',
-                    '|',
                     'toggleImageCaption',
                     'imageTextAlternative',
-                    '|',
-                    'insertTemplate'
+                    'linkImage'
                   ],
                   shouldNotGroupWhenFull: true
                 },
@@ -1133,12 +1160,21 @@
         },
 
         get filtered() {
+          if (!this.templates || !Array.isArray(this.templates)) {
+            return [];
+          }
+          const searchTerm = (this.search || '').toLowerCase();
           return this.templates
-            .filter(t => this.category === 'all' || t.category === this.category)
-            .filter(t =>
-              t.name.toLowerCase().includes(this.search.toLowerCase()) ||
-              t.content.toLowerCase().includes(this.search.toLowerCase())
-            );
+            .filter(t => {
+              if (!t) return false;
+              return this.category === 'all' || t.category === this.category;
+            })
+            .filter(t => {
+              if (!t) return false;
+              const name = (t.name || '').toLowerCase();
+              const content = (t.content || '').toLowerCase();
+              return name.includes(searchTerm) || content.includes(searchTerm);
+            });
         },
 
         api: {
