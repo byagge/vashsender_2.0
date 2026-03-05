@@ -664,17 +664,28 @@
               // Если переключаемся в визуальный режим, уничтожаем старый редактор если он есть
               if (globalEditor) {
                 try {
-                  const editorContainer = document.querySelector('#editor-container');
-                  const toolbarContainer = document.querySelector('#toolbar-container');
-                  if (editorContainer) editorContainer.innerHTML = '';
-                  if (toolbarContainer) toolbarContainer.innerHTML = '';
+                  // Сначала уничтожаем редактор (это отвяжет DOM элементы)
                   await globalEditor.destroy();
                 } catch (e) {
-                  console.warn('Error destroying editor on mode switch:', e);
+                  // Игнорируем ошибки уничтожения - редактор может быть уже частично уничтожен
+                }
+                // Теперь очищаем контейнеры
+                const editorContainer = document.querySelector('#editor-container');
+                const toolbarContainer = document.querySelector('#toolbar-container');
+                if (editorContainer) {
+                  editorContainer.innerHTML = '';
+                  // Удаляем все атрибуты CKEditor
+                  editorContainer.removeAttribute('data-ck-editor');
+                  editorContainer.removeAttribute('contenteditable');
+                }
+                if (toolbarContainer) {
+                  toolbarContainer.innerHTML = '';
                 }
                 globalEditor = null;
                 this.editorReady = false;
                 this.editorInitPromise = null;
+                // Даем время для полной очистки
+                await new Promise(resolve => setTimeout(resolve, 100));
               }
               // Ждем, пока Alpine обновит DOM и контейнер станет видимым
               await this.$nextTick();
@@ -682,7 +693,7 @@
               setTimeout(() => {
                 this.needsEditorSync = true;
                 this.syncEditorContentToVisual(true);
-              }, 150);
+              }, 200);
             } else if (value === 'html' && globalEditor) {
               // Сохраняем контент из редактора перед переключением
               try {
@@ -746,7 +757,7 @@
             await this.ensureEditorAssets();
             await this.$nextTick();
 
-            const editorContainer = document.querySelector('#editor-container');
+            let editorContainer = document.querySelector('#editor-container');
             const toolbarContainer = document.querySelector('#toolbar-container');
 
             if (!editorContainer || !toolbarContainer) {
@@ -778,22 +789,41 @@
 
             if (globalEditor && force) {
               try {
-                // Сначала очищаем контейнеры, чтобы отвязать DOM элементы
-                editorContainer.innerHTML = '';
-                toolbarContainer.innerHTML = '';
-                // Затем уничтожаем редактор
+                // Сначала уничтожаем редактор (это отвяжет DOM элементы)
                 await globalEditor.destroy();
               } catch (destroyError) {
-                // Если уничтожение не удалось, все равно очищаем контейнеры
-                editorContainer.innerHTML = '';
-                toolbarContainer.innerHTML = '';
-                console.warn('Failed to destroy previous editor instance', destroyError);
+                // Игнорируем ошибки - редактор может быть уже частично уничтожен
               }
               globalEditor = null;
               this.editorReady = false;
               this.editorInitPromise = null;
               // Даем время для полной очистки
-              await new Promise(resolve => setTimeout(resolve, 50));
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Проверяем, использовался ли контейнер CKEditor (проверяем ДО очистки)
+            editorContainer = document.querySelector('#editor-container');
+            const wasUsed = editorContainer && (
+              editorContainer.hasAttribute('data-ck-editor') || 
+              editorContainer.querySelector('.ck-editor') ||
+              editorContainer.querySelector('.ck-content')
+            );
+
+            // Если контейнер уже использовался CKEditor, создаем новый элемент
+            if (wasUsed && editorContainer) {
+              const parent = editorContainer.parentNode;
+              const className = editorContainer.className;
+              const newContainer = document.createElement('div');
+              newContainer.id = 'editor-container';
+              newContainer.className = className;
+              parent.replaceChild(newContainer, editorContainer);
+              // Обновляем ссылку
+              editorContainer = document.querySelector('#editor-container');
+            }
+
+            if (!editorContainer) {
+              console.error('Editor container not found after replacement!');
+              return null;
             }
 
             // Очищаем контейнеры перед созданием нового редактора
@@ -805,7 +835,7 @@
             editorContainer.removeAttribute('contenteditable');
             
             // Даем время для полной очистки DOM
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 100));
 
             const createEditor = async () => {
               // Дополнительная проверка - убеждаемся, что контейнер действительно пуст
@@ -1155,6 +1185,9 @@
         },
 
         truncate(html, n) {
+          if (!html || typeof html !== 'string') {
+            return '';
+          }
           const txt = html.replace(/<[^>]*>/g, '');
           return txt.length > n ? txt.slice(0, n) + '…' : txt;
         },
