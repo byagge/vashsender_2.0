@@ -385,22 +385,20 @@
         </template>
       </div>
 
-      <!-- Тип импорта - ЗАКОММЕНТИРОВАНО: убрана возможность выбора, используется только быстрый импорт -->
-      <!--
+      <!-- Тип импорта -->
       <div class="mt-4">
         <label class="block text-sm font-medium text-gray-700 mb-2">Тип импорта:</label>
         <div class="space-y-2">
-          <label class="flex items-center">
+          <!-- <label class="flex items-center">
             <input type="radio" x-model="importType" value="normal" class="mr-2">
             <span class="text-sm">С валидацией (медленнее, но точнее)</span>
-          </label>
+          </label> -->
           <label class="flex items-center">
             <input type="radio" x-model="importType" value="fast" class="mr-2">
             <span class="text-sm">Быстрый импорт (без валидации)</span>
           </label>
         </div>
       </div>
-      -->
 
       <!-- Прогресс импорта -->
       <template x-if="importProgress">
@@ -875,8 +873,9 @@
           fd.append('file', this.importFileObj);
 
           try {
-            // Всегда используем быстрый импорт (без валидации)
-            const endpoint = 'import-optimized/';
+            // Определяем тип импорта (быстрый или с валидацией)
+            const importType = this.importType || 'normal';
+            const endpoint = importType === 'fast' ? 'import-optimized/' : 'import/';
             
             this.importProgress = `Загружаем файл ${this.importFileObj.name}...`;
             
@@ -890,15 +889,14 @@
             if (res.ok) {
               const result = await res.json();
               
-              // Быстрый импорт - синхронный результат
-              this.importSuccess = true;
-              this.importResult = result;
-              this.importProgress = `Импорт завершен! Импортировано: ${result.imported} контактов`;
-              await this.viewList(this.selectedList);
-              // Автоматически закрываем окно через 3 секунды
-              setTimeout(() => this.closeImport(), 3000);
-              
-              /* ЗАКОММЕНТИРОВАНО: Код для импорта с валидацией (может зависать в pending)
+              if (importType === 'fast') {
+                // Быстрый импорт - синхронный результат
+                this.importSuccess = true;
+                this.importResult = result;
+                this.importProgress = `Быстрый импорт завершен! Импортировано: ${result.imported} контактов`;
+                await this.viewList(this.selectedList);
+                // Автоматически закрываем окно через 3 секунды
+                setTimeout(() => this.closeImport(), 3000);
               } else {
                 // Асинхронный импорт с валидацией
                 this.importSuccess = true;
@@ -908,7 +906,6 @@
                 // Начинаем отслеживание прогресса
                 this.startProgressTracking(result.task_id);
               }
-              */
             } else {
               const errorText = await res.text();
               this.importProgress = `Ошибка импорта: ${errorText}`;
@@ -920,7 +917,6 @@
           }
         },
 
-        /* ЗАКОММЕНТИРОВАНО: Функция отслеживания прогресса импорта с валидацией (может зависать в pending)
         async startProgressTracking(taskId) {
           const maxAttempts = 300; // Максимум 5 минут (300 * 1 секунда)
           let attempts = 0;
@@ -973,7 +969,6 @@
           // Начинаем отслеживание
           setTimeout(checkProgress, 1000);
         },
-        */
 
 
 

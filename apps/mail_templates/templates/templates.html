@@ -659,10 +659,15 @@
         async init() {
           this.bootstrapEditor();
           await this.loadTemplates();
-          this.$watch('editMode', (value) => {
+          this.$watch('editMode', async (value) => {
             if (value === 'visual') {
-              this.needsEditorSync = true;
-              this.syncEditorContentToVisual();
+              // Ждем, пока Alpine обновит DOM и контейнер станет видимым
+              await this.$nextTick();
+              // Даем небольшую задержку для рендеринга
+              setTimeout(() => {
+                this.needsEditorSync = true;
+                this.syncEditorContentToVisual(true);
+              }, 100);
             } else if (value === 'html' && globalEditor) {
               this.current.content = globalEditor.getData();
             }
@@ -695,6 +700,11 @@
             return;
           }
           try {
+            // Ждем, пока контейнеры будут доступны в DOM
+            await this.$nextTick();
+            // Дополнительная задержка для гарантии, что контейнеры отрендерены
+            await new Promise(resolve => setTimeout(resolve, 150));
+            
             const editor = await this.initEditor({ force });
             if (!editor) return;
             const desired = this.current.content || '';
@@ -728,12 +738,21 @@
               throw new Error('CKEditor assets are not available');
             }
 
-            if (this.editorInitPromise) {
-              await this.editorInitPromise;
-              return globalEditor;
+            // Если редактор уже существует и мы не форсируем пересоздание, проверяем его состояние
+            if (globalEditor && !force) {
+              // Проверяем, что редактор все еще привязан к контейнеру
+              if (globalEditor.ui && globalEditor.ui.view && globalEditor.ui.view.editable && 
+                  globalEditor.ui.view.editable.element && 
+                  editorContainer.contains(globalEditor.ui.view.editable.element)) {
+                return globalEditor;
+              } else {
+                // Редактор существует, но не привязан к текущему контейнеру - нужно пересоздать
+                force = true;
+              }
             }
 
-            if (globalEditor && !force) {
+            if (this.editorInitPromise && !force) {
+              await this.editorInitPromise;
               return globalEditor;
             }
 
@@ -744,6 +763,7 @@
                 console.warn('Failed to destroy previous editor instance', destroyError);
               }
               globalEditor = null;
+              this.editorReady = false;
             }
 
             editorContainer.innerHTML = '';
